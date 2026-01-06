@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Campus Swap Admin</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+
+        .sidebar {
+            height: 100vh;
+            background: #343a40;
+            color: white;
+            padding: 20px;
+        }
+
+        .sidebar a {
+            color: #adb5bd;
+            text-decoration: none;
+            display: block;
+            padding: 10px;
+        }
+
+        .sidebar a:hover {
+            color: white;
+            background: #495057;
+            border-radius: 5px;
+        }
+
+        .card {
+            margin-bottom: 20px;
+            border: none;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="d-flex">
+        <div class="sidebar col-md-2">
+            <h3>Admin Panel</h3>
+            <hr>
+            <a href="#" onclick="loadDashboard()">Dashboard</a>
+            <a href="#" onclick="loadUsers()">Users</a>
+            <a href="#" onclick="loadProducts()">Products</a>
+            <a href="#" onclick="loadTransactions()">Transactions</a>
+        </div>
+        <div class="content col-md-10 p-4">
+            <h2 id="page-title">Dashboard</h2>
+            <div id="main-content">
+                <!-- Dynamic Content -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:3000/api';
+
+        async function loadDashboard() {
+            document.getElementById('page-title').innerText = 'Dashboard Overview';
+            // Mock Stats for FYP Demo
+            document.getElementById('main-content').innerHTML = `
+            <div class="row">
+                <div class="col-md-4"><div class="card p-4 text-center"><h3>Total Users</h3><h1 id="count-users">Loading...</h1></div></div>
+                <div class="col-md-4"><div class="card p-4 text-center"><h3>Active Products</h3><h1 id="count-products">Loading...</h1></div></div>
+                <div class="col-md-4"><div class="card p-4 text-center"><h3>Transactions</h3><h1 id="count-trans">Loading...</h1></div></div>
+            </div>
+        `;
+
+            try {
+                // In real app, create dedicated stats endpoint. Here we count raw list (inefficient but works for small demo)
+                const users = await fetch(API_URL + '/admin/users').then(r => r.json());
+                const products = await fetch(API_URL + '/products').then(r => r.json());
+
+                document.getElementById('count-users').innerText = users.length;
+                document.getElementById('count-products').innerText = products.length;
+                document.getElementById('count-trans').innerText = '12'; // Mock
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        async function loadUsers() {
+            document.getElementById('page-title').innerText = 'User Management';
+            const res = await fetch(API_URL + '/admin/users');
+            const users = await res.json();
+
+            let rows = users.map(u => `
+            <tr>
+                <td>${u.full_name}</td>
+                <td>${u.email}</td>
+                <td>${u.role}</td>
+                <td>RM ${u.balance}</td>
+                <td>
+                    <button class="btn btn-sm btn-danger" onclick="deleteUser('${u.id}')">Ban</button>
+                </td>
+            </tr>
+        `).join('');
+
+            document.getElementById('main-content').innerHTML = `
+            <table class="table table-striped bg-white">
+                <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Balance</th><th>Action</th></tr></thead>
+                <tbody>${rows}</tbody>
+            </table>
+        `;
+        }
+
+        async function loadProducts() {
+            document.getElementById('page-title').innerText = 'Product Moderation';
+            const res = await fetch(API_URL + '/products');
+            const products = await res.json();
+
+            let rows = products.map(p => `
+            <tr>
+                <td><img src="${p.image_urls && p.image_urls.length > 0 ? (Array.isArray(p.image_urls) ? p.image_urls[0] : p.image_urls) : ''}" width="50"></td>
+                <td>${p.title}</td>
+                <td>RM ${p.price}</td>
+                <td>${p.status}</td>
+                <td>
+                    <button class="btn btn-sm btn-warning" onclick="deleteProduct('${p.id}')">Remove</button>
+                </td>
+            </tr>
+        `).join('');
+
+            document.getElementById('main-content').innerHTML = `
+            <table class="table table-striped bg-white">
+                <thead><tr><th>Image</th><th>Title</th><th>Price</th><th>Status</th><th>Action</th></tr></thead>
+                <tbody>${rows}</tbody>
+            </table>
+        `;
+        }
+
+        async function deleteUser(id) {
+            if (!confirm('Are you sure?')) return;
+            await fetch(API_URL + '/admin/users/' + id, { method: 'DELETE' });
+            loadUsers();
+        }
+
+        async function deleteProduct(id) {
+            if (!confirm('Are you sure?')) return;
+            await fetch(API_URL + '/products/' + id, { method: 'DELETE' });
+            loadProducts();
+        }
+
+        // Load Dashboard by default
+        loadDashboard();
+    </script>
+
+</body>
+
+</html>
+```
