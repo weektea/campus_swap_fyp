@@ -11,3 +11,18 @@ This directory acts as the root for the Node.js + PostgreSQL backend application
     *   `src/controllers`: Request handlers
     *   `src/models`: Database models
     *   `src/routes`: API endpoints
+
+## Database Setup
+
+This project uses PostgreSQL.
+
+### Option A: Docker (Recommended)
+Run the following command in the `backend` folder to start the database:
+```bash
+docker-compose up -d
+```
+
+### Option B: Manual Setup
+1. Install PostgreSQL.
+2. Create a database named `campus_swap`.
+3. Create a user `postgres` with password `postgres` (or update `.env`).

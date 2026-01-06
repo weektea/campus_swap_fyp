@@ -3,6 +3,7 @@ import 'package:campus_swap/core/api/api_client.dart';
 import 'package:campus_swap/features/home/presentation/pages/home_page.dart';
 import 'package:campus_swap/features/auth/presentation/pages/register_page.dart';
 import 'package:campus_swap/core/session/user_session.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -11,16 +12,50 @@ class LoginPage extends StatefulWidget {
   State<LoginPage> createState() => _LoginPageState();
 }
 
+
+
 class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isPasswordVisible = false;
   bool _isLoading = false;
+  bool _rememberMe = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserCredentials();
+  }
+
+  Future<void> _loadUserCredentials() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _rememberMe = prefs.getBool('remember_me') ?? false;
+      if (_rememberMe) {
+        _emailController.text = prefs.getString('email') ?? '';
+        _passwordController.text = prefs.getString('password') ?? '';
+      }
+    });
+  }
+
+  Future<void> _saveUserCredentials() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (_rememberMe) {
+      await prefs.setBool('remember_me', true);
+      await prefs.setString('email', _emailController.text);
+      await prefs.setString('password', _passwordController.text);
+    } else {
+      await prefs.remove('remember_me');
+      await prefs.remove('email');
+      await prefs.remove('password');
+    }
+  }
 
   void _login() async {
     if (_formKey.currentState!.validate()) {
       setState(() => _isLoading = true);
+      await _saveUserCredentials(); // Save credentials if checked
 
       try {
         final apiClient = ApiClient();
@@ -149,10 +184,24 @@ class _LoginPageState extends State<LoginPage> {
                             return null;
                           },
                         ),
+
+                        Row(
+                          children: [
+                            Checkbox(
+                              value: _rememberMe,
+                              onChanged: (value) {
+                                setState(() {
+                                  _rememberMe = value ?? false;
+                                });
+                              },
+                            ),
+                            const Text('Remember Me'),
+                          ],
+                        ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 16),
                   ElevatedButton(
                     onPressed: _isLoading ? null : _login,
                     child: _isLoading 

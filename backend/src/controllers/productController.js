@@ -49,7 +49,7 @@ export const getAllProducts = async (req, res) => {
         }
 
         if (search) {
-            whereClause.title = { [Op.like]: `%${search}%` }; // SQLite uses 'like' usually, Postgres 'iLike'
+            whereClause.title = { [Op.iLike]: `%${search}%` }; // Postgres uses iLike for case-insensitive
         }
 
         if (category && category !== 'All') {
@@ -57,18 +57,24 @@ export const getAllProducts = async (req, res) => {
         }
 
         if (min_price) {
-            whereClause.price = { ...whereClause.price, [Op.gte]: min_price };
+            whereClause.price = { ...whereClause.price, [Op.gte]: parseFloat(min_price) };
         }
         if (max_price) {
-            whereClause.price = { ...whereClause.price, [Op.lte]: max_price };
+            whereClause.price = { ...whereClause.price, [Op.lte]: parseFloat(max_price) };
         }
+
+        console.log('----- DEBUG PRODUCTS -----');
+        console.log('Query Params:', req.query);
+        console.log('Where Clause:', JSON.stringify(whereClause, null, 2));
+        console.log('--------------------------');
 
         const products = await Product.findAll({
             where: whereClause,
             include: [{
                 model: User,
                 as: 'seller',
-                attributes: ['full_name', 'email', 'reputation']
+                attributes: ['full_name', 'email', 'reputation_score'],
+                required: false // Force LEFT JOIN
             }],
             order: [['createdAt', 'DESC']]
         });
@@ -76,7 +82,11 @@ export const getAllProducts = async (req, res) => {
         res.json(products);
     } catch (error) {
         console.error('Get Products Error:', error);
-        res.status(500).json({ error: 'Failed to fetch products' });
+        res.status(500).json({
+            error: 'Failed to fetch products',
+            details: error.message,
+            stack: error.stack
+        });
     }
 };
 

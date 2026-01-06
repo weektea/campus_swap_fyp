@@ -165,22 +165,31 @@
             e.preventDefault();
             const btn = document.getElementById('submitBtn');
             btn.disabled = true;
-            btn.innerText = 'Creating Listing...';
+            btn.innerText = 'Uploading Image...';
 
             try {
-                // 1. Mock Image Upload (For FYP Web, real File Upload is complex without cloud storage setup, 
-                // so we will simulate it or use a public placeholder if file upload endpoint is tricky)
-                // Ideally we post to /api/products with JSON.
-                // But wait, the App sends "image_urls". 
-                // We can assume a dummy image for now because the user said "uploading via web is convenient"
-                // Let's assume we send a valid URL.
+                // 1. Upload Image if selected
+                const fileInput = document.getElementById('imageFile');
+                let imageUrl = ""; // Default empty or placeholder if you prefer
 
-                // NOTE: Since I can't easily upload a file from browser to my local server without FormData + Multer setup on THIS endpoint (which expects JSON mostly for createProduct in standard flows unless I made it Multipart),
-                // I will use a placeholder image for the Web demo OR try to support base64?
-                // Actually, the user specifically said "Upload things".
+                if (fileInput.files.length > 0) {
+                    const formData = new FormData();
+                    formData.append('file', fileInput.files[0]);
 
-                // Let's assume the user just wants the input flow.
-                const dummyImage = "https://picsum.photos/400/300";
+                    const uploadRes = await fetch('/api/upload', {
+                        method: 'POST',
+                        body: formData // No Content-Type header needed for FormData
+                    });
+
+                    if (!uploadRes.ok) throw new Error('Image upload failed');
+                    const uploadData = await uploadRes.json();
+                    imageUrl = uploadData.url;
+                } else {
+                    // Use placeholder if no image
+                    imageUrl = "https://picsum.photos/400/300";
+                }
+
+                btn.innerText = 'Creating Listing...';
 
                 const title = document.getElementById('title').value;
                 const description = document.getElementById('description').value || "No description";
@@ -195,7 +204,7 @@
                     condition,
                     type,
                     seller_id: localStorage.getItem('user_id'),
-                    image_urls: [dummyImage],
+                    image_urls: [imageUrl],
                     price: type === 'Sale' ? parseFloat(document.getElementById('price').value) : 0,
                     rental_price_per_day: type === 'Rent' ? parseFloat(document.getElementById('rental_price').value) : 0,
                     max_rental_duration: type === 'Rent' ? parseInt(document.getElementById('max_duration').value) : 0
@@ -219,8 +228,9 @@
 
             } catch (err) {
                 console.error(err);
-                alert('Something went wrong');
+                alert('Something went wrong: ' + err.message);
                 btn.disabled = false;
+                btn.innerText = 'Post Item';
             }
         }
     </script>

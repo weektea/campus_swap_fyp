@@ -7,6 +7,8 @@ import 'package:campus_swap/features/profile/presentation/pages/my_purchases_pag
 import 'package:campus_swap/features/profile/presentation/pages/saved_items_page.dart';
 import 'package:campus_swap/features/profile/presentation/pages/settings_page.dart';
 import 'package:campus_swap/features/profile/presentation/pages/help_page.dart';
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -19,6 +21,7 @@ class _ProfilePageState extends State<ProfilePage> {
   int _itemsReused = 0;
   double _co2Saved = 0.0;
   bool _loadingStats = true;
+  bool _isUploading = false;
 
   @override
   void initState() {
@@ -57,6 +60,48 @@ class _ProfilePageState extends State<ProfilePage> {
       }
   }
 
+  Future<void> _pickAndUploadAvatar() async {
+      final picker = ImagePicker();
+      final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+      
+      if (pickedFile == null) return;
+
+      setState(() => _isUploading = true);
+      final session = UserSession();
+
+      try {
+          final apiClient = ApiClient();
+          // 1. Upload Image
+          final uploadRes = await apiClient.postMultipart('/upload', pickedFile);
+          final imageUrl = uploadRes['url']; // Expecting { url: '/uploads/filename.jpg' }
+
+          // 2. Update User Profile with new Avatar URL
+          // Note: Backend needs an endpoint to update user profile picture, or generic user update
+          await apiClient.patch('/auth/user/${session.userId}', {'profile_picture': imageUrl});
+
+          // 3. Update Local Session (Mock update for now until session sync logic is robust)
+          // Ideally UserSession should have a method to update fields or refresh from API
+          // For now we assume we just trigger a rebuild if we were storing it, 
+          // but since UserSession is a singleton with simple fields, we can't easily "set" a new avatar URL 
+          // unless we expose a setter or refresh method.
+          // Let's assume UserSession has a mechanism or we just rely on the UI update for now if we stored it in state.
+          // TO DO: Add setAvatarUrl to UserSession. 
+          
+          if (mounted) {
+             ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Avatar Updated!')));
+             setState(() => _isUploading = false);
+             // Force refresh or update session if possible. 
+             // session.avatarUrl = imageUrl; // Hypothetically
+          }
+      } catch (e) {
+          if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Upload Failed: $e')));
+              setState(() => _isUploading = false);
+          }
+      }
+  }
+
+
   @override
   Widget build(BuildContext context) {
     final session = UserSession();
@@ -68,10 +113,33 @@ class _ProfilePageState extends State<ProfilePage> {
         child: Column(
           children: [
             const SizedBox(height: 20),
-            const CircleAvatar(
-              radius: 50,
-              backgroundColor: Colors.teal,
-              child: Icon(Icons.person, size: 50, color: Colors.white),
+            GestureDetector(
+              onTap: _pickAndUploadAvatar,
+              child: Stack(
+                children: [
+                    CircleAvatar(
+                      radius: 50,
+                      backgroundColor: Colors.teal,
+                      // TODO: Use session.avatarUrl if available
+                      // backgroundImage: session.avatarUrl != null ? NetworkImage('${ApiClient.baseUrl.replaceAll('/api', '')}${session.avatarUrl}') : null,
+                      child: _isUploading 
+                        ? const CircularProgressIndicator(color: Colors.white)
+                        : const Icon(Icons.person, size: 50, color: Colors.white),
+                    ),
+                    Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: const BoxDecoration(
+                                color: Colors.white,
+                                shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.camera_alt, size: 16, color: Colors.grey),
+                        ),
+                    )
+                ],
+              ),
             ),
             const SizedBox(height: 16),
             Text(

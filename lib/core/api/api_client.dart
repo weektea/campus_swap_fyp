@@ -1,9 +1,20 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:image_picker/image_picker.dart';
 
 class ApiClient {
-  // Use 10.0.2.2 for Android Emulator to access localhost
-  static const String baseUrl = 'http://10.0.2.2:3000/api'; 
+  // Determine Base URL based on platform
+  static String get baseUrl {
+    if (kIsWeb) {
+      return 'http://localhost:3000/api'; // Browsers access localhost directly
+    } else if (Platform.isAndroid) {
+      return 'http://10.0.2.2:3000/api'; // Android Emulator
+    } else {
+      return 'http://localhost:3000/api'; // iOS Simulator & others
+    }
+  } 
 
   Future<dynamic> get(String endpoint) async {
     final response = await http.get(Uri.parse('$baseUrl$endpoint'));
@@ -36,9 +47,21 @@ class ApiClient {
     return _handleResponse(response);
   }
 
-  Future<dynamic> postMultipart(String endpoint, String filePath) async {
+  Future<dynamic> postMultipart(String endpoint, XFile file) async {
     var request = http.MultipartRequest('POST', Uri.parse('$baseUrl$endpoint'));
-    request.files.add(await http.MultipartFile.fromPath('file', filePath));
+    
+    if (kIsWeb) {
+      // Web: Use bytes
+      final bytes = await file.readAsBytes();
+      request.files.add(http.MultipartFile.fromBytes(
+        'file', 
+        bytes, 
+        filename: file.name
+      ));
+    } else {
+      // Mobile/Desktop: Use path (if available, otherwise fallback to bytes)
+      request.files.add(await http.MultipartFile.fromPath('file', file.path));
+    }
 
     final streamedResponse = await request.send();
     final response = await http.Response.fromStream(streamedResponse);

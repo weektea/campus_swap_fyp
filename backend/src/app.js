@@ -39,6 +39,7 @@ import savedRoutes from './routes/savedRoutes.js';
 import messageRoutes from './routes/messageRoutes.js';
 import reviewRoutes from './routes/reviewRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
+import uploadRoutes from './routes/uploadRoutes.js';
 
 
 
@@ -49,6 +50,7 @@ app.use('/api/saved', savedRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/upload', uploadRoutes);
 
 
 

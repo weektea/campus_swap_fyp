@@ -3,7 +3,8 @@ import 'package:campus_swap/core/api/api_client.dart';
 import 'package:campus_swap/core/session/user_session.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
-import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:io' show File;
 
 class SellPage extends StatefulWidget {
   const SellPage({super.key});
@@ -21,28 +22,31 @@ class _SellPageState extends State<SellPage> {
   final TextEditingController _descController = TextEditingController();
   final TextEditingController _maxDurationController = TextEditingController();
 
-  File? _imageFile;
+  XFile? _imageFile;
   final ImagePicker _picker = ImagePicker();
 
   Future<void> _analyzeImage() async {
-    final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
+    // Optimization: Resize image to max 1024px width and 80% quality to save bandwidth
+    final XFile? image = await _picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1024, 
+      imageQuality: 80
+    );
     if (image == null) return;
 
     setState(() {
-      _imageFile = File(image.path);
+      _imageFile = image;
       _isAnalyzing = true;
     });
 
     try {
       final apiClient = ApiClient();
-      final result = await apiClient.postMultipart('/products/classify', image.path);
+      final result = await apiClient.postMultipart('/products/classify', image);
       
       setState(() {
         _isAnalyzing = false;
         _selectedCategory = result['category'] ?? 'Others';
-        if (_titleController.text.isEmpty) {
-            _titleController.text = 'Detected ${result['category']}';
-        }
+        // Removed auto-filling title to avoid "Detected Category" awkwardness
       });
 
       if (mounted) {
@@ -65,6 +69,56 @@ class _SellPageState extends State<SellPage> {
     }
   }
 
+   final List<String> _categories = [
+    'Books', 'Electronics', 'Clothing', 'Furniture', 'Stationery', 'Bicycles', 'Others'
+  ];
+
+  final List<String> _conditions = [
+    'New', 'Like New', 'Good', 'Fair', 'Poor'
+  ];
+
+  String _selectedCondition = 'Good';
+  
+  void _showCategoryPicker() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return Container(
+          padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Select Category', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _categories.map((category) {
+                  return ChoiceChip(
+                    label: Text(category, style: GoogleFonts.outfit()),
+                    selected: _selectedCategory == category,
+                    onSelected: (selected) {
+                      if (selected) {
+                        setState(() {
+                          _selectedCategory = category;
+                        });
+                        Navigator.pop(context);
+                      }
+                    },
+                  );
+                }).toList(),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _fetchPriceSuggestion() async {
       if (_selectedCategory == null) {
            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Please select a category first', style: GoogleFonts.outfit())));
@@ -75,13 +129,11 @@ class _SellPageState extends State<SellPage> {
           final apiClient = ApiClient();
           final res = await apiClient.post('/products/price-suggestion', {
               'category': _selectedCategory,
-              'condition': 'Good' // Default for MVP
+              'condition': _selectedCondition 
           });
           
           if (mounted) {
               final price = res['estimated_price'];
-              // If simple heuristic returned sale price, but we are renting, maybe adjust?
-              // For now, let's just use what ML gives.
               double finalPrice = double.tryParse(price.toString()) ?? 0.0;
               if (_listingType == 'Rent') {
                   finalPrice = finalPrice * 0.1; // Rule of thumb: Rent is 10% of value
@@ -112,7 +164,7 @@ class _SellPageState extends State<SellPage> {
          final res = await apiClient.post('/products/generate-description', {
              'title': _titleController.text,
              'category': _selectedCategory,
-             'condition': 'Good'
+             'condition': _selectedCondition
          });
          
          if (mounted) {
@@ -151,26 +203,34 @@ class _SellPageState extends State<SellPage> {
                   color: Colors.grey[100],
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(color: Colors.grey[300]!, style: BorderStyle.solid),
-                  image: _imageFile != null 
-                    ? DecorationImage(image: FileImage(_imageFile!), fit: BoxFit.cover)
-                    : null,
                 ),
-                child: _isAnalyzing 
-                  ? const Center(child: CircularProgressIndicator())
-                  : _imageFile != null 
-                    ? const SizedBox() // Show image
-                    : Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                         Icon(Icons.camera_alt_rounded, size: 48, color: Theme.of(context).colorScheme.primary),
-                         const SizedBox(height: 12),
-                         Text('Tap to upload photo & auto-detect', style: GoogleFonts.outfit()),
-                         TextButton(
-                           onPressed: _analyzeImage, 
-                           child: Text('Open Gallery', style: GoogleFonts.outfit())
-                          )
-                      ],
-                    ),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    if (_imageFile != null)
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: kIsWeb 
+                              ? Image.network(_imageFile!.path, fit: BoxFit.contain)
+                              : Image.file(File(_imageFile!.path), fit: BoxFit.contain),
+                        ),
+                    if (_isAnalyzing)
+                        const Center(child: CircularProgressIndicator())
+                    else if (_imageFile == null)
+                        Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                             Icon(Icons.camera_alt_rounded, size: 48, color: Theme.of(context).colorScheme.primary),
+                             const SizedBox(height: 12),
+                             Text('Tap to upload photo & auto-detect', style: GoogleFonts.outfit()),
+                             TextButton(
+                               onPressed: _analyzeImage, 
+                               child: Text('Open Gallery', style: GoogleFonts.outfit())
+                              )
+                          ],
+                        ),
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 24),
@@ -206,11 +266,30 @@ class _SellPageState extends State<SellPage> {
                       const SizedBox(width: 8),
                       Text('Category: $_selectedCategory', style: GoogleFonts.outfit()),
                       const Spacer(),
-                      TextButton(onPressed: (){}, child: Text('Edit', style: GoogleFonts.outfit()))
+                      TextButton(
+                          onPressed: _showCategoryPicker, 
+                          child: Text('Edit', style: GoogleFonts.outfit())
+                      )
                     ],
                   ),
                 ),
               ),
+
+             // Condition Dropdown
+            DropdownButtonFormField<String>(
+              value: _selectedCondition,
+              decoration: InputDecoration(
+                labelText: 'Condition',
+                labelStyle: GoogleFonts.outfit(),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              ),
+              items: _conditions.map((c) => DropdownMenuItem(value: c, child: Text(c, style: GoogleFonts.outfit()))).toList(),
+              onChanged: (val) {
+                if (val != null) setState(() => _selectedCondition = val);
+              },
+            ),
+            const SizedBox(height: 16),
 
             TextFormField(
               controller: _titleController,
@@ -314,13 +393,28 @@ class _SellPageState extends State<SellPage> {
 
     try {
       final apiClient = ApiClient();
+      
+      // 1. Upload Image first if exists
+      String? uploadedImageUrl;
+      if (_imageFile != null) {
+          try {
+              final uploadRes = await apiClient.postMultipart('/upload', _imageFile!);
+              uploadedImageUrl = uploadRes['url'];
+           } catch(e) {
+              print("Upload failed: $e");
+              // Decide whether to fail hard or soft. Let's fail hard if image exists but fails.
+              throw Exception("Image upload failed. Check connection.");
+           }
+      }
+
       final Map<String, dynamic> body = {
         'title': _titleController.text,
         'description': _descController.text,
         'category': _selectedCategory ?? 'Others',
-        'condition': 'Good', // Default for now
+        'condition': _selectedCondition, 
         'seller_id': session.userId,
         'type': _listingType,
+        'image_urls': uploadedImageUrl != null ? [uploadedImageUrl] : [],
       };
 
       if (_listingType == 'Sale') {
@@ -341,6 +435,7 @@ class _SellPageState extends State<SellPage> {
         setState(() {
              _imageFile = null;
              _selectedCategory = null;
+             _selectedCondition = 'Good';
         });
       }
     } catch (e) {

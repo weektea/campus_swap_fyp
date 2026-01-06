@@ -96,3 +96,37 @@ export const login = async (req, res) => {
         res.status(500).json({ error: 'Login failed' });
     }
 };
+
+export const updateProfile = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const updates = req.body; // e.g. { profile_picture: '...' }
+
+        const user = await User.findByPk(id);
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        // Whitelist allowed updates
+        if (updates.profile_picture) user.profile_picture = updates.profile_picture;
+        if (updates.full_name) user.full_name = updates.full_name;
+        // Add more fields if needed
+
+        await user.save();
+
+        res.json({
+            message: 'Profile updated',
+            user: {
+                id: user.id,
+                email: user.email,
+                full_name: user.full_name,
+                profile_picture: user.profile_picture,
+                role: user.role
+            }
+        });
+
+    } catch (error) {
+        console.error('Update Profile Error:', error);
+        res.status(500).json({ error: 'Update failed' });
+    }
+};

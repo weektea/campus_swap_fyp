@@ -1,5 +1,5 @@
 import express from 'express';
-import { User } from '../models/index.js';
+import { User, Transaction, Product } from '../models/index.js';
 
 const router = express.Router();
 
@@ -21,6 +21,34 @@ router.delete('/users/:id', async (req, res) => {
     }
 });
 
-// Admin Stats Endpoint (Optional) - Can expand later
+router.get('/transactions', async (req, res) => {
+    try {
+        // Include product to show title in admin panel
+        const transactions = await Transaction.findAll({
+            include: [{ model: Product, as: 'product' }]
+        });
+        res.json(transactions);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Admin Stats Endpoint
+router.get('/stats', async (req, res) => {
+    try {
+        const usersCount = await User.count();
+        const productsCount = await Product.count();
+        const transactionsCount = await Transaction.count();
+
+        res.json({
+            users: usersCount,
+            products: productsCount,
+            transactions: transactionsCount,
+            revenue: 0 // TODO: Sum implementation later
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
 
 export default router;

@@ -63,7 +63,6 @@
 
         async function loadDashboard() {
             document.getElementById('page-title').innerText = 'Dashboard Overview';
-            // Mock Stats for FYP Demo
             document.getElementById('main-content').innerHTML = `
             <div class="row">
                 <div class="col-md-4"><div class="card p-4 text-center"><h3>Total Users</h3><h1 id="count-users">Loading...</h1></div></div>
@@ -73,13 +72,11 @@
         `;
 
             try {
-                // In real app, create dedicated stats endpoint. Here we count raw list (inefficient but works for small demo)
-                const users = await fetch(API_URL + '/admin/users').then(r => r.json());
-                const products = await fetch(API_URL + '/products').then(r => r.json());
+                const stats = await fetch(API_URL + '/admin/stats').then(r => r.json());
 
-                document.getElementById('count-users').innerText = users.length;
-                document.getElementById('count-products').innerText = products.length;
-                document.getElementById('count-trans').innerText = '12'; // Mock
+                document.getElementById('count-users').innerText = stats.users;
+                document.getElementById('count-products').innerText = stats.products;
+                document.getElementById('count-trans').innerText = stats.transactions;
             } catch (e) {
                 console.error(e);
             }
@@ -130,6 +127,29 @@
             document.getElementById('main-content').innerHTML = `
             <table class="table table-striped bg-white">
                 <thead><tr><th>Image</th><th>Title</th><th>Price</th><th>Status</th><th>Action</th></tr></thead>
+                <tbody>${rows}</tbody>
+            </table>
+        `;
+        }
+
+        async function loadTransactions() {
+            document.getElementById('page-title').innerText = 'Transaction History';
+            const res = await fetch(API_URL + '/admin/transactions');
+            const transactions = await res.json();
+
+            let rows = transactions.map(t => `
+            <tr>
+                <td>${t.id.substring(0, 8)}...</td>
+                <td>${t.product ? t.product.title : 'Deleted Product'}</td>
+                <td>RM ${t.amount}</td>
+                <td><span class="badge bg-${t.status === 'completed' ? 'success' : (t.status === 'pending' ? 'warning' : 'secondary')}">${t.status}</span></td>
+                <td>${new Date(t.created_at).toLocaleDateString()}</td>
+            </tr>
+        `).join('');
+
+            document.getElementById('main-content').innerHTML = `
+            <table class="table table-striped bg-white">
+                <thead><tr><th>ID</th><th>Product</th><th>Amount</th><th>Status</th><th>Date</th></tr></thead>
                 <tbody>${rows}</tbody>
             </table>
         `;
