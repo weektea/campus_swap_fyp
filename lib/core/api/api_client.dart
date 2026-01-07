@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:image_picker/image_picker.dart';
+import 'package:campus_swap/core/session/user_session.dart';
 
 class ApiClient {
   // Determine Base URL based on platform
@@ -17,14 +18,17 @@ class ApiClient {
   } 
 
   Future<dynamic> get(String endpoint) async {
-    final response = await http.get(Uri.parse('$baseUrl$endpoint'));
+    final response = await http.get(
+      Uri.parse('$baseUrl$endpoint'),
+      headers: _getHeaders(),
+    );
     return _handleResponse(response);
   }
 
   Future<dynamic> post(String endpoint, Map<String, dynamic> data) async {
     final response = await http.post(
       Uri.parse('$baseUrl$endpoint'),
-      headers: {'Content-Type': 'application/json'},
+      headers: _getHeaders(),
       body: jsonEncode(data),
     );
     return _handleResponse(response);
@@ -33,7 +37,7 @@ class ApiClient {
   Future<dynamic> patch(String endpoint, Map<String, dynamic> data) async {
     final response = await http.patch(
       Uri.parse('$baseUrl$endpoint'),
-      headers: {'Content-Type': 'application/json'},
+      headers: _getHeaders(),
       body: jsonEncode(data),
     );
     return _handleResponse(response);
@@ -42,7 +46,7 @@ class ApiClient {
   Future<dynamic> delete(String endpoint) async {
     final response = await http.delete(
       Uri.parse('$baseUrl$endpoint'),
-      headers: {'Content-Type': 'application/json'},
+      headers: _getHeaders(),
     );
     return _handleResponse(response);
   }
@@ -62,6 +66,12 @@ class ApiClient {
       // Mobile/Desktop: Use path (if available, otherwise fallback to bytes)
       request.files.add(await http.MultipartFile.fromPath('file', file.path));
     }
+    
+    // Add Authorization header
+    final token = UserSession().token;
+    if (token != null) {
+      request.headers['Authorization'] = 'Bearer $token';
+    }
 
     final streamedResponse = await request.send();
     final response = await http.Response.fromStream(streamedResponse);
@@ -74,5 +84,14 @@ class ApiClient {
     } else {
       throw Exception('API Error: ${response.statusCode} ${response.body}');
     }
+  }
+
+  Map<String, String> _getHeaders() {
+    final headers = {'Content-Type': 'application/json'};
+    final token = UserSession().token;
+    if (token != null) {
+      headers['Authorization'] = 'Bearer $token';
+    }
+    return headers;
   }
 }

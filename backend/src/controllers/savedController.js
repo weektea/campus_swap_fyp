@@ -3,10 +3,11 @@ import { SavedItem, Product, User } from '../models/index.js';
 // Toggle Save (Like/Unlike)
 export const toggleSave = async (req, res) => {
     try {
-        const { user_id, product_id } = req.body;
+        const user_id = req.user.id;
+        const { product_id } = req.body;
 
-        if (!user_id || !product_id) {
-            return res.status(400).json({ error: 'Missing user_id or product_id' });
+        if (!product_id) {
+            return res.status(400).json({ error: 'Missing product_id' });
         }
 
         const existing = await SavedItem.findOne({ where: { user_id, product_id } });
@@ -27,7 +28,7 @@ export const toggleSave = async (req, res) => {
 // Get User's Saved Items
 export const getSavedItems = async (req, res) => {
     try {
-        const { user_id } = req.params;
+        const user_id = req.user.id; // Secure from token
 
         // Simplification: In a real app we would join more data
         const savedItems = await SavedItem.findAll({

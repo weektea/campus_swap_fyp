@@ -1,9 +1,11 @@
 import express from 'express';
 import { User, Transaction, Product } from '../models/index.js';
+import { authenticateToken } from '../middleware/authMiddleware.js';
+import { isAdmin } from '../middleware/adminMiddleware.js';
 
 const router = express.Router();
 
-router.get('/users', async (req, res) => {
+router.get('/users', authenticateToken, isAdmin, async (req, res) => {
     try {
         const users = await User.findAll();
         res.json(users);
@@ -12,7 +14,7 @@ router.get('/users', async (req, res) => {
     }
 });
 
-router.delete('/users/:id', async (req, res) => {
+router.delete('/users/:id', authenticateToken, isAdmin, async (req, res) => {
     try {
         await User.destroy({ where: { id: req.params.id } });
         res.json({ message: 'User deleted' });
@@ -21,7 +23,7 @@ router.delete('/users/:id', async (req, res) => {
     }
 });
 
-router.get('/transactions', async (req, res) => {
+router.get('/transactions', authenticateToken, isAdmin, async (req, res) => {
     try {
         // Include product to show title in admin panel
         const transactions = await Transaction.findAll({
@@ -34,7 +36,7 @@ router.get('/transactions', async (req, res) => {
 });
 
 // Admin Stats Endpoint
-router.get('/stats', async (req, res) => {
+router.get('/stats', authenticateToken, isAdmin, async (req, res) => {
     try {
         const usersCount = await User.count();
         const productsCount = await Product.count();

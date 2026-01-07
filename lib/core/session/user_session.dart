@@ -11,6 +11,7 @@ class UserSession {
   String? email;
   String? fullName;
   String? token;
+  String? avatarUrl;
 
   bool get isLoggedIn => userId != null && token != null;
 
@@ -19,5 +20,6 @@ class UserSession {
     email = null;
     fullName = null;
     token = null;
+    avatarUrl = null;
   }
 }

@@ -29,7 +29,7 @@ class _SavedItemsPageState extends State<SavedItemsPage> {
 
     try {
       final apiClient = ApiClient();
-      final response = await apiClient.get('/saved/${session.userId}');
+      final response = await apiClient.get('/saved');
       
       if (response is List) {
         setState(() {

@@ -27,7 +27,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
     setState(() => _isLoading = true);
     try {
         final apiClient = ApiClient();
-        final res = await apiClient.get('/notifications/user/${session.userId}');
+        final res = await apiClient.get('/notifications');
         if (mounted) {
             setState(() {
                 _notifications = res is List ? res : [];

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:campus_swap/core/api/api_client.dart';
 import 'package:campus_swap/core/session/user_session.dart';
+import 'package:campus_swap/features/profile/presentation/pages/public_profile_page.dart';
 
 class ChatDetailPage extends StatefulWidget {
   final String sellerName;
@@ -32,7 +33,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
      try {
        final apiClient = ApiClient();
-       final response = await apiClient.get('/messages/conversation/${session.userId}/${widget.otherUserId}');
+       final response = await apiClient.get('/messages/conversation/${widget.otherUserId}');
        
        if (response is List) {
          setState(() {
@@ -67,7 +68,6 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     try {
       final apiClient = ApiClient();
       await apiClient.post('/messages', {
-        'sender_id': session.userId,
         'receiver_id': widget.otherUserId,
         'content': content
       });
@@ -86,7 +86,29 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(widget.sellerName)),
+      appBar: AppBar(
+        title: GestureDetector(
+            onTap: () {
+                if (widget.otherUserId != null) {
+                     Navigator.push(context, MaterialPageRoute(builder: (_) => PublicProfilePage(
+                         userId: widget.otherUserId!, 
+                         userName: widget.sellerName
+                     )));
+                }
+            },
+            child: Row(
+              children: [
+                 CircleAvatar(
+                     radius: 16,
+                     backgroundColor: Colors.grey[200],
+                     child: Text(widget.sellerName[0].toUpperCase(), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                 ),
+                 const SizedBox(width: 8),
+                 Text(widget.sellerName, style: const TextStyle(fontSize: 18)),
+              ],
+            ),
+        ),
+      ),
       body: Column(
         children: [
           Expanded(

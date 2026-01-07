@@ -4,6 +4,8 @@ import 'package:campus_swap/features/home/presentation/pages/home_page.dart';
 import 'package:campus_swap/features/auth/presentation/pages/register_page.dart';
 import 'package:campus_swap/core/session/user_session.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:campus_swap/features/auth/presentation/pages/forgot_password_page.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -21,6 +23,7 @@ class _LoginPageState extends State<LoginPage> {
   bool _isPasswordVisible = false;
   bool _isLoading = false;
   bool _rememberMe = false;
+  final _storage = const FlutterSecureStorage();
 
   @override
   void initState() {
@@ -30,25 +33,37 @@ class _LoginPageState extends State<LoginPage> {
 
   Future<void> _loadUserCredentials() async {
     final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _rememberMe = prefs.getBool('remember_me') ?? false;
-      if (_rememberMe) {
-        _emailController.text = prefs.getString('email') ?? '';
-        _passwordController.text = prefs.getString('password') ?? '';
-      }
-    });
+    final remember = prefs.getBool('remember_me') ?? false;
+    
+    String email = '';
+    String password = '';
+    
+    if (remember) {
+        email = await _storage.read(key: 'email') ?? '';
+        password = await _storage.read(key: 'password') ?? '';
+    }
+
+    if (mounted) {
+      setState(() {
+        _rememberMe = remember;
+        if (remember) {
+            _emailController.text = email;
+            _passwordController.text = password;
+        }
+      });
+    }
   }
 
   Future<void> _saveUserCredentials() async {
     final prefs = await SharedPreferences.getInstance();
     if (_rememberMe) {
       await prefs.setBool('remember_me', true);
-      await prefs.setString('email', _emailController.text);
-      await prefs.setString('password', _passwordController.text);
+      await _storage.write(key: 'email', value: _emailController.text);
+      await _storage.write(key: 'password', value: _passwordController.text);
     } else {
       await prefs.remove('remember_me');
-      await prefs.remove('email');
-      await prefs.remove('password');
+      await _storage.delete(key: 'email');
+      await _storage.delete(key: 'password');
     }
   }
 
@@ -197,6 +212,15 @@ class _LoginPageState extends State<LoginPage> {
                             ),
                             const Text('Remember Me'),
                           ],
+                        ),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton(
+                            onPressed: () {
+                                Navigator.push(context, MaterialPageRoute(builder: (_) => const ForgotPasswordPage()));
+                            },
+                            child: const Text('Forgot Password?'),
+                          ),
                         ),
                       ],
                     ),

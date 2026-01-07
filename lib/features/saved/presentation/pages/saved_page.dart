@@ -31,7 +31,7 @@ class _SavedPageState extends State<SavedPage> {
 
     try {
       final apiClient = ApiClient();
-      final response = await apiClient.get('/saved/${session.userId}');
+      final response = await apiClient.get('/saved');
       if (response is List) {
         setState(() {
           _savedProducts = response.map((data) => Product.fromJson(data)).toList();

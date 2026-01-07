@@ -28,7 +28,7 @@ const Product = sequelize.define('Product', {
         defaultValue: 'Good',
     },
     image_urls: {
-        type: DataTypes.JSON, // SQLite compat
+        type: DataTypes.JSON,
         defaultValue: [],
     },
     status: {

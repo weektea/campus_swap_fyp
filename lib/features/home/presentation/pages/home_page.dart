@@ -34,10 +34,40 @@ class _HomePageState extends State<HomePage> {
     {'label': 'Sports', 'icon': Icons.sports_basketball_rounded},
   ];
 
+  String _sortBy = 'newest'; // newest, price_asc, price_desc
+  RangeValues _priceRange = const RangeValues(0, 1000);
+  String? _selectedCondition;
+
+  List<Product> _recommendedProducts = [];
+
+  Future<void> _fetchRecommendations() async {
+    // Only fetch for logged-in users? Or generic
+    if (!UserSession().isLoggedIn) return;
+
+    try {
+       final apiClient = ApiClient();
+       final response = await apiClient.get('/recommendations');
+       if (response is List && mounted) {
+          setState(() {
+             _recommendedProducts = response.map((e) => Product.fromJson(e)).toList();
+          });
+       }
+    } catch(e) {
+       print("Rec Error: $e");
+    }
+  }
+
   @override
   void initState() {
     super.initState();
     _fetchProducts();
+    _fetchRecommendations(); // Load recommendations
+  }
+
+  @override
+  void didChangeDependencies() {
+     super.didChangeDependencies();
+     // Reload if coming back? 
   }
 
   Future<void> _fetchProducts([String? query]) async {
@@ -55,14 +85,21 @@ class _HomePageState extends State<HomePage> {
         String cat = _categories[_selectedCategoryIndex]['label'];
         params.add('category=$cat');
       }
+      
+      // Sorting
+      params.add('sort=$_sortBy');
+
+      // Price Filter
+      params.add('min_price=${_priceRange.start}');
+      params.add('max_price=${_priceRange.end}');
+
+      if (_selectedCondition != null) {
+          params.add('condition=$_selectedCondition');
+      }
 
       if (params.isNotEmpty) {
         endpoint += '?${params.join('&')}';
       }
-
-      // Append filter
-      endpoint += endpoint.contains('?') ? '&' : '?';
-      endpoint += 'min_price=${_priceRange.start}&max_price=${_priceRange.end}';
 
       final response = await apiClient.get(endpoint);
       if (response is List) {
@@ -195,9 +232,18 @@ class _HomePageState extends State<HomePage> {
                   hintText: 'Search books, electronics...',
                   hintStyle: GoogleFonts.outfit(color: Colors.grey[400]),
                   prefixIcon: const Icon(Icons.search_rounded),
-                  suffixIcon: IconButton(
-                    icon: const Icon(Icons.filter_list_rounded),
-                    onPressed: _showFilterDialog,
+                  suffixIcon: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.sort_rounded),
+                        onPressed: _showSortDialog,
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.filter_list_rounded),
+                        onPressed: _showFilterDialog,
+                      ),
+                    ],
                   ),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(16),
@@ -241,6 +287,45 @@ class _HomePageState extends State<HomePage> {
 
           const SizedBox(height: 16),
 
+          if (_recommendedProducts.isNotEmpty) ...[
+             Padding(
+               padding: const EdgeInsets.symmetric(horizontal: 20),
+               child: Text("Recommended for You", style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold)),
+             ),
+             const SizedBox(height: 12),
+             SizedBox(
+               height: 240, // Height for horizontal card
+               child: ListView.builder(
+                 padding: const EdgeInsets.symmetric(horizontal: 12),
+                 scrollDirection: Axis.horizontal,
+                 itemCount: _recommendedProducts.length,
+                 itemBuilder: (context, index) {
+                    return SizedBox(
+                       width: 160,
+                       child: Padding(
+                         padding: const EdgeInsets.symmetric(horizontal: 8.0), // Spacing between items
+                         child: ProductCard(
+                            product: _recommendedProducts[index],
+                            onTap: () {
+                              Navigator.push(context, MaterialPageRoute(
+                                builder: (_) => ProductDetailsPage(product: _recommendedProducts[index])
+                              ));
+                            },
+                         ),
+                       ),
+                    );
+                 },
+               ),
+             ),
+             const SizedBox(height: 24),
+          ],
+          
+          Padding(
+             padding: const EdgeInsets.symmetric(horizontal: 20),
+             child: Text("All Listings", style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold)),
+          ),
+          const SizedBox(height: 12),
+
           // Product Grid
           Expanded(
             child: _isLoading 
@@ -278,6 +363,42 @@ class _HomePageState extends State<HomePage> {
 
   RangeValues _priceRange = const RangeValues(0, 1000);
 
+  void _showSortDialog() {
+      showModalBottomSheet(
+          context: context,
+          shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+          builder: (context) {
+              return Padding(
+                  padding: const EdgeInsets.all(24.0),
+                  child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                          Text("Sort By", style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 16),
+                          _buildSortOption('Newest Listed', 'newest'),
+                          _buildSortOption('Price: Low to High', 'price_asc'),
+                          _buildSortOption('Price: High to Low', 'price_desc'),
+                      ],
+                  ),
+              );
+          }
+      );
+  }
+
+  Widget _buildSortOption(String label, String value) {
+      final isSelected = _sortBy == value;
+      return ListTile(
+          title: Text(label, style: GoogleFonts.outfit(fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
+          trailing: isSelected ? Icon(Icons.check, color: Theme.of(context).colorScheme.primary) : null,
+          onTap: () {
+              Navigator.pop(context);
+              setState(() => _sortBy = value);
+              _fetchProducts();
+          },
+      );
+  }
+
   void _showFilterDialog() {
       showModalBottomSheet(
           context: context,
@@ -308,13 +429,38 @@ class _HomePageState extends State<HomePage> {
                                           });
                                       },
                                   ),
-                                  const SizedBox(height: 24),
+                                  // const SizedBox(height: 24),
+                                  Text("Item Condition", style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold)),
+                                  const SizedBox(height: 12),
+                                  Wrap(
+                                      spacing: 8.0,
+                                      children: ['Any', 'New', 'Like New', 'Good', 'Fair', 'Poor'].map((condition) {
+                                          final isSelected = _selectedCondition == condition || (condition == 'Any' && _selectedCondition == null);
+                                          return ChoiceChip(
+                                              label: Text(condition),
+                                              selected: isSelected,
+                                              onSelected: (bool selected) {
+                                                  setModalState(() {
+                                                       _selectedCondition = (condition == 'Any' || !selected) ? null : condition;
+                                                  });
+                                              },
+                                              selectedColor: Theme.of(context).colorScheme.primary.withOpacity(0.2),
+                                              labelStyle: GoogleFonts.outfit(
+                                                  color: isSelected ? Theme.of(context).colorScheme.primary : Colors.black
+                                              ),
+                                              checkmarkColor: Theme.of(context).colorScheme.primary,
+                                          );
+                                      }).toList(),
+                                  ),
+                                  const SizedBox(height: 32),
                                   SizedBox(
                                       width: double.infinity,
                                       child: ElevatedButton(
                                           onPressed: () {
                                               Navigator.pop(context);
-                                              _fetchProducts(); // Apply filter
+                                              // Ensure condition state is updated in parent
+                                              setState(() {}); 
+                                              _fetchProducts(); // Apply filter with new condition
                                           },
                                           style: ElevatedButton.styleFrom(
                                               backgroundColor: Theme.of(context).colorScheme.primary,

@@ -27,10 +27,30 @@ class _ProfilePageState extends State<ProfilePage> {
   void initState() {
     super.initState();
     _fetchStats();
+    _fetchUserProfile();
+  }
+
+  // Fetch fresh profile data to get latest avatar
+  Future<void> _fetchUserProfile() async {
+      final session = UserSession();
+      if (!session.isLoggedIn) return;
+      try {
+          final apiClient = ApiClient();
+          // Assuming we have a route GET /auth/me or similar, if not we use /auth/user/:id
+          final userData = await apiClient.get('/auth/user/${session.userId}');
+          if (userData != null && userData['profile_picture'] != null) {
+              setState(() {
+                  session.avatarUrl = userData['profile_picture'];
+              });
+          }
+      } catch (e) {
+          debugPrint('Error fetching profile: $e');
+      }
   }
 
   Future<void> _fetchStats() async {
       final session = UserSession();
+// ... (rest of _fetchStats same logic)
       if (!session.isLoggedIn) {
           setState(() => _loadingStats = false);
           return;
@@ -40,6 +60,7 @@ class _ProfilePageState extends State<ProfilePage> {
           final apiClient = ApiClient();
           // Fetch selling transactions that are completed
           final res = await apiClient.get('/transactions/user/${session.userId}?type=selling');
+// ...
           if (res is List) {
               final completedSales = res.where((t) => t['status'] == 'Completed').toList();
               final count = completedSales.length;
@@ -73,25 +94,19 @@ class _ProfilePageState extends State<ProfilePage> {
           final apiClient = ApiClient();
           // 1. Upload Image
           final uploadRes = await apiClient.postMultipart('/upload', pickedFile);
-          final imageUrl = uploadRes['url']; // Expecting { url: '/uploads/filename.jpg' }
+          final imageUrl = uploadRes['url']; 
 
-          // 2. Update User Profile with new Avatar URL
-          // Note: Backend needs an endpoint to update user profile picture, or generic user update
+          // 2. Update User Profile
           await apiClient.patch('/auth/user/${session.userId}', {'profile_picture': imageUrl});
 
-          // 3. Update Local Session (Mock update for now until session sync logic is robust)
-          // Ideally UserSession should have a method to update fields or refresh from API
-          // For now we assume we just trigger a rebuild if we were storing it, 
-          // but since UserSession is a singleton with simple fields, we can't easily "set" a new avatar URL 
-          // unless we expose a setter or refresh method.
-          // Let's assume UserSession has a mechanism or we just rely on the UI update for now if we stored it in state.
-          // TO DO: Add setAvatarUrl to UserSession. 
+          // 3. Update Local Session
+          setState(() {
+              session.avatarUrl = imageUrl;
+              _isUploading = false;
+          });
           
           if (mounted) {
              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Avatar Updated!')));
-             setState(() => _isUploading = false);
-             // Force refresh or update session if possible. 
-             // session.avatarUrl = imageUrl; // Hypothetically
           }
       } catch (e) {
           if (mounted) {
@@ -120,11 +135,12 @@ class _ProfilePageState extends State<ProfilePage> {
                     CircleAvatar(
                       radius: 50,
                       backgroundColor: Colors.teal,
-                      // TODO: Use session.avatarUrl if available
-                      // backgroundImage: session.avatarUrl != null ? NetworkImage('${ApiClient.baseUrl.replaceAll('/api', '')}${session.avatarUrl}') : null,
+                      backgroundImage: session.avatarUrl != null 
+                          ? NetworkImage('${ApiClient.baseUrl.replaceAll('/api', '')}${session.avatarUrl}') 
+                          : null,
                       child: _isUploading 
                         ? const CircularProgressIndicator(color: Colors.white)
-                        : const Icon(Icons.person, size: 50, color: Colors.white),
+                        : (session.avatarUrl == null ? const Icon(Icons.person, size: 50, color: Colors.white) : null),
                     ),
                     Positioned(
                         bottom: 0,

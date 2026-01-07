@@ -22,23 +22,42 @@ class _SellPageState extends State<SellPage> {
   final TextEditingController _descController = TextEditingController();
   final TextEditingController _maxDurationController = TextEditingController();
 
-  XFile? _imageFile;
+  List<XFile> _imageFiles = [];
   final ImagePicker _picker = ImagePicker();
 
-  Future<void> _analyzeImage() async {
-    // Optimization: Resize image to max 1024px width and 80% quality to save bandwidth
-    final XFile? image = await _picker.pickImage(
-      source: ImageSource.gallery,
-      maxWidth: 1024, 
-      imageQuality: 80
+  static const int _maxImages = 9;
+
+  Future<void> _pickImages() async {
+    if (_imageFiles.length >= _maxImages) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Maximum $_maxImages images allowed.')));
+        return;
+    }
+
+    final List<XFile> images = await _picker.pickMultiImage(
+        maxWidth: 1024,
+        imageQuality: 80 // Compression is key for size limit
     );
-    if (image == null) return;
+    
+    if (images.isNotEmpty) {
+        final remainingSlots = _maxImages - _imageFiles.length;
+        final imagesToAdd = images.take(remainingSlots).toList();
+        
+        if (images.length > remainingSlots) {
+             ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Only added first $remainingSlots images. Max $_maxImages allowed.')));
+        }
 
-    setState(() {
-      _imageFile = image;
-      _isAnalyzing = true;
-    });
+        setState(() {
+            _imageFiles.addAll(imagesToAdd);
+            // If first image added and no category, analyze it
+            if (_imageFiles.length == imagesToAdd.length && _selectedCategory == null) {
+                _analyzeImage(_imageFiles.first);
+            }
+        });
+    }
+  }
 
+  Future<void> _analyzeImage(XFile image) async {
+    setState(() => _isAnalyzing = true);
     try {
       final apiClient = ApiClient();
       final result = await apiClient.postMultipart('/products/classify', image);
@@ -46,7 +65,6 @@ class _SellPageState extends State<SellPage> {
       setState(() {
         _isAnalyzing = false;
         _selectedCategory = result['category'] ?? 'Others';
-        // Removed auto-filling title to avoid "Detected Category" awkwardness
       });
 
       if (mounted) {
@@ -58,14 +76,8 @@ class _SellPageState extends State<SellPage> {
       print('AI Error: $e');
       setState(() { 
         _isAnalyzing = false;
-        // Fallback to manual selection if AI fails
         _selectedCategory = 'Others';
       });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-           SnackBar(content: Text('AI Analysis failed. Please enter details manually.'))
-        );
-      }
     }
   }
 
@@ -195,43 +207,88 @@ class _SellPageState extends State<SellPage> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // Image Upload Section (Smart Recognition)
-            GestureDetector(
-              onTap: _analyzeImage,
-              child: Container(
-                height: 200,
-                decoration: BoxDecoration(
-                  color: Colors.grey[100],
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.grey[300]!, style: BorderStyle.solid),
+            SizedBox(
+                height: 120,
+                child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: _imageFiles.length + 1,
+                    itemBuilder: (context, index) {
+                        if (index == 0) {
+                            return GestureDetector(
+                                onTap: _pickImages,
+                                child: Container(
+                                    width: 100,
+                                    margin: const EdgeInsets.only(right: 12),
+                                    decoration: BoxDecoration(
+                                        color: Colors.grey[100],
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(color: Colors.grey[300]!)
+                                    ),
+                                    child: Column(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                            Icon(Icons.add_a_photo_rounded, color: Theme.of(context).colorScheme.primary),
+                                            const SizedBox(height: 4),
+                                            Text("Add Photos", style: GoogleFonts.outfit(fontSize: 12)),
+                                            Text("(Max 9)", style: GoogleFonts.outfit(fontSize: 10, color: Colors.grey))
+                                        ],
+                                    ),
+                                ),
+                            );
+                        }
+                        
+                        final image = _imageFiles[index - 1];
+                        final isCover = (index - 1) == 0;
+
+                        return Stack(
+                            children: [
+                                Container(
+                                    width: 100,
+                                    margin: const EdgeInsets.only(right: 12),
+                                    child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(12),
+                                        child: kIsWeb 
+                                          ? Image.network(image.path, fit: BoxFit.cover, height: 120)
+                                          : Image.file(File(image.path), fit: BoxFit.cover, height: 120),
+                                    ),
+                                ),
+                                if (isCover)
+                                  Positioned(
+                                    bottom: 0,
+                                    left: 0,
+                                    right: 12, // Match margin
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        color: Colors.black.withOpacity(0.6),
+                                        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
+                                      ),
+                                      alignment: Alignment.center,
+                                      padding: const EdgeInsets.symmetric(vertical: 2),
+                                      child: Text("Cover", style: GoogleFonts.outfit(color: Colors.white, fontSize: 10)),
+                                    ),
+                                  ),
+                                Positioned(
+                                    top: 4,
+                                    right: 16, // Adjusted for margin
+                                    child: GestureDetector(
+                                        onTap: () {
+                                            setState(() {
+                                                _imageFiles.removeAt(index - 1);
+                                            });
+                                        },
+                                        child: Container(
+                                            padding: const EdgeInsets.all(4),
+                                            decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
+                                            child: const Icon(Icons.close, color: Colors.white, size: 14)
+                                        ),
+                                    ),
+                                ),
+                                if (_isAnalyzing && index == 1) // Show spinner on first image if analyzing
+                                    const Positioned.fill(child: Center(child: CircularProgressIndicator())),
+                            ],
+                        );
+                    },
                 ),
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    if (_imageFile != null)
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(16),
-                          child: kIsWeb 
-                              ? Image.network(_imageFile!.path, fit: BoxFit.contain)
-                              : Image.file(File(_imageFile!.path), fit: BoxFit.contain),
-                        ),
-                    if (_isAnalyzing)
-                        const Center(child: CircularProgressIndicator())
-                    else if (_imageFile == null)
-                        Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                             Icon(Icons.camera_alt_rounded, size: 48, color: Theme.of(context).colorScheme.primary),
-                             const SizedBox(height: 12),
-                             Text('Tap to upload photo & auto-detect', style: GoogleFonts.outfit()),
-                             TextButton(
-                               onPressed: _analyzeImage, 
-                               child: Text('Open Gallery', style: GoogleFonts.outfit())
-                              )
-                          ],
-                        ),
-                  ],
-                ),
-              ),
             ),
             const SizedBox(height: 24),
 
@@ -384,8 +441,8 @@ class _SellPageState extends State<SellPage> {
     }
 
     final double price = double.tryParse(_priceController.text) ?? 0.0;
-    if (price <= 0) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Price must be greater than 0', style: GoogleFonts.outfit())));
+    if (price < 0) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Price cannot be negative', style: GoogleFonts.outfit())));
         return;
     }
 
@@ -394,16 +451,16 @@ class _SellPageState extends State<SellPage> {
     try {
       final apiClient = ApiClient();
       
-      // 1. Upload Image first if exists
-      String? uploadedImageUrl;
-      if (_imageFile != null) {
+      // 1. Upload Images
+      List<String> uploadedImageUrls = [];
+      for (var img in _imageFiles) {
           try {
-              final uploadRes = await apiClient.postMultipart('/upload', _imageFile!);
-              uploadedImageUrl = uploadRes['url'];
+              final uploadRes = await apiClient.postMultipart('/upload', img);
+              if (uploadRes['url'] != null) {
+                  uploadedImageUrls.add(uploadRes['url']);
+              }
            } catch(e) {
-              print("Upload failed: $e");
-              // Decide whether to fail hard or soft. Let's fail hard if image exists but fails.
-              throw Exception("Image upload failed. Check connection.");
+              print("Upload failed for one image: $e");
            }
       }
 
@@ -414,7 +471,7 @@ class _SellPageState extends State<SellPage> {
         'condition': _selectedCondition, 
         'seller_id': session.userId,
         'type': _listingType,
-        'image_urls': uploadedImageUrl != null ? [uploadedImageUrl] : [],
+        'image_urls': uploadedImageUrls,
       };
 
       if (_listingType == 'Sale') {
@@ -433,7 +490,7 @@ class _SellPageState extends State<SellPage> {
         _priceController.clear();
         _descController.clear();
         setState(() {
-             _imageFile = null;
+             _imageFiles.clear();
              _selectedCategory = null;
              _selectedCondition = 'Good';
         });

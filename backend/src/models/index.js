@@ -44,4 +44,6 @@ User.hasMany(Message, { foreignKey: 'receiver_id', as: 'received_messages' });
 Message.belongsTo(User, { foreignKey: 'sender_id', as: 'sender' });
 Message.belongsTo(User, { foreignKey: 'receiver_id', as: 'receiver' });
 
-export { User, Product, Transaction, SavedItem, Message, Review, Notification };
+import UserInteraction from './UserInteraction.js';
+
+export { User, Product, Transaction, SavedItem, Message, Review, Notification, UserInteraction };

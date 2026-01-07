@@ -16,6 +16,13 @@ const User = sequelize.define('User', {
             is: /.*\.edu\.my$/i, // Enforce .edu.my domain for campus verification
         },
     },
+    phone_number: {
+        type: DataTypes.STRING,
+        allowNull: true,
+        validate: {
+            is: /^[0-9+-\s]+$/i // Basic phone validation (only digits, +, -, space)
+        }
+    },
     password_hash: {
         type: DataTypes.STRING,
         allowNull: false,

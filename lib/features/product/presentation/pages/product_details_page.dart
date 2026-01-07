@@ -6,6 +6,7 @@ import 'package:campus_swap/features/chat/presentation/pages/chat_detail_page.da
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:share_plus/share_plus.dart';
 
 class ProductDetailsPage extends StatefulWidget {
   final Product product;
@@ -16,13 +17,47 @@ class ProductDetailsPage extends StatefulWidget {
   State<ProductDetailsPage> createState() => _ProductDetailsPageState();
 }
 
-class _ProductDetailsPageState extends State<ProductDetailsPage> {
   bool _isSaved = false;
+  bool _isBuying = false;
+  List<Product> _sellerProducts = [];
+  bool _isLoadingSellerItems = true;
 
   @override
   void initState() {
     super.initState();
-    // In a real app, we would fetch the true 'isSaved' state here.
+    _trackView();
+    _fetchSellerProducts();
+  }
+
+  Future<void> _fetchSellerProducts() async {
+      try {
+          final apiClient = ApiClient();
+          final response = await apiClient.get('/products?seller_id=${widget.product.sellerId}');
+          if (response is List) {
+              if (mounted) {
+                  setState(() {
+                      // Filter out current product
+                      _sellerProducts = response
+                          .map((data) => Product.fromJson(data))
+                          .where((p) => p.id != widget.product.id)
+                          .toList();
+                      _isLoadingSellerItems = false;
+                  });
+              }
+          }
+      } catch (e) {
+          print("Error fetching seller items: $e");
+          if (mounted) setState(() => _isLoadingSellerItems = false);
+      }
+  }
+
+  void _trackView() {
+    if (UserSession().isLoggedIn) {
+       ApiClient().post('/recommendations/track', {
+         'product_id': widget.product.id,
+         'type': 'view'
+       }).catchError((e) => print("Track Error: $e"));
+    }
   }
 
   @override
@@ -50,6 +85,18 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                 child: CircleAvatar(
                   backgroundColor: Colors.white.withOpacity(0.8),
                   child: IconButton(
+                    icon: Icon(Icons.share, color: theme.colorScheme.onSurface),
+                    onPressed: () {
+                        Share.share('Check out ${widget.product.title} for RM ${widget.product.price} on Campus Swap!');
+                    },
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: CircleAvatar(
+                  backgroundColor: Colors.white.withOpacity(0.8),
+                  child: IconButton(
                     icon: Icon(
                       _isSaved ? Icons.favorite : Icons.favorite_border,
                       color: _isSaved ? Colors.red : theme.colorScheme.onSurface,
@@ -60,26 +107,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
               ),
             ],
             flexibleSpace: FlexibleSpaceBar(
-              background: Hero(
-                tag: 'product_image_${widget.product.id}',
-                child: widget.product.imageUrl.isNotEmpty
-                  ? CachedNetworkImage(
-                      imageUrl: widget.product.imageUrl,
-                      fit: BoxFit.cover,
-                      placeholder: (context, url) => Container(
-                        color: Colors.grey[200],
-                        child: const Center(child: CircularProgressIndicator()),
-                      ),
-                      errorWidget: (context, url, error) => Container(
-                        color: Colors.grey[200],
-                        child: const Icon(Icons.broken_image, size: 64, color: Colors.grey),
-                      ),
-                    )
-                  : Container(
-                      color: Colors.grey[200],
-                      child: const Icon(Icons.image_not_supported, size: 64, color: Colors.grey),
-                    ),
-              ),
+                child: _buildImageGallery(widget.product),
             ),
           ),
           SliverToBoxAdapter(
@@ -131,28 +159,40 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                   const SizedBox(height: 12),
                   Row(
                      children: [
-                       Text(
-                         'RM',
-                         style: GoogleFonts.outfit(
-                           fontSize: 16,
-                           fontWeight: FontWeight.bold,
-                           color: theme.colorScheme.primary,
-                           textBaseline: TextBaseline.alphabetic
-                         ),
-                       ),
-                       Text(
-                         widget.product.type == 'Rent' ? widget.product.rentalPricePerDay.toStringAsFixed(2) : widget.product.price.toStringAsFixed(2),
-                         style: GoogleFonts.outfit(
-                           fontSize: 32,
-                           fontWeight: FontWeight.w900,
-                           color: theme.colorScheme.primary,
-                         ),
-                       ),
-                        if (widget.product.type == 'Rent') 
-                           Padding(
-                             padding: const EdgeInsets.only(left: 4.0, top: 8.0),
-                             child: Text('/ day', style: GoogleFonts.outfit(color: Colors.grey, fontSize: 16)),
+                       Flexible(
+                         child: FittedBox(
+                           fit: BoxFit.scaleDown,
+                           child: Row(
+                             mainAxisSize: MainAxisSize.min,
+                             crossAxisAlignment: CrossAxisAlignment.baseline,
+                             textBaseline: TextBaseline.alphabetic,
+                             children: [
+                               Text(
+                                 'RM',
+                                 style: GoogleFonts.outfit(
+                                   fontSize: 16,
+                                   fontWeight: FontWeight.bold,
+                                   color: theme.colorScheme.primary,
+                                 ),
+                               ),
+                               const SizedBox(width: 4),
+                               Text(
+                                 widget.product.type == 'Rent' ? widget.product.rentalPricePerDay.toStringAsFixed(2) : widget.product.price.toStringAsFixed(2),
+                                 style: GoogleFonts.outfit(
+                                   fontSize: 32,
+                                   fontWeight: FontWeight.w900,
+                                   color: theme.colorScheme.primary,
+                                 ),
+                               ),
+                               if (widget.product.type == 'Rent') 
+                                 Padding(
+                                   padding: const EdgeInsets.only(left: 4.0),
+                                   child: Text('/ day', style: GoogleFonts.outfit(color: Colors.grey, fontSize: 16)),
+                                 ),
+                             ],
                            ),
+                         ),
+                       ),
                        const Spacer(),
                        Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -198,18 +238,22 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                           )
                         ),
                         const SizedBox(width: 16),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                                "Seller",
-                                style: GoogleFonts.outfit(color: Colors.grey[500], fontSize: 12)
-                            ),
-                            Text(
-                              widget.product.sellerName,
-                              style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 16),
-                            ),
-                          ],
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                  "Seller",
+                                  style: GoogleFonts.outfit(color: Colors.grey[500], fontSize: 12)
+                              ),
+                              Text(
+                                widget.product.sellerName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 16),
+                              ),
+                            ],
+                          ),
                         ),
                         const Spacer(),
                         IconButton(onPressed: (){}, icon: const Icon(Icons.chevron_right, color: Colors.grey))
@@ -218,6 +262,66 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                   ).animate().fadeIn(duration: 500.ms, delay: 300.ms).slideY(begin: 0.1),
 
                   const SizedBox(height: 32),
+                  // Seller Portfolio
+                  if (_sellerProducts.isNotEmpty) ...[
+                      Text("More from ${widget.product.sellerName}", style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 18)),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        height: 140,
+                        child: ListView.builder(
+                            scrollDirection: Axis.horizontal,
+                            itemCount: _sellerProducts.length,
+                            itemBuilder: (context, index) {
+                                final item = _sellerProducts[index];
+                                return GestureDetector(
+                                    onTap: () {
+                                        // Navigate to that product
+                                         Navigator.push(context, MaterialPageRoute(
+                                            builder: (_) => ProductDetailsPage(product: item)
+                                          ));
+                                    },
+                                    child: Container(
+                                        width: 110,
+                                        margin: const EdgeInsets.only(right: 12),
+                                        decoration: BoxDecoration(
+                                            color: Colors.white,
+                                            borderRadius: BorderRadius.circular(12),
+                                            border: Border.all(color: Colors.grey.shade200)
+                                        ),
+                                        child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                                Expanded(
+                                                    child: ClipRRect(
+                                                        borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                                                        child: item.imageUrl.isNotEmpty
+                                                            ? CachedNetworkImage(
+                                                                imageUrl: item.imageUrl,
+                                                                fit: BoxFit.cover,
+                                                                width: double.infinity,
+                                                              )
+                                                            : Container(color: Colors.grey[100]),
+                                                    ),
+                                                ),
+                                                Padding(
+                                                    padding: const EdgeInsets.all(8.0),
+                                                    child: Column(
+                                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                                        children: [
+                                                            Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.bold)),
+                                                            Text('RM ${item.price.toStringAsFixed(0)}', style: GoogleFonts.outfit(fontSize: 12, color: Theme.of(context).colorScheme.primary)),
+                                                        ],
+                                                    ),
+                                                )
+                                            ],
+                                        ),
+                                    ),
+                                );
+                            },
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+                  ],
                   Text('Description', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 18)),
                   const SizedBox(height: 8),
                   Text(
@@ -256,19 +360,38 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
       final isSeller = session.userId == widget.product.sellerId;
 
       if (isSeller) {
-          return SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                  onPressed: _deleteProduct, 
-                  icon: const Icon(Icons.delete_outline),
-                  label: Text('Delete Listing', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red[50],
-                    foregroundColor: Colors.red,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    elevation: 0,
-                  ),
-              ),
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 0.0),
+            child: Row(
+              children: [
+                   Expanded(
+                     child: OutlinedButton.icon(
+                        onPressed: _markAsSold, 
+                        icon: const Icon(Icons.check_circle_outline),
+                        label: Text('Mark Sold', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.green,
+                          side: const BorderSide(color: Colors.green),
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                        ),
+                      ),
+                   ),
+                   const SizedBox(width: 12),
+                   Expanded(
+                     child: ElevatedButton.icon(
+                        onPressed: _deleteProduct, 
+                        icon: const Icon(Icons.delete_outline),
+                        label: Text('Delete', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red[50],
+                          foregroundColor: Colors.red,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          elevation: 0,
+                        ),
+                     ),
+                   ),
+              ],
+            ),
           );
       }
 
@@ -306,6 +429,33 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
               ),
             ],
           );
+  }
+
+  void _markAsSold() async {
+      final confirm = await showDialog(
+          context: context, 
+          builder: (context) => AlertDialog(
+              title: Text("Mark as Sold?", style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+              content: Text("This will mark the item as sold and hide it from future searches.", style: GoogleFonts.outfit()),
+              actions: [
+                  TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancel")),
+                  TextButton(onPressed: () => Navigator.pop(context, true), child: const Text("Confirm", style: TextStyle(color: Colors.green))),
+              ],
+          )
+      );
+
+      if (confirm == true) {
+          try {
+              final apiClient = ApiClient();
+              await apiClient.patch('/products/${widget.product.id}', {'status': 'Sold'});
+              if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Item marked as Sold!")));
+                  Navigator.pop(context); // Go back
+              }
+          } catch (e) {
+              if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Failed: $e")));
+          }
+      }
   }
 
   void _deleteProduct() async {
@@ -360,9 +510,16 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
       try {
          final apiClient = ApiClient();
          await apiClient.post('/saved/toggle', {
-           'user_id': session.userId,
            'product_id': widget.product.id
          });
+         
+         if (_isSaved) {
+             apiClient.post('/recommendations/track', {
+                'product_id': widget.product.id,
+                'type': 'save'
+             });
+         }
+
       } catch (e) {
          setState(() => _isSaved = !_isSaved);
       }
@@ -460,9 +617,13 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      _buyNow(context);
+                    onPressed: _isBuying ? null : () {
+                      // Navigator.pop(context); // Don't pop here, let _buyNow handle it or keep it open?
+                      // The original logic popped it immediately which is weird if it fails.
+                      // Let's keep modal open until success?
+                      // Actually, usually we pop confirmation then show loading overlay, or keep confirmation open with loading.
+                      // For simplicity, let's keep it open and show loading inside button.
+                      _buyNow(context); 
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Theme.of(context).colorScheme.primary,
@@ -470,7 +631,9 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
-                    child: Text('Confirm & Schedule', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+                    child: _isBuying
+                        ? const Center(child: CircularProgressIndicator(color: Colors.white))
+                        : Text('Confirm & Schedule', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
                   ),
                 ),
               ],
@@ -482,6 +645,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
   }
 
   void _buyNow(BuildContext context) async {
+      setState(() => _isBuying = true);
       try {
         final apiClient = ApiClient();
         await apiClient.post('/transactions', {
@@ -499,11 +663,77 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                 backgroundColor: Colors.green,
               )
             );
+            Navigator.pop(context); // Close details page on success? Or just stay. Usually stay is fine or go to chat.
         }
       } catch (e) {
           if (context.mounted) {
              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
           }
+      } finally {
+          if (mounted) setState(() => _isBuying = false);
       }
+  }
+
+  int _currentImageIndex = 0;
+
+  Widget _buildImageGallery(Product product) {
+    // Priority: imageUrls > imageUrl
+    List<String> images = product.imageUrls.isNotEmpty 
+        ? product.imageUrls 
+        : (product.imageUrl.isNotEmpty ? [product.imageUrl] : []);
+    
+    if (images.isEmpty) {
+        return Container(
+            color: Colors.grey[200],
+            child: const Icon(Icons.image_not_supported, size: 64, color: Colors.grey),
+        );
+    }
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        PageView.builder(
+          onPageChanged: (index) {
+             if (mounted) setState(() => _currentImageIndex = index);
+          },
+          itemCount: images.length,
+          itemBuilder: (context, index) {
+            return Hero(
+                tag: 'product_image_${product.id}_$index', // Unique tag per image? careful with Hero
+                // Simple tag for first image usually works best for transition
+                child: CachedNetworkImage(
+                    imageUrl: images[index],
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) => Container(color: Colors.grey[200]),
+                    errorWidget: (context, url, error) => const Icon(Icons.error),
+                ),
+            );
+          },
+        ),
+        if (images.length > 1) 
+          Positioned(
+            bottom: 16,
+            left: 0,
+            right: 0,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: images.asMap().entries.map((entry) {
+                return Container(
+                  width: 8.0,
+                  height: 8.0,
+                  margin: const EdgeInsets.symmetric(horizontal: 4.0),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: (Theme.of(context).brightness == Brightness.dark
+                            ? Colors.white
+                            : Colors.black)
+                        .withOpacity(_currentImageIndex == entry.key ? 0.9 : 0.4),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+      ],
+    );
   }
 }

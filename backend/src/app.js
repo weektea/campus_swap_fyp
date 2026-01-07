@@ -40,6 +40,7 @@ import messageRoutes from './routes/messageRoutes.js';
 import reviewRoutes from './routes/reviewRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
 import uploadRoutes from './routes/uploadRoutes.js';
+import recommendationRoutes from './routes/recommendationRoutes.js';
 
 
 
@@ -51,7 +52,7 @@ app.use('/api/messages', messageRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/upload', uploadRoutes);
-
+app.use('/api/recommendations', recommendationRoutes);
 
 
 import adminRoutes from './routes/adminRoutes.js';

@@ -11,13 +11,18 @@ class CampusSwapApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Campus Swap',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightTheme,
-      darkTheme: AppTheme.darkTheme,
-      themeMode: ThemeMode.system,
-      home: const LoginPage(),
+    return AnimatedBuilder(
+      animation: ThemeProvider.instance,
+      builder: (context, _) {
+        return MaterialApp(
+          title: 'Campus Swap',
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.lightTheme,
+          darkTheme: AppTheme.darkTheme,
+          themeMode: ThemeProvider.instance.themeMode,
+          home: const LoginPage(),
+        );
+      },
     );
   }
 }

@@ -110,74 +110,123 @@ class _MyTransactionsPageState extends State<MyTransactionsPage> with SingleTick
             final product = item['product'] ?? {};
             final otherParty = isBuying ? (item['seller'] ?? {}) : (item['buyer'] ?? {});
             final status = item['status'];
-            final review = item['review']; // Check if already reviewed (need backend support for this include)
+            final reviews = item['reviews'] as List?;
+            final hasRated = reviews != null && reviews.isNotEmpty;
+            final productImg = product['image_urls'] != null && (product['image_urls'] as List).isNotEmpty ? product['image_urls'][0] : (product['imageUrl'] ?? '');
 
             return Card(
                 elevation: 2,
                 margin: const EdgeInsets.only(bottom: 16),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                            Row(
-                                children: [
-                                    Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                        decoration: BoxDecoration(
-                                            color: _getStatusColor(status).withOpacity(0.1),
-                                            borderRadius: BorderRadius.circular(8)
+                    padding: const EdgeInsets.all(12),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                         // Product Image with Overlay
+                         ClipRRect(
+                           borderRadius: BorderRadius.circular(12),
+                           child: Stack(
+                             children: [
+                               SizedBox(
+                                 width: 80, height: 80,
+                                 child: productImg.isNotEmpty 
+                                   ? Image.network('${ApiClient.baseUrl.replaceAll('/api', '')}$productImg', fit: BoxFit.cover, 
+                                        errorBuilder: (c,o,s) => Container(color: Colors.grey[200], child: const Icon(Icons.error))) 
+                                   : Container(color: Colors.grey[200]),
+                               ),
+                               if (status == 'Completed' || status == 'Reserved')
+                                 Positioned.fill(
+                                   child: Container(
+                                     color: Colors.black.withOpacity(0.4),
+                                     child: Center(
+                                       child: Text(
+                                         status == 'Completed' ? 'SOLD' : 'RESERVED',
+                                         style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10),
+                                       ),
+                                     ),
+                                   ),
+                                 )
+                             ],
+                           ),
+                         ),
+                         const SizedBox(width: 12),
+                         Expanded(
+                           child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                                Row(
+                                    children: [
+                                        Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                            decoration: BoxDecoration(
+                                                color: _getStatusColor(status).withOpacity(0.1),
+                                                borderRadius: BorderRadius.circular(8)
+                                            ),
+                                            child: Text(status, style: GoogleFonts.outfit(color: _getStatusColor(status), fontWeight: FontWeight.bold, fontSize: 10)),
                                         ),
-                                        child: Text(status, style: GoogleFonts.outfit(color: _getStatusColor(status), fontWeight: FontWeight.bold, fontSize: 12)),
-                                    ),
-                                    const Spacer(),
-                                    Text('RM ${item['amount']}', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 16, color: Theme.of(context).colorScheme.primary)),
-                                ],
-                            ),
-                            const SizedBox(height: 12),
-                            Text(product['title'] ?? 'Unknown Item', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 16)),
-                            const SizedBox(height: 4),
-                            Text(
-                                isBuying ? 'Seller: ${otherParty['full_name'] ?? 'Unknown'}' : 'Buyer: ${otherParty['full_name'] ?? 'Unknown'}',
-                                style: GoogleFonts.outfit(color: Colors.grey[600], fontSize: 13)
-                            ),
-                            const SizedBox(height: 16),
-                            const Divider(),
-                            // Actions
-                            Row(
-                                mainAxisAlignment: MainAxisAlignment.end,
-                                children: [
-                                    if (status == 'Pending') ...[
-                                        TextButton(
-                                            onPressed: () => _updateStatus(item['id'], 'Cancelled'),
-                                            child: Text('Cancel', style: GoogleFonts.outfit(color: Colors.red)),
-                                        ),
-                                        if (!isBuying) // Seller can confirm
-                                            ElevatedButton(
-                                                onPressed: () => _updateStatus(item['id'], 'Scheduled'),
-                                                child: Text('Confirm Meetup', style: GoogleFonts.outfit()),
-                                            ),
+                                        const Spacer(),
+                                        Text('RM ${item['amount']}', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 14, color: Theme.of(context).colorScheme.primary)),
                                     ],
-                                    if (status == 'Scheduled') ...[
-                                         if (isBuying) // Buyer confirms receipt
-                                            ElevatedButton(
-                                                onPressed: () => _updateStatus(item['id'], 'Completed'),
-                                                style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                                                child: Text('Item Received', style: GoogleFonts.outfit(color: Colors.white)),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(product['title'] ?? 'Unknown Item', maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 15)),
+                                Text(
+                                    isBuying ? 'Seller: ${otherParty['full_name'] ?? 'Unknown'}' : 'Buyer: ${otherParty['full_name'] ?? 'Unknown'}',
+                                    style: GoogleFonts.outfit(color: Colors.grey[600], fontSize: 12)
+                                ),
+                                const SizedBox(height: 8),
+                                // Actions Row (Extracted)
+                                Row(
+                                    mainAxisAlignment: MainAxisAlignment.end,
+                                    children: [
+                                        if (status == 'Pending') ...[
+                                            SizedBox(
+                                              height: 32,
+                                              child: TextButton(
+                                                  onPressed: () => _updateStatus(item['id'], 'Cancelled'),
+                                                  child: Text('Cancel', style: GoogleFonts.outfit(color: Colors.red, fontSize: 12)),
+                                              ),
                                             ),
+                                            if (!isBuying) 
+                                                SizedBox(
+                                                  height: 32,
+                                                  child: ElevatedButton(
+                                                      onPressed: () => _updateStatus(item['id'], 'Scheduled'),
+                                                      style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 12)),
+                                                      child: Text('Confirm', style: GoogleFonts.outfit(fontSize: 12)),
+                                                  ),
+                                                ),
+                                        ],
+                                        if (status == 'Scheduled' && isBuying) ...[
+                                                SizedBox(
+                                                  height: 32,
+                                                  child: ElevatedButton(
+                                                      onPressed: () => _updateStatus(item['id'], 'Completed'),
+                                                      style: ElevatedButton.styleFrom(backgroundColor: Colors.green, padding: const EdgeInsets.symmetric(horizontal: 12)),
+                                                      child: Text('Received', style: GoogleFonts.outfit(color: Colors.white, fontSize: 12)),
+                                                  ),
+                                                ),
+                                        ],
+                                         if (status == 'Completed' && isBuying) ...[
+                                                hasRated 
+                                                ? Row(children: [const Icon(Icons.star, color: Colors.amber, size: 14), const SizedBox(width: 4), Text('Rated', style: GoogleFonts.outfit(fontSize: 12, color: Colors.amber))]) 
+                                                : SizedBox(
+                                                  height: 32,
+                                                  child: OutlinedButton(
+                                                      onPressed: () => _showRateDialog(item['id'], otherParty['id']),
+                                                      style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 12)),
+                                                      child: Text('Rate', style: GoogleFonts.outfit(fontSize: 12)),
+                                                  ),
+                                                ),
+                                        ],
                                     ],
-                                     if (status == 'Completed' && isBuying) ...[ // Only buyer rates seller for now
-                                            OutlinedButton.icon(
-                                                onPressed: () => _showRateDialog(item['id'], otherParty['id']),
-                                                icon: const Icon(Icons.star, size: 16),
-                                                label: Text('Rate Seller', style: GoogleFonts.outfit()),
-                                            ),
-                                    ],
-                                ],
-                            )
-                        ],
-                    ),
+                                )
+                            ],
+                           ),
+                         )
+                      ],
+                    )
                 ),
             );
         },

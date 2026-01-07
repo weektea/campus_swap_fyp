@@ -15,6 +15,7 @@ class _RegisterPageState extends State<RegisterPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  final _phoneController = TextEditingController();
   bool _isLoading = false;
 
   void _register() async {
@@ -32,6 +33,7 @@ class _RegisterPageState extends State<RegisterPage> {
           'full_name': _fullNameController.text,
           'email': _emailController.text,
           'password': _passwordController.text,
+          'phone_number': _phoneController.text,
           'university_id': 'MOCK-ID-123'
         });
 
@@ -59,10 +61,22 @@ class _RegisterPageState extends State<RegisterPage> {
           key: _formKey,
           child: Column(
             children: [
+            children: [
               TextFormField(
                 controller: _fullNameController,
                 decoration: const InputDecoration(labelText: 'Full Name', prefixIcon: Icon(Icons.person_outline)),
                 validator: (v) => v!.isEmpty ? 'Required' : null,
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                  controller: _phoneController,
+                  decoration: const InputDecoration(labelText: 'Phone Number', prefixIcon: Icon(Icons.phone_outlined)),
+                  keyboardType: TextInputType.phone,
+                  validator: (v) {
+                    if (v == null || v.isEmpty) return 'Required';
+                    if (!RegExp(r'^[0-9+-\s]+$').hasMatch(v)) return 'Invalid phone format';
+                    return null;
+                  },
               ),
               const SizedBox(height: 16),
               TextFormField(
@@ -79,7 +93,7 @@ class _RegisterPageState extends State<RegisterPage> {
                 controller: _passwordController,
                 obscureText: true,
                 decoration: const InputDecoration(labelText: 'Password', prefixIcon: Icon(Icons.lock_outline)),
-                validator: (v) => v!.length < 6 ? 'Min 6 chars' : null,
+                validator: (v) => v!.length < 8 ? 'Min 8 chars, needs improved complexity' : null,
               ),
               const SizedBox(height: 16),
               TextFormField(

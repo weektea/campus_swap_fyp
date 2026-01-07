@@ -1,10 +1,13 @@
 import { Message, User } from '../models/index.js';
 import { Op } from 'sequelize';
 
+// Send Message
 export const sendMessage = async (req, res) => {
     try {
-        const { sender_id, receiver_id, content } = req.body;
-        if (!sender_id || !receiver_id || !content) {
+        const sender_id = req.user.id;
+        const { receiver_id, content } = req.body;
+
+        if (!receiver_id || !content) {
             return res.status(400).json({ error: 'Missing details' });
         }
 
@@ -16,9 +19,11 @@ export const sendMessage = async (req, res) => {
     }
 };
 
+// Get Conversation with specific user
 export const getConversation = async (req, res) => {
     try {
-        const { userId, otherId } = req.params;
+        const userId = req.user.id;
+        const { otherId } = req.params;
 
         const messages = await Message.findAll({
             where: {
@@ -37,10 +42,10 @@ export const getConversation = async (req, res) => {
     }
 };
 
-// Simplified: Get list of users the current user has chatted with
+// Get list of users the current user has chatted with
 export const getChatList = async (req, res) => {
     try {
-        const { userId } = req.params;
+        const userId = req.user.id;
 
         // Find all messages involving user
         // This is a naive implementation. For scale, use a separate 'Conversation' model.
@@ -64,6 +69,9 @@ export const getChatList = async (req, res) => {
         for (const msg of messages) {
             const isSender = msg.sender_id === userId;
             const partner = isSender ? msg.receiver : msg.sender;
+
+            // Skip if partner is null (e.g. deleted user)
+            if (!partner) continue;
 
             if (!partners.has(partner.id)) {
                 partners.set(partner.id, {

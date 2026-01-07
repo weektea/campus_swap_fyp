@@ -29,7 +29,7 @@ class _ChatPageState extends State<ChatPage> {
 
     try {
       final apiClient = ApiClient();
-      final response = await apiClient.get('/messages/list/${session.userId}');
+      final response = await apiClient.get('/messages/list');
       if (response is List) {
         setState(() {
           _conversations = response;

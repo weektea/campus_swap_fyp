@@ -2,7 +2,7 @@ import { Notification } from '../models/index.js';
 
 export const getUserNotifications = async (req, res) => {
     try {
-        const { user_id } = req.params;
+        const user_id = req.user.id;
         const notifications = await Notification.findAll({
             where: { user_id },
             order: [['createdAt', 'DESC']]

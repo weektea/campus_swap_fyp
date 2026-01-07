@@ -1,4 +1,4 @@
-import { Transaction, Product, User } from '../models/index.js';
+import { Transaction, Product, User, Review } from '../models/index.js';
 import { createNotification } from './notificationController.js';
 
 export const createTransaction = async (req, res) => {
@@ -8,6 +8,15 @@ export const createTransaction = async (req, res) => {
         // Validate
         if (!buyer_id || !seller_id || !product_id || !amount) {
             return res.status(400).json({ error: 'Missing required transaction details' });
+        }
+
+        // Check Product Availability
+        const product = await Product.findByPk(product_id);
+        if (!product) {
+            return res.status(404).json({ error: 'Product not found' });
+        }
+        if (product.status !== 'Available') {
+            return res.status(400).json({ error: 'Product is no longer available' });
         }
 
         // Create Transaction
@@ -57,6 +66,12 @@ export const getUserTransactions = async (req, res) => {
                     model: User,
                     as: type === 'selling' ? 'buyer' : 'seller',
                     attributes: ['full_name', 'email']
+                },
+                {
+                    model: Review,
+                    as: 'reviews', // Need to check association alias
+                    required: false,
+                    where: { reviewer_id: user_id } // Only get reviews by THIS user for this transaction
                 }
             ],
             order: [['createdAt', 'DESC']]
@@ -131,5 +146,29 @@ export const updateTransactionStatus = async (req, res) => {
     } catch (error) {
         console.error('Update Status Error:', error);
         res.status(500).json({ error: 'Failed to update transaction' });
+    }
+};
+
+export const addRating = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { rating, review, is_seller } = req.body; // is_seller = true if rating buyer
+
+        const transaction = await Transaction.findByPk(id);
+        if (!transaction) return res.status(404).json({ error: 'Transaction not found' });
+
+        if (is_seller) {
+            transaction.rating_from_seller = rating;
+            // Ideally update Buyer's reputation
+        } else {
+            transaction.rating_from_buyer = rating;
+            // Ideally update Seller's reputation
+        }
+        await transaction.save();
+
+        res.json({ message: 'Rating submitted' });
+    } catch (e) {
+        console.error('Rating Error', e);
+        res.status(500).json({ error: 'Failed to rate' });
     }
 };

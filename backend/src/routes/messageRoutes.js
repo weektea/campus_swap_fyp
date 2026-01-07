@@ -1,10 +1,11 @@
 import express from 'express';
 import { sendMessage, getConversation, getChatList } from '../controllers/messageController.js';
+import { authenticateToken } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-router.post('/', sendMessage);
-router.get('/conversation/:userId/:otherId', getConversation);
-router.get('/list/:userId', getChatList);
+router.post('/', authenticateToken, sendMessage);
+router.get('/conversation/:otherId', authenticateToken, getConversation);
+router.get('/list', authenticateToken, getChatList);
 
 export default router;
