@@ -37,7 +37,7 @@ class _ChatPageState extends State<ChatPage> {
         });
       }
     } catch (e) {
-      print('Fetch Chat Error: $e');
+      // print('Fetch Chat Error: $e');
       setState(() => _isLoading = false);
     }
   }
@@ -62,7 +62,7 @@ class _ChatPageState extends State<ChatPage> {
                     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     leading: CircleAvatar(
                       radius: 28,
-                      backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                      backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
                       child: Text(
                         chat['name'] != null ? chat['name'][0].toUpperCase() : '?',
                         style: TextStyle(

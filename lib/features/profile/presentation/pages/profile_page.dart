@@ -7,7 +7,7 @@ import 'package:campus_swap/features/profile/presentation/pages/my_purchases_pag
 import 'package:campus_swap/features/profile/presentation/pages/saved_items_page.dart';
 import 'package:campus_swap/features/profile/presentation/pages/settings_page.dart';
 import 'package:campus_swap/features/profile/presentation/pages/help_page.dart';
-import 'dart:io';
+// import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 
 class ProfilePage extends StatefulWidget {
@@ -188,7 +188,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 ),
                 borderRadius: BorderRadius.circular(24),
                 boxShadow: [
-                  BoxShadow(color: Colors.green.withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 5))
+                  BoxShadow(color: Colors.green.withValues(alpha: 0.3), blurRadius: 10, offset: const Offset(0, 5))
                 ]
               ),
               child: Column(

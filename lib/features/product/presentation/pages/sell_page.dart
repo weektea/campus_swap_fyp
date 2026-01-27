@@ -22,7 +22,7 @@ class _SellPageState extends State<SellPage> {
   final TextEditingController _descController = TextEditingController();
   final TextEditingController _maxDurationController = TextEditingController();
 
-  List<XFile> _imageFiles = [];
+  final List<XFile> _imageFiles = [];
   final ImagePicker _picker = ImagePicker();
 
   static const int _maxImages = 9;
@@ -43,7 +43,9 @@ class _SellPageState extends State<SellPage> {
         final imagesToAdd = images.take(remainingSlots).toList();
         
         if (images.length > remainingSlots) {
-             ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Only added first $remainingSlots images. Max $_maxImages allowed.')));
+             if (mounted) {
+               ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Only added first $remainingSlots images. Max $_maxImages allowed.')));
+             }
         }
 
         setState(() {
@@ -73,7 +75,7 @@ class _SellPageState extends State<SellPage> {
         );
       }
     } catch (e) {
-      print('AI Error: $e');
+      // print('AI Error: $e');
       setState(() { 
         _isAnalyzing = false;
         _selectedCategory = 'Others';
@@ -259,7 +261,7 @@ class _SellPageState extends State<SellPage> {
                                     right: 12, // Match margin
                                     child: Container(
                                       decoration: BoxDecoration(
-                                        color: Colors.black.withOpacity(0.6),
+                                        color: Colors.black.withValues(alpha: 0.6),
                                         borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
                                       ),
                                       alignment: Alignment.center,
@@ -314,7 +316,7 @@ class _SellPageState extends State<SellPage> {
                 child: Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Row(
@@ -460,7 +462,7 @@ class _SellPageState extends State<SellPage> {
                   uploadedImageUrls.add(uploadRes['url']);
               }
            } catch(e) {
-              print("Upload failed for one image: $e");
+              // print("Upload failed for one image: $e");
            }
       }
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import 'package:campus_swap/core/api/api_client.dart';
 import 'package:campus_swap/core/session/user_session.dart';
 import 'package:campus_swap/features/profile/presentation/pages/public_profile_page.dart';
@@ -17,14 +18,23 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   final TextEditingController _controller = TextEditingController();
   List<dynamic> _messages = [];
   bool _isLoading = true;
+  Timer? _timer;
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
     super.initState();
     _fetchMessages();
+    _timer = Timer.periodic(const Duration(seconds: 3), (_) => _fetchMessages(silent: true));
   }
 
-  Future<void> _fetchMessages() async {
+  Future<void> _fetchMessages({bool silent = false}) async {
      final session = UserSession();
      if (widget.otherUserId == null || !session.isLoggedIn) {
          setState(() => _isLoading = false);
@@ -42,8 +52,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
          });
        }
      } catch (e) {
-       print('Error fetching messages: $e');
-       setState(() => _isLoading = false);
+       // print('Error fetching messages: $e');
+       if (!silent) setState(() => _isLoading = false);
      }
   }
 
@@ -73,8 +83,10 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       });
       // Optionally refresh to confirm sync
     } catch (e) {
-      print('Send error: $e');
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to send')));
+      // print('Send error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to send')));
+      }
     }
   }
 

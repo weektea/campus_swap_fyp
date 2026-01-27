@@ -51,7 +51,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
                }
            });
        } catch (e) {
-           print('Error marking read: $e');
+           // print('Error marking read: $e');
        }
   }
 
@@ -72,10 +72,10 @@ class _NotificationsPageState extends State<NotificationsPage> {
                         final isRead = note['is_read'] ?? false;
 
                         return Container(
-                            color: isRead ? Colors.white : Colors.blue.withOpacity(0.05),
+                            color: isRead ? Colors.white : Colors.blue.withValues(alpha: 0.05),
                             child: ListTile(
                                 leading: CircleAvatar(
-                                    backgroundColor: isRead ? Colors.grey[200] : Theme.of(context).colorScheme.primary.withOpacity(0.2),
+                                    backgroundColor: isRead ? Colors.grey[200] : Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
                                     child: Icon(
                                         note['type'] == 'Transaction' ? Icons.shopping_bag : Icons.notifications,
                                         color: isRead ? Colors.grey : Theme.of(context).colorScheme.primary,

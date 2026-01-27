@@ -20,7 +20,7 @@ class ProductCard extends StatelessWidget {
       child: Card(
         clipBehavior: Clip.antiAlias,
         elevation: 2,
-        shadowColor: Colors.black.withOpacity(0.05),
+        shadowColor: Colors.black.withValues(alpha: 0.05),
         surfaceTintColor: Colors.white,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
@@ -69,8 +69,8 @@ class ProductCard extends StatelessWidget {
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
                           colors: [
-                            Colors.black.withOpacity(0.0),
-                            Colors.black.withOpacity(0.05),
+                            Colors.black.withValues(alpha: 0.0),
+                            Colors.black.withValues(alpha: 0.05),
                           ],
                           stops: const [0.7, 1.0],
                         ),
@@ -85,10 +85,10 @@ class ProductCard extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: product.type == 'Rent' ? Colors.blue.withOpacity(0.9) : Colors.white.withOpacity(0.9), // Blue for Rent
+                        color: product.type == 'Rent' ? Colors.blue.withValues(alpha: 0.9) : Colors.white.withValues(alpha: 0.9), // Blue for Rent
                         borderRadius: BorderRadius.circular(12),
                         boxShadow: [
-                          BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 4)
+                          BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 4)
                         ]
                       ),
                       child: Text(
@@ -143,7 +143,7 @@ class ProductCard extends StatelessWidget {
                       children: [
                         CircleAvatar(
                           radius: 9,
-                          backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                          backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
                           child: Text(
                              product.sellerName.isNotEmpty ? product.sellerName[0].toUpperCase() : '?',
                              style: TextStyle(fontSize: 8, color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold),

@@ -4,7 +4,7 @@ import 'package:campus_swap/features/home/presentation/pages/home_page.dart';
 import 'package:campus_swap/features/auth/presentation/pages/register_page.dart';
 import 'package:campus_swap/core/session/user_session.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+
 import 'package:campus_swap/features/auth/presentation/pages/forgot_password_page.dart';
 
 class LoginPage extends StatefulWidget {
@@ -23,7 +23,7 @@ class _LoginPageState extends State<LoginPage> {
   bool _isPasswordVisible = false;
   bool _isLoading = false;
   bool _rememberMe = false;
-  final _storage = const FlutterSecureStorage();
+
 
   @override
   void initState() {
@@ -39,8 +39,8 @@ class _LoginPageState extends State<LoginPage> {
     String password = '';
     
     if (remember) {
-        email = await _storage.read(key: 'email') ?? '';
-        password = await _storage.read(key: 'password') ?? '';
+        email = prefs.getString('email') ?? '';
+        password = prefs.getString('password') ?? '';
     }
 
     if (mounted) {
@@ -58,12 +58,12 @@ class _LoginPageState extends State<LoginPage> {
     final prefs = await SharedPreferences.getInstance();
     if (_rememberMe) {
       await prefs.setBool('remember_me', true);
-      await _storage.write(key: 'email', value: _emailController.text);
-      await _storage.write(key: 'password', value: _passwordController.text);
+      await prefs.setString('email', _emailController.text);
+      await prefs.setString('password', _passwordController.text);
     } else {
       await prefs.remove('remember_me');
-      await _storage.delete(key: 'email');
-      await _storage.delete(key: 'password');
+      await prefs.remove('email');
+      await prefs.remove('password');
     }
   }
 
@@ -79,8 +79,7 @@ class _LoginPageState extends State<LoginPage> {
           'password': _passwordController.text,
         });
 
-        // For MVP, we won't persist token yet, just assume success
-        print('Login Token: ${response['token']}'); 
+        // For MVP, we won't persist token yet, just assume success 
 
         final session = UserSession();
         session.token = response['token'];
@@ -115,9 +114,9 @@ class _LoginPageState extends State<LoginPage> {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              Theme.of(context).colorScheme.primary.withOpacity(0.1),
-              Theme.of(context).colorScheme.secondary.withOpacity(0.05),
-              Theme.of(context).colorScheme.background,
+              Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+              Theme.of(context).colorScheme.secondary.withValues(alpha: 0.05),
+              Theme.of(context).colorScheme.surface,
             ],
           ),
         ),

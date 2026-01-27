@@ -43,7 +43,7 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
 
         if (mounted) setState(() => _isLoading = false);
     } catch (e) {
-        print("Error fetching public profile: $e");
+        // print("Error fetching public profile: $e");
         if (mounted) setState(() => _isLoading = false);
     }
   }

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:campus_swap/core/api/api_client.dart';
-import 'package:campus_swap/features/auth/presentation/pages/login_page.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -60,7 +59,6 @@ class _RegisterPageState extends State<RegisterPage> {
         child: Form(
           key: _formKey,
           child: Column(
-            children: [
             children: [
               TextFormField(
                 controller: _fullNameController,

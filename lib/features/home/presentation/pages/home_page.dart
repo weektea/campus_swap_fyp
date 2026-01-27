@@ -11,6 +11,8 @@ import 'package:campus_swap/features/profile/presentation/pages/profile_page.dar
 import 'package:campus_swap/features/notification/presentation/pages/notifications_page.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:campus_swap/core/services/notification_service.dart';
+import 'package:campus_swap/core/session/user_session.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -20,6 +22,12 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  @override
+  void dispose() {
+    NotificationService().stopPolling();
+    super.dispose();
+  }
+
   int _selectedIndex = 0;
   int _selectedCategoryIndex = 0;
   List<Product> _products = [];
@@ -53,7 +61,7 @@ class _HomePageState extends State<HomePage> {
           });
        }
     } catch(e) {
-       print("Rec Error: $e");
+       // print("Rec Error: $e");
     }
   }
 
@@ -61,7 +69,10 @@ class _HomePageState extends State<HomePage> {
   void initState() {
     super.initState();
     _fetchProducts();
-    _fetchRecommendations(); // Load recommendations
+    _fetchRecommendations();
+    if (UserSession().isLoggedIn) {
+      NotificationService().startPolling();
+    }
   }
 
   @override
@@ -109,7 +120,7 @@ class _HomePageState extends State<HomePage> {
         });
       }
     } catch (e) {
-      print('Error fetching products: $e');
+      // print('Error fetching products: $e');
       setState(() => _isLoading = false);
     }
   }
@@ -198,15 +209,44 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ],
                 ).animate().fadeIn(duration: 500.ms).slideX(begin: -0.2),
-                GestureDetector(
-                  onTap: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsPage()));
+                ValueListenableBuilder<int>(
+                  valueListenable: NotificationService().unreadCountNotifier,
+                  builder: (context, count, child) {
+                    return GestureDetector(
+                      onTap: () async {
+                          await Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsPage()));
+                          // Refresh unread count after returning
+                          NotificationService().unreadCountNotifier.value = 0; // Optimistic reset if read all
+                          // Or force poll
+                      },
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          CircleAvatar(
+                            radius: 24,
+                            backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                            child: Icon(Icons.notifications_none_rounded, color: Theme.of(context).colorScheme.primary),
+                          ),
+                          if (count > 0)
+                            Positioned(
+                              right: 0,
+                              top: 0,
+                              child: Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: const BoxDecoration(
+                                  color: Colors.red,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Text(
+                                  count > 9 ? '9+' : count.toString(),
+                                  style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    );
                   },
-                  child: CircleAvatar(
-                    radius: 24,
-                    backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
-                    child: Icon(Icons.notifications_none_rounded, color: Theme.of(context).colorScheme.primary),
-                  ),
                 ).animate().fadeIn(duration: 500.ms, delay: 200.ms).scale(),
               ],
             ),
@@ -221,7 +261,7 @@ class _HomePageState extends State<HomePage> {
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.grey.withOpacity(0.1),
+                    color: Colors.grey.withValues(alpha: 0.1),
                     blurRadius: 10,
                     offset: const Offset(0, 4),
                   ),
@@ -361,7 +401,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  RangeValues _priceRange = const RangeValues(0, 1000);
+
 
   void _showSortDialog() {
       showModalBottomSheet(
@@ -444,7 +484,7 @@ class _HomePageState extends State<HomePage> {
                                                        _selectedCondition = (condition == 'Any' || !selected) ? null : condition;
                                                   });
                                               },
-                                              selectedColor: Theme.of(context).colorScheme.primary.withOpacity(0.2),
+                                              selectedColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
                                               labelStyle: GoogleFonts.outfit(
                                                   color: isSelected ? Theme.of(context).colorScheme.primary : Colors.black
                                               ),

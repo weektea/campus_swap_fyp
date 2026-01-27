@@ -17,10 +17,11 @@ class ProductDetailsPage extends StatefulWidget {
   State<ProductDetailsPage> createState() => _ProductDetailsPageState();
 }
 
+class _ProductDetailsPageState extends State<ProductDetailsPage> {
   bool _isSaved = false;
   bool _isBuying = false;
   List<Product> _sellerProducts = [];
-  bool _isLoadingSellerItems = true;
+  // bool _isLoadingSellerItems = true;
 
   @override
   void initState() {
@@ -41,13 +42,13 @@ class ProductDetailsPage extends StatefulWidget {
                           .map((data) => Product.fromJson(data))
                           .where((p) => p.id != widget.product.id)
                           .toList();
-                      _isLoadingSellerItems = false;
+                      // _isLoadingSellerItems = false;
                   });
               }
           }
       } catch (e) {
-          print("Error fetching seller items: $e");
-          if (mounted) setState(() => _isLoadingSellerItems = false);
+          // print("Error fetching seller items: $e");
+          // if (mounted) setState(() => _isLoadingSellerItems = false);
       }
   }
 
@@ -56,7 +57,9 @@ class ProductDetailsPage extends StatefulWidget {
        ApiClient().post('/recommendations/track', {
          'product_id': widget.product.id,
          'type': 'view'
-       }).catchError((e) => print("Track Error: $e"));
+       }).catchError((e) {
+          // print("Track Error: $e");
+       });
     }
   }
 
@@ -75,7 +78,7 @@ class ProductDetailsPage extends StatefulWidget {
             leading: Padding(
               padding: const EdgeInsets.all(8.0),
               child: CircleAvatar(
-                backgroundColor: Colors.white.withOpacity(0.8),
+                backgroundColor: Colors.white.withValues(alpha: 0.8),
                 child: BackButton(color: theme.colorScheme.onSurface),
               ),
             ),
@@ -83,11 +86,12 @@ class ProductDetailsPage extends StatefulWidget {
               Padding(
                 padding: const EdgeInsets.all(8.0),
                 child: CircleAvatar(
-                  backgroundColor: Colors.white.withOpacity(0.8),
+                  backgroundColor: Colors.white.withValues(alpha: 0.8),
                   child: IconButton(
                     icon: Icon(Icons.share, color: theme.colorScheme.onSurface),
-                    onPressed: () {
-                        Share.share('Check out ${widget.product.title} for RM ${widget.product.price} on Campus Swap!');
+                    onPressed: () async {
+                        // ignore: deprecated_member_use
+                        await Share.share('Check out ${widget.product.title} for RM ${widget.product.price} on Campus Swap!');
                     },
                   ),
                 ),
@@ -95,7 +99,7 @@ class ProductDetailsPage extends StatefulWidget {
               Padding(
                 padding: const EdgeInsets.all(8.0),
                 child: CircleAvatar(
-                  backgroundColor: Colors.white.withOpacity(0.8),
+                  backgroundColor: Colors.white.withValues(alpha: 0.8),
                   child: IconButton(
                     icon: Icon(
                       _isSaved ? Icons.favorite : Icons.favorite_border,
@@ -107,7 +111,8 @@ class ProductDetailsPage extends StatefulWidget {
               ),
             ],
             flexibleSpace: FlexibleSpaceBar(
-                child: _buildImageGallery(widget.product),
+                title: Text(widget.product.title, style: TextStyle(color: Colors.transparent)),
+                background: _buildImageGallery(widget.product),
             ),
           ),
           SliverToBoxAdapter(
@@ -122,7 +127,7 @@ class ProductDetailsPage extends StatefulWidget {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
-                          color: widget.product.type == 'Rent' ? Colors.blue.withOpacity(0.1) : theme.colorScheme.primary.withOpacity(0.1),
+                          color: widget.product.type == 'Rent' ? Colors.blue.withValues(alpha: 0.1) : theme.colorScheme.primary.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
@@ -218,10 +223,10 @@ class ProductDetailsPage extends StatefulWidget {
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.grey.withOpacity(0.1)),
+                      border: Border.all(color: Colors.grey.withValues(alpha: 0.1)),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.03),
+                          color: Colors.black.withValues(alpha: 0.03),
                           blurRadius: 10,
                           offset: const Offset(0, 4),
                         )
@@ -231,7 +236,7 @@ class ProductDetailsPage extends StatefulWidget {
                       children: [
                         CircleAvatar(
                           radius: 24,
-                          backgroundColor: theme.colorScheme.secondary.withOpacity(0.1),
+                          backgroundColor: theme.colorScheme.secondary.withValues(alpha: 0.1),
                           child: Text(
                             widget.product.sellerName[0].toUpperCase(),
                             style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: theme.colorScheme.secondary),
@@ -342,7 +347,7 @@ class ProductDetailsPage extends StatefulWidget {
           color: Colors.white,
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black.withValues(alpha: 0.05),
               blurRadius: 20,
               offset: const Offset(0, -5),
             )
@@ -727,7 +732,7 @@ class ProductDetailsPage extends StatefulWidget {
                     color: (Theme.of(context).brightness == Brightness.dark
                             ? Colors.white
                             : Colors.black)
-                        .withOpacity(_currentImageIndex == entry.key ? 0.9 : 0.4),
+                        .withValues(alpha: _currentImageIndex == entry.key ? 0.9 : 0.4),
                   ),
                 );
               }).toList(),

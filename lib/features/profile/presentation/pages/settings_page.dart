@@ -133,7 +133,6 @@ class _SettingsPageState extends State<SettingsPage> {
       ),
     );
   }
-  }
 
   void _deleteAccount() async {
       final confirm = await showDialog(

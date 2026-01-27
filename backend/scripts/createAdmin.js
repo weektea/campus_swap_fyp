@@ -8,7 +8,7 @@ const createAdmin = async () => {
         await sequelize.authenticate();
         console.log('Database connected.');
 
-        const email = process.argv[2] || 'admin@campus.swap';
+        const email = process.argv[2] || 'admin@campus.edu.my';
         const password = process.argv[3] || 'Admin@123';
 
         // Check availability

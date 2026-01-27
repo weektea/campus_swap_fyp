@@ -138,7 +138,7 @@ class _MyTransactionsPageState extends State<MyTransactionsPage> with SingleTick
                                if (status == 'Completed' || status == 'Reserved')
                                  Positioned.fill(
                                    child: Container(
-                                     color: Colors.black.withOpacity(0.4),
+                                     color: Colors.black.withValues(alpha: 0.4),
                                      child: Center(
                                        child: Text(
                                          status == 'Completed' ? 'SOLD' : 'RESERVED',
@@ -160,7 +160,7 @@ class _MyTransactionsPageState extends State<MyTransactionsPage> with SingleTick
                                         Container(
                                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                             decoration: BoxDecoration(
-                                                color: _getStatusColor(status).withOpacity(0.1),
+                                                color: _getStatusColor(status).withValues(alpha: 0.1),
                                                 borderRadius: BorderRadius.circular(8)
                                             ),
                                             child: Text(status, style: GoogleFonts.outfit(color: _getStatusColor(status), fontWeight: FontWeight.bold, fontSize: 10)),

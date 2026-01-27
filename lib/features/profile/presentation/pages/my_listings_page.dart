@@ -67,7 +67,7 @@ class _MyListingsPageState extends State<MyListingsPage> {
                     onTap: () {
                        Navigator.push(context, MaterialPageRoute(
                         builder: (_) => ProductDetailsPage(product: _products[index])
-                      ));
+                      )).then((_) => _fetchMyListings());
                     },
                   );
                 },
