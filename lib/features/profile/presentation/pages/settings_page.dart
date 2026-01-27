@@ -7,6 +7,7 @@ import 'package:campus_swap/core/theme/theme_provider.dart';
 import 'package:campus_swap/features/profile/presentation/pages/help_page.dart';
 import 'package:campus_swap/core/api/api_client.dart';
 import 'package:campus_swap/features/profile/presentation/pages/change_password_page.dart';
+import 'package:campus_swap/features/profile/presentation/pages/privacy_settings_page.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -58,7 +59,7 @@ class _SettingsPageState extends State<SettingsPage> {
             title: Text("Privacy Settings", style: GoogleFonts.outfit()),
             trailing: const Icon(Icons.chevron_right),
             onTap: () {
-               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Mock: Privacy Settings")));
+               Navigator.push(context, MaterialPageRoute(builder: (_) => const PrivacySettingsPage()));
             },
           ),
 

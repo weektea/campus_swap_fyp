@@ -21,7 +21,7 @@ Transaction.belongsTo(Product, { foreignKey: 'product_id', as: 'product' });
 
 // Review Relationships
 Review.belongsTo(Transaction, { foreignKey: 'transaction_id', as: 'transaction' });
-Transaction.hasOne(Review, { foreignKey: 'transaction_id', as: 'review' }); // Assuming 1 review per transaction for simplicity (or 1 from buyer, 1 from seller ideally)
+Transaction.hasMany(Review, { foreignKey: 'transaction_id', as: 'reviews' });
 
 Review.belongsTo(User, { foreignKey: 'reviewer_id', as: 'reviewer' });
 Review.belongsTo(User, { foreignKey: 'reviewee_id', as: 'reviewee' });

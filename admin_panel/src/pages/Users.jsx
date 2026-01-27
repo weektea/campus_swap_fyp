@@ -34,7 +34,7 @@ const UsersPage = () => {
     };
 
     const filteredUsers = users.filter(user =>
-        user.username?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         user.email?.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
@@ -74,9 +74,9 @@ const UsersPage = () => {
                                 <td>
                                     <div className="flex items-center gap-2">
                                         <div style={{ width: '32px', height: '32px', background: '#334155', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px' }}>
-                                            {user.username?.[0]?.toUpperCase()}
+                                            {user.full_name?.[0]?.toUpperCase()}
                                         </div>
-                                        {user.username}
+                                        {user.full_name}
                                     </div>
                                 </td>
                                 <td className="text-sm">{user.email}</td>

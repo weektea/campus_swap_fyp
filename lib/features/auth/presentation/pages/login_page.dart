@@ -86,6 +86,7 @@ class _LoginPageState extends State<LoginPage> {
         session.userId = response['user']['id'];
         session.email = response['user']['email'];
         session.fullName = response['user']['full_name'];
+        session.role = response['user']['role'];
 
         if (mounted) {
            Navigator.pushReplacement(

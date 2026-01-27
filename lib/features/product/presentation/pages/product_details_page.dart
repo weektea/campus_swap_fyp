@@ -7,6 +7,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:campus_swap/features/profile/presentation/pages/public_profile_page.dart';
 
 class ProductDetailsPage extends StatefulWidget {
   final Product product;
@@ -218,7 +219,14 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                   const SizedBox(height: 32),
                   
                   // Seller Section
-                  Container(
+                  GestureDetector(
+                    onTap: () {
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => PublicProfilePage(
+                            userId: widget.product.sellerId,
+                            userName: widget.product.sellerName
+                        )));
+                    },
+                    child: Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color: Colors.white,
@@ -261,9 +269,10 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                           ),
                         ),
                         const Spacer(),
-                        IconButton(onPressed: (){}, icon: const Icon(Icons.chevron_right, color: Colors.grey))
+                        const Icon(Icons.chevron_right, color: Colors.grey)
                       ],
                     ),
+                  ),
                   ).animate().fadeIn(duration: 500.ms, delay: 300.ms).slideY(begin: 0.1),
 
                   const SizedBox(height: 32),

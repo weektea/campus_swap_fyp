@@ -48,6 +48,14 @@ export const createReview = async (req, res) => {
             comment
         });
 
+        // Sync to Transaction (Denormalization)
+        if (transaction.buyer_id === reviewer_id) {
+            transaction.rating_from_buyer = rating;
+        } else {
+            transaction.rating_from_seller = rating;
+        }
+        await transaction.save();
+
         // Update Reputation Score (Simple Average)
         // Fetch all reviews for this user to calculate new average
         const reviews = await Review.findAll({ where: { reviewee_id } });

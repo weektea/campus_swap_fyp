@@ -14,7 +14,7 @@ class NotificationService {
   final List<String> _knownNotificationIds = [];
   final ValueNotifier<int> unreadCountNotifier = ValueNotifier(0);
 
-  Future<void> init() async {
+  Future<void> init({Function(String?)? onNotificationTap}) async {
     const AndroidInitializationSettings initializationSettingsAndroid =
         AndroidInitializationSettings('@mipmap/ic_launcher');
 
@@ -22,7 +22,12 @@ class NotificationService {
       android: initializationSettingsAndroid,
     );
 
-    await _notificationsPlugin.initialize(initializationSettings);
+    await _notificationsPlugin.initialize(
+      initializationSettings,
+      onDidReceiveNotificationResponse: (details) {
+          onNotificationTap?.call(details.payload);
+      }
+    );
   }
 
   void startPolling() {
