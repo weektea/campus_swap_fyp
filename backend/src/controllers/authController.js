@@ -7,14 +7,39 @@ export const register = async (req, res) => {
         const { email, password, full_name, university_id, phone_number } = req.body;
 
         // 1. Validation
-        if (!email || !password || !full_name) {
+        if (!email || !password || !full_name || !university_id) {
             return res.status(400).json({ error: 'All fields are required' });
         }
+
+        // Email Validation
         if (!email.endsWith('.edu.my')) {
             return res.status(400).json({ error: 'Must use a valid .edu.my student email' });
         }
-        if (password.length < 8) {
-            return res.status(400).json({ error: 'Password must be at least 8 characters long' });
+
+        // University ID Validation (YYAAAXXXXX)
+        // e.g., 24PMR01234
+        const uniIdRegex = /^\d{2}[a-zA-Z]{3}\d{5}$/;
+        if (!uniIdRegex.test(university_id)) {
+            return res.status(400).json({
+                error: 'Invalid University ID format. Example: 24PMR01234 (YYAAAXXXXX)'
+            });
+        }
+
+        // Password Validation (Min 8, 1 Upper, 1 Lower, 1 Number, 1 Symbol)
+        const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
+        if (!passwordRegex.test(password)) {
+            return res.status(400).json({
+                error: 'Password must vary: Min 8 chars, incl. uppercase, lowercase, number & symbol.'
+            });
+        }
+
+        // Phone Validation (e.g., +6016-1234567 or +6011-23456789)
+        // Matches +60 followed by 2 digits, a dash, and 7-8 digits
+        const phoneRegex = /^\+60\d{2}-\d{7,8}$/;
+        if (phone_number && !phoneRegex.test(phone_number)) {
+            return res.status(400).json({
+                error: 'Invalid phone format. Use: +601x-xxxxxxx'
+            });
         }
 
         // 2. Check existing
@@ -29,12 +54,12 @@ export const register = async (req, res) => {
         // 4. Create User
         const user = await User.create({
             email,
-            password_hash: hashedPassword, // Note: Model field is password_hash
+            password_hash: hashedPassword,
             full_name,
-            university_id,
+            university_id: university_id.toUpperCase(), // Store uniform uppercase
             phone_number,
             role: 'student',
-            is_verified: true, // Auto-verify for MVP for now
+            is_verified: true,
         });
 
         // 5. Generate Token

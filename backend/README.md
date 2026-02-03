@@ -26,3 +26,10 @@ docker-compose up -d
 1. Install PostgreSQL.
 2. Create a database named `campus_swap`.
 3. Create a user `postgres` with password `postgres` (or update `.env`).
+
+# Test Register
+Test Student1
+24PMR12345
+016-1234567
+student1@student.tarc.edu.my
+Test1234@

@@ -150,6 +150,7 @@ app.post('/api/products/generate-description', async (req, res) => {
 });
 
 // Start Server
-app.listen(port, () => {
+// Start Server
+app.listen(port, '0.0.0.0', () => {
     console.log(`Server running on port ${port}`);
 });

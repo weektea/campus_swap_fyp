@@ -19,9 +19,16 @@ const User = sequelize.define('User', {
     phone_number: {
         type: DataTypes.STRING,
         allowNull: true,
+        unique: true, // Enforce uniqueness
         validate: {
-            is: /^[0-9+-\s]+$/i // Basic phone validation (only digits, +, -, space)
+            is: /^[0-9+-\s]+$/i
         }
+    },
+    // ...
+    university_id: {
+        type: DataTypes.STRING,
+        allowNull: true,
+        unique: true, // Enforce uniqueness
     },
     password_hash: {
         type: DataTypes.STRING,
@@ -34,6 +41,7 @@ const User = sequelize.define('User', {
     university_id: {
         type: DataTypes.STRING,
         allowNull: true,
+        unique: true, // Enforce uniqueness
     },
     profile_image_url: {
         type: DataTypes.STRING,

@@ -1,3 +1,4 @@
+import express from 'express';
 import { register, login, updateProfile, deleteAccount, changePassword, forgotPassword } from '../controllers/authController.js';
 import { authenticateToken } from '../middleware/authMiddleware.js';
 
