@@ -23,6 +23,7 @@ class _SellPageState extends State<SellPage> {
   final TextEditingController _maxDurationController = TextEditingController();
 
   final List<XFile> _imageFiles = [];
+  XFile? _videoFile;
   final ImagePicker _picker = ImagePicker();
 
   static const int _maxImages = 9;
@@ -54,6 +55,24 @@ class _SellPageState extends State<SellPage> {
             if (_imageFiles.length == imagesToAdd.length && _selectedCategory == null) {
                 _analyzeImage(_imageFiles.first);
             }
+        });
+    }
+  }
+
+  Future<void> _pickVideo() async {
+    if (_videoFile != null) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Only 1 video allowed. Remove existing to change.')));
+        return;
+    }
+    
+    final XFile? video = await _picker.pickVideo(
+        source: ImageSource.gallery,
+        maxDuration: const Duration(seconds: 15),
+    );
+    
+    if (video != null) {
+        setState(() {
+            _videoFile = video;
         });
     }
   }
@@ -208,88 +227,151 @@ class _SellPageState extends State<SellPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Image Upload Section (Smart Recognition)
-            SizedBox(
-                height: 120,
-                child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: _imageFiles.length + 1,
-                    itemBuilder: (context, index) {
-                        if (index == 0) {
-                            return GestureDetector(
-                                onTap: _pickImages,
-                                child: Container(
-                                    width: 100,
-                                    margin: const EdgeInsets.only(right: 12),
-                                    decoration: BoxDecoration(
-                                        color: Colors.grey[100],
-                                        borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(color: Colors.grey[300]!)
-                                    ),
-                                    child: Column(
-                                        mainAxisAlignment: MainAxisAlignment.center,
-                                        children: [
-                                            Icon(Icons.add_a_photo_rounded, color: Theme.of(context).colorScheme.primary),
-                                            const SizedBox(height: 4),
-                                            Text("Add Photos", style: GoogleFonts.outfit(fontSize: 12)),
-                                            Text("(Max 9)", style: GoogleFonts.outfit(fontSize: 10, color: Colors.grey))
-                                        ],
-                                    ),
+            // Media Upload Section (Images + Video)
+            SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                    children: [
+                        // Add Photos Button
+                        GestureDetector(
+                            onTap: _pickImages,
+                            child: Container(
+                                width: 100,
+                                height: 120,
+                                margin: const EdgeInsets.only(right: 12),
+                                decoration: BoxDecoration(
+                                    color: Colors.grey[100],
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: Colors.grey[300]!)
                                 ),
-                            );
-                        }
-                        
-                        final image = _imageFiles[index - 1];
-                        final isCover = (index - 1) == 0;
-
-                        return Stack(
-                            children: [
-                                Container(
-                                    width: 100,
-                                    margin: const EdgeInsets.only(right: 12),
-                                    child: ClipRRect(
-                                        borderRadius: BorderRadius.circular(12),
-                                        child: kIsWeb 
-                                          ? Image.network(image.path, fit: BoxFit.cover, height: 120)
-                                          : Image.file(File(image.path), fit: BoxFit.cover, height: 120),
-                                    ),
+                                child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                        Icon(Icons.add_a_photo_rounded, color: Theme.of(context).colorScheme.primary),
+                                        const SizedBox(height: 4),
+                                        Text("Add Photos", style: GoogleFonts.outfit(fontSize: 12)),
+                                        Text("(Max $_maxImages)", style: GoogleFonts.outfit(fontSize: 10, color: Colors.grey))
+                                    ],
                                 ),
-                                if (isCover)
-                                  Positioned(
-                                    bottom: 0,
-                                    left: 0,
-                                    right: 12, // Match margin
-                                    child: Container(
-                                      decoration: BoxDecoration(
-                                        color: Colors.black.withValues(alpha: 0.6),
-                                        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
-                                      ),
-                                      alignment: Alignment.center,
-                                      padding: const EdgeInsets.symmetric(vertical: 2),
-                                      child: Text("Cover", style: GoogleFonts.outfit(color: Colors.white, fontSize: 10)),
-                                    ),
-                                  ),
-                                Positioned(
-                                    top: 4,
-                                    right: 16, // Adjusted for margin
-                                    child: GestureDetector(
-                                        onTap: () {
-                                            setState(() {
-                                                _imageFiles.removeAt(index - 1);
-                                            });
-                                        },
-                                        child: Container(
-                                            padding: const EdgeInsets.all(4),
-                                            decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
-                                            child: const Icon(Icons.close, color: Colors.white, size: 14)
+                            ),
+                        ),
+                        // Add Video Button
+                        GestureDetector(
+                            onTap: _pickVideo,
+                            child: Container(
+                                width: 100,
+                                height: 120,
+                                margin: const EdgeInsets.only(right: 12),
+                                decoration: BoxDecoration(
+                                    color: Colors.grey[100],
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: Colors.grey[300]!)
+                                ),
+                                child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                        Icon(Icons.video_call_rounded, color: Theme.of(context).colorScheme.primary),
+                                        const SizedBox(height: 4),
+                                        Text("Add Video", style: GoogleFonts.outfit(fontSize: 12)),
+                                        Text("(Max 15s)", style: GoogleFonts.outfit(fontSize: 10, color: Colors.grey))
+                                    ],
+                                ),
+                            ),
+                        ),
+                        // Picked Images
+                        ...List.generate(_imageFiles.length, (index) {
+                            final image = _imageFiles[index];
+                            final isCover = index == 0;
+                            return Stack(
+                                children: [
+                                    Container(
+                                        width: 100,
+                                        height: 120,
+                                        margin: const EdgeInsets.only(right: 12),
+                                        child: ClipRRect(
+                                            borderRadius: BorderRadius.circular(12),
+                                            child: kIsWeb 
+                                              ? Image.network(image.path, fit: BoxFit.cover)
+                                              : Image.file(File(image.path), fit: BoxFit.cover),
                                         ),
                                     ),
-                                ),
-                                if (_isAnalyzing && index == 1) // Show spinner on first image if analyzing
-                                    const Positioned.fill(child: Center(child: CircularProgressIndicator())),
-                            ],
-                        );
-                    },
+                                    if (isCover)
+                                      Positioned(
+                                        bottom: 0,
+                                        left: 0,
+                                        right: 12, // Match margin
+                                        child: Container(
+                                          decoration: BoxDecoration(
+                                            color: Colors.black.withValues(alpha: 0.6),
+                                            borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
+                                          ),
+                                          alignment: Alignment.center,
+                                          padding: const EdgeInsets.symmetric(vertical: 2),
+                                          child: Text("Cover", style: GoogleFonts.outfit(color: Colors.white, fontSize: 10)),
+                                        ),
+                                      ),
+                                    Positioned(
+                                        top: 4,
+                                        right: 16, // Adjusted for margin
+                                        child: GestureDetector(
+                                            onTap: () {
+                                                setState(() {
+                                                    _imageFiles.removeAt(index);
+                                                });
+                                            },
+                                            child: Container(
+                                                padding: const EdgeInsets.all(4),
+                                                decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
+                                                child: const Icon(Icons.close, color: Colors.white, size: 14)
+                                            ),
+                                        ),
+                                    ),
+                                    if (_isAnalyzing && index == 0) // Show spinner on first image if analyzing
+                                        Positioned(
+                                            left: 0, top: 0, right: 12, bottom: 0,
+                                            child: const Center(child: CircularProgressIndicator())
+                                        ),
+                                ],
+                            );
+                        }),
+                        // Picked Video
+                        if (_videoFile != null)
+                           Stack(
+                                children: [
+                                    Container(
+                                        width: 100,
+                                        height: 120,
+                                        margin: const EdgeInsets.only(right: 12),
+                                        decoration: BoxDecoration(
+                                            color: Colors.black87,
+                                            borderRadius: BorderRadius.circular(12),
+                                        ),
+                                        child: Column(
+                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            children: [
+                                                const Icon(Icons.videocam_rounded, color: Colors.white, size: 32),
+                                                const SizedBox(height: 8),
+                                                Text("Video Selected", style: GoogleFonts.outfit(color: Colors.white, fontSize: 10), textAlign: TextAlign.center),
+                                            ],
+                                        ),
+                                    ),
+                                    Positioned(
+                                        top: 4,
+                                        right: 16,
+                                        child: GestureDetector(
+                                            onTap: () {
+                                                setState(() => _videoFile = null);
+                                            },
+                                            child: Container(
+                                                padding: const EdgeInsets.all(4),
+                                                decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
+                                                child: const Icon(Icons.close, color: Colors.white, size: 14)
+                                            ),
+                                        ),
+                                    ),
+                                ],
+                            ),
+                    ],
                 ),
             ),
             const SizedBox(height: 24),
@@ -466,6 +548,19 @@ class _SellPageState extends State<SellPage> {
            }
       }
 
+      // 2. Upload Video (if any)
+      String? uploadedVideoUrl;
+      if (_videoFile != null) {
+          try {
+              final uploadRes = await apiClient.postMultipart('/upload', _videoFile!);
+              if (uploadRes['url'] != null) {
+                  uploadedVideoUrl = uploadRes['url'];
+              }
+          } catch(e) {
+              // print("Video upload failed: $e");
+          }
+      }
+
       final Map<String, dynamic> body = {
         'title': _titleController.text,
         'description': _descController.text,
@@ -474,6 +569,7 @@ class _SellPageState extends State<SellPage> {
         'seller_id': session.userId,
         'type': _listingType,
         'image_urls': uploadedImageUrls,
+        if (uploadedVideoUrl != null) 'video_url': uploadedVideoUrl,
       };
 
       if (_listingType == 'Sale') {
@@ -493,6 +589,7 @@ class _SellPageState extends State<SellPage> {
         _descController.clear();
         setState(() {
              _imageFiles.clear();
+             _videoFile = null;
              _selectedCategory = null;
              _selectedCondition = 'Good';
         });

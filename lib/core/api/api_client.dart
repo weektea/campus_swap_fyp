@@ -7,13 +7,14 @@ import 'package:campus_swap/core/session/user_session.dart';
 
 class ApiClient {
   // Determine Base URL based on platform
+  // Determine Base URL based on platform
   static String get baseUrl {
     if (kIsWeb) {
       return 'http://localhost:3000/api'; // Browsers access localhost directly
-    } else if (Platform.isAndroid) {
-      return 'http://10.0.2.2:3000/api'; // Android Emulator
     } else {
-      return 'http://localhost:3000/api'; // iOS Simulator & others
+      // For physical devices (Android/iOS) AND emulators, use the computer's LAN IP.
+      // This is the most reliable way for local testing on the same Wi-Fi.
+      return 'http://192.168.100.23:3000/api'; 
     }
   } 
 

@@ -3,7 +3,7 @@ import { Op } from 'sequelize';
 
 export const createProduct = async (req, res) => {
     try {
-        const { title, description, price, category, condition, seller_id, image_urls, type, rental_price_per_day, max_rental_duration } = req.body;
+        const { title, description, price, category, condition, seller_id, image_urls, video_url, type, rental_price_per_day, max_rental_duration } = req.body;
 
         // Basic validation
         if (!title || !seller_id || (price === undefined && !rental_price_per_day)) {
@@ -19,6 +19,7 @@ export const createProduct = async (req, res) => {
             condition,
             seller_id,
             image_urls: image_urls || [],
+            video_url,
             status: 'Available',
             type: type || 'Sale',
             rental_price_per_day,

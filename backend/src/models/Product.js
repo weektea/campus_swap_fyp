@@ -31,6 +31,10 @@ const Product = sequelize.define('Product', {
         type: DataTypes.JSON,
         defaultValue: [],
     },
+    video_url: {
+        type: DataTypes.STRING,
+        allowNull: true,
+    },
     status: {
         type: DataTypes.ENUM('Available', 'Reserved', 'Sold', 'Removed'),
         defaultValue: 'Available',

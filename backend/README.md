@@ -27,9 +27,16 @@ docker-compose up -d
 2. Create a database named `campus_swap`.
 3. Create a user `postgres` with password `postgres` (or update `.env`).
 
+# DB connect
+1. open docker
+2. cd backend
+   docker-compose up -d
+3. cd backend
+   npm run dev
+
 # Test Register
-Test Student1
-24PMR12345
+Test Student2
+24PMR12346
 016-1234567
 student1@student.tarc.edu.my
 Test1234@

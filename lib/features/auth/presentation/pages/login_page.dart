@@ -18,7 +18,7 @@ class LoginPage extends StatefulWidget {
 
 class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController();
+  final _studentIdController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isPasswordVisible = false;
   bool _isLoading = false;
@@ -35,11 +35,11 @@ class _LoginPageState extends State<LoginPage> {
     final prefs = await SharedPreferences.getInstance();
     final remember = prefs.getBool('remember_me') ?? false;
     
-    String email = '';
+    String studentId = '';
     String password = '';
     
     if (remember) {
-        email = prefs.getString('email') ?? '';
+        studentId = prefs.getString('student_id') ?? '';
         password = prefs.getString('password') ?? '';
     }
 
@@ -47,7 +47,7 @@ class _LoginPageState extends State<LoginPage> {
       setState(() {
         _rememberMe = remember;
         if (remember) {
-            _emailController.text = email;
+            _studentIdController.text = studentId;
             _passwordController.text = password;
         }
       });
@@ -58,11 +58,11 @@ class _LoginPageState extends State<LoginPage> {
     final prefs = await SharedPreferences.getInstance();
     if (_rememberMe) {
       await prefs.setBool('remember_me', true);
-      await prefs.setString('email', _emailController.text);
+      await prefs.setString('student_id', _studentIdController.text);
       await prefs.setString('password', _passwordController.text);
     } else {
       await prefs.remove('remember_me');
-      await prefs.remove('email');
+      await prefs.remove('student_id');
       await prefs.remove('password');
     }
   }
@@ -75,7 +75,7 @@ class _LoginPageState extends State<LoginPage> {
       try {
         final apiClient = ApiClient();
         final response = await apiClient.post('/auth/login', {
-          'email': _emailController.text,
+          'student_id': _studentIdController.text,
           'password': _passwordController.text,
         });
 
@@ -157,19 +157,20 @@ class _LoginPageState extends State<LoginPage> {
                     child: Column(
                       children: [
                         TextFormField(
-                          controller: _emailController,
-                          keyboardType: TextInputType.emailAddress,
+                          controller: _studentIdController,
+                          keyboardType: TextInputType.text,
+                          textCapitalization: TextCapitalization.characters,
                           decoration: const InputDecoration(
-                            labelText: 'Student Email (@edu.my)',
-                            prefixIcon: Icon(Icons.school_outlined),
-                            hintText: 'yourname@university.edu.my',
+                            labelText: 'Student ID',
+                            prefixIcon: Icon(Icons.badge_outlined),
+                            hintText: 'YYAAAXXXXX',
                           ),
                           validator: (value) {
                             if (value == null || value.isEmpty) {
-                              return 'Please enter your student email';
+                              return 'Please enter your student ID';
                             }
-                            if (!value.endsWith('.edu.my')) {
-                              return 'Must be a valid .edu.my email';
+                            if (!RegExp(r'^\d{2}[a-zA-Z]{3}\d{5}$').hasMatch(value)) {
+                              return 'Invalid format. Use YYAAAXXXXX (e.g. 24PMR01234)';
                             }
                             return null;
                           },

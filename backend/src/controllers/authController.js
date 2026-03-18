@@ -43,9 +43,21 @@ export const register = async (req, res) => {
         }
 
         // 2. Check existing
-        const existingUser = await User.findOne({ where: { email } });
-        if (existingUser) {
+        const existingEmail = await User.findOne({ where: { email } });
+        if (existingEmail) {
             return res.status(400).json({ error: 'Email already registered' });
+        }
+
+        const existingUniId = await User.findOne({ where: { university_id } });
+        if (existingUniId) {
+            return res.status(400).json({ error: 'University ID already registered' });
+        }
+
+        if (phone_number) {
+            const existingPhone = await User.findOne({ where: { phone_number } });
+            if (existingPhone) {
+                return res.status(400).json({ error: 'Phone number already registered' });
+            }
         }
 
         // 3. Hash Password
@@ -88,18 +100,24 @@ export const register = async (req, res) => {
 
 export const login = async (req, res) => {
     try {
-        const { email, password } = req.body;
+        const { email, student_id, password } = req.body;
+        
+        const identifier = email || student_id;
 
-        // 1. Check User
-        const user = await User.findOne({ where: { email } });
+        // 1. Check User by email or university_id
+        let user = await User.findOne({ where: { email: identifier } });
         if (!user) {
-            return res.status(400).json({ error: 'Invalid email or password' });
+            user = await User.findOne({ where: { university_id: identifier } });
+        }
+        
+        if (!user) {
+            return res.status(400).json({ error: 'Invalid ID/email or password' });
         }
 
         // 2. Check Password
         const isMatch = await bcrypt.compare(password, user.password_hash);
         if (!isMatch) {
-            return res.status(400).json({ error: 'Invalid email or password' });
+            return res.status(400).json({ error: 'Invalid ID/email or password' });
         }
 
         // 3. Generate Token

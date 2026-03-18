@@ -181,222 +181,242 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildHomeView() {
     return SafeArea(
-      child: Column(
-        children: [
-          // Custom Header
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+      child: RefreshIndicator(
+        onRefresh: _fetchProducts,
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            // Custom Header
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      'Welcome Back,',
-                      style: GoogleFonts.outfit(
-                            color: Colors.grey[600],
-                            fontSize: 16,
-                          ),
-                    ),
-                    Text(
-                      'Find Your Needs',
-                      style: GoogleFonts.outfit(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 24,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                    ),
-                  ],
-                ).animate().fadeIn(duration: 500.ms).slideX(begin: -0.2),
-                ValueListenableBuilder<int>(
-                  valueListenable: NotificationService().unreadCountNotifier,
-                  builder: (context, count, child) {
-                    return GestureDetector(
-                      onTap: () async {
-                          await Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsPage()));
-                          // Refresh unread count after returning
-                          NotificationService().unreadCountNotifier.value = 0; // Optimistic reset if read all
-                          // Or force poll
-                      },
-                      child: Stack(
-                        clipBehavior: Clip.none,
-                        children: [
-                          CircleAvatar(
-                            radius: 24,
-                            backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
-                            child: Icon(Icons.notifications_none_rounded, color: Theme.of(context).colorScheme.primary),
-                          ),
-                          if (count > 0)
-                            Positioned(
-                              right: 0,
-                              top: 0,
-                              child: Container(
-                                padding: const EdgeInsets.all(4),
-                                decoration: const BoxDecoration(
-                                  color: Colors.red,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Text(
-                                  count > 9 ? '9+' : count.toString(),
-                                  style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                                ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Welcome Back,',
+                          style: GoogleFonts.outfit(
+                                color: Colors.grey[600],
+                                fontSize: 16,
                               ),
-                            ),
-                        ],
-                      ),
-                    );
-                  },
-                ).animate().fadeIn(duration: 500.ms, delay: 200.ms).scale(),
-              ],
-            ),
-          ),
-
-          // Search Bar
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20.0),
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.grey.withValues(alpha: 0.1),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
+                        ),
+                        Text(
+                          'Find Your Needs',
+                          style: GoogleFonts.outfit(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 24,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                        ),
+                      ],
+                    ).animate().fadeIn(duration: 500.ms).slideX(begin: -0.2),
+                    ValueListenableBuilder<int>(
+                      valueListenable: NotificationService().unreadCountNotifier,
+                      builder: (context, count, child) {
+                        return GestureDetector(
+                          onTap: () async {
+                              await Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsPage()));
+                              // Refresh unread count after returning
+                              NotificationService().unreadCountNotifier.value = 0; // Optimistic reset if read all
+                              // Or force poll
+                          },
+                          child: Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              CircleAvatar(
+                                radius: 24,
+                                backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                                child: Icon(Icons.notifications_none_rounded, color: Theme.of(context).colorScheme.primary),
+                              ),
+                              if (count > 0)
+                                Positioned(
+                                  right: 0,
+                                  top: 0,
+                                  child: Container(
+                                    padding: const EdgeInsets.all(4),
+                                    decoration: const BoxDecoration(
+                                      color: Colors.red,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Text(
+                                      count > 9 ? '9+' : count.toString(),
+                                      style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        );
+                      },
+                    ).animate().fadeIn(duration: 500.ms, delay: 200.ms).scale(),
+                  ],
+                ),
               ),
-              child: TextField(
-                decoration: InputDecoration(
-                  hintText: 'Search books, electronics...',
-                  hintStyle: GoogleFonts.outfit(color: Colors.grey[400]),
-                  prefixIcon: const Icon(Icons.search_rounded),
-                  suffixIcon: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.sort_rounded),
-                        onPressed: _showSortDialog,
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.filter_list_rounded),
-                        onPressed: _showFilterDialog,
+            ),
+
+            // Search Bar
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.grey.withValues(alpha: 0.1),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
                       ),
                     ],
                   ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide.none,
+                  child: TextField(
+                    decoration: InputDecoration(
+                      hintText: 'Search books, electronics...',
+                      hintStyle: GoogleFonts.outfit(color: Colors.grey[400]),
+                      prefixIcon: const Icon(Icons.search_rounded),
+                      suffixIcon: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.sort_rounded),
+                            onPressed: _showSortDialog,
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.filter_list_rounded),
+                            onPressed: _showFilterDialog,
+                          ),
+                        ],
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide.none,
+                      ),
+                      filled: true,
+                      fillColor: Colors.white, 
+                      contentPadding: const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                    style: GoogleFonts.outfit(),
+                    onSubmitted: (value) => _fetchProducts(value),
+                    textInputAction: TextInputAction.search,
                   ),
-                  filled: true,
-                  fillColor: Colors.white, 
-                  contentPadding: const EdgeInsets.symmetric(vertical: 16),
                 ),
-                style: GoogleFonts.outfit(),
-                onSubmitted: (value) => _fetchProducts(value),
-                textInputAction: TextInputAction.search,
+              ).animate().fadeIn(duration: 500.ms, delay: 300.ms).slideY(begin: 0.2),
+            ),
+
+            const SliverToBoxAdapter(child: SizedBox(height: 24)),
+
+            // Categories
+            SliverToBoxAdapter(
+              child: SizedBox(
+                height: 50,
+                child: ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _categories.length,
+                  itemBuilder: (context, index) {
+                    return CategoryChip(
+                      label: _categories[index]['label'],
+                      icon: _categories[index]['icon'],
+                      isSelected: _selectedCategoryIndex == index,
+                      onTap: () {
+                        setState(() {
+                          _selectedCategoryIndex = index;
+                        });
+                        _fetchProducts(); // Refresh with new category
+                      },
+                    ).animate().fadeIn(duration: 400.ms, delay: (100 * index).ms).slideX();
+                  },
+                ),
               ),
             ),
-          ).animate().fadeIn(duration: 500.ms, delay: 300.ms).slideY(begin: 0.2),
 
-          const SizedBox(height: 24),
+            const SliverToBoxAdapter(child: SizedBox(height: 24)),
 
-          // Categories
-          SizedBox(
-            height: 50,
-            child: ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              scrollDirection: Axis.horizontal,
-              itemCount: _categories.length,
-              itemBuilder: (context, index) {
-                return CategoryChip(
-                  label: _categories[index]['label'],
-                  icon: _categories[index]['icon'],
-                  isSelected: _selectedCategoryIndex == index,
-                  onTap: () {
-                    setState(() {
-                      _selectedCategoryIndex = index;
-                    });
-                    _fetchProducts(); // Refresh with new category
-                  },
-                ).animate().fadeIn(duration: 400.ms, delay: (100 * index).ms).slideX();
-              },
-            ),
-          ),
-
-          const SizedBox(height: 16),
-
-          if (_recommendedProducts.isNotEmpty) ...[
-             Padding(
-               padding: const EdgeInsets.symmetric(horizontal: 20),
-               child: Text("Recommended for You", style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold)),
-             ),
-             const SizedBox(height: 12),
-             SizedBox(
-               height: 240, // Height for horizontal card
-               child: ListView.builder(
-                 padding: const EdgeInsets.symmetric(horizontal: 12),
-                 scrollDirection: Axis.horizontal,
-                 itemCount: _recommendedProducts.length,
-                 itemBuilder: (context, index) {
-                    return SizedBox(
-                       width: 160,
-                       child: Padding(
-                         padding: const EdgeInsets.symmetric(horizontal: 8.0), // Spacing between items
-                         child: ProductCard(
-                            product: _recommendedProducts[index],
-                            onTap: () {
-                              Navigator.push(context, MaterialPageRoute(
-                                builder: (_) => ProductDetailsPage(product: _recommendedProducts[index])
-                              ));
-                            },
-                         ),
-                       ),
-                    );
-                 },
+            if (_recommendedProducts.isNotEmpty) ...[
+               SliverToBoxAdapter(
+                 child: Padding(
+                   padding: const EdgeInsets.symmetric(horizontal: 20),
+                   child: Text("Recommended for You", style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold)),
+                 ),
                ),
-             ),
-             const SizedBox(height: 24),
-          ],
-          
-          Padding(
-             padding: const EdgeInsets.symmetric(horizontal: 20),
-             child: Text("All Listings", style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold)),
-          ),
-          const SizedBox(height: 12),
+               const SliverToBoxAdapter(child: SizedBox(height: 12)),
+               SliverToBoxAdapter(
+                 child: SizedBox(
+                   height: 240, // Height for horizontal card
+                   child: ListView.builder(
+                     padding: const EdgeInsets.symmetric(horizontal: 12),
+                     scrollDirection: Axis.horizontal,
+                     itemCount: _recommendedProducts.length,
+                     itemBuilder: (context, index) {
+                        return SizedBox(
+                           width: 160,
+                           child: Padding(
+                             padding: const EdgeInsets.symmetric(horizontal: 8.0), // Spacing between items
+                             child: ProductCard(
+                                product: _recommendedProducts[index],
+                                onTap: () {
+                                  Navigator.push(context, MaterialPageRoute(
+                                    builder: (_) => ProductDetailsPage(product: _recommendedProducts[index])
+                                  ));
+                                },
+                             ),
+                           ),
+                        );
+                     },
+                   ),
+                 ),
+               ),
+               const SliverToBoxAdapter(child: SizedBox(height: 24)),
+            ],
+            
+            SliverToBoxAdapter(
+              child: Padding(
+                 padding: const EdgeInsets.symmetric(horizontal: 20),
+                 child: Text("All Listings", style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold)),
+              ),
+            ),
+            const SliverToBoxAdapter(child: SizedBox(height: 12)),
 
-          // Product Grid
-          Expanded(
-            child: _isLoading 
-              ? const Center(child: CircularProgressIndicator())
-              : _products.isEmpty 
-                  ? Center(child: Text('No items found. Be the first to sell!', style: GoogleFonts.outfit()))
-                  : RefreshIndicator(
-                      onRefresh: _fetchProducts,
-                      child: GridView.builder(
-                        padding: const EdgeInsets.all(20),
-                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          childAspectRatio: 0.70, // Slightly taller for better cards
-                          crossAxisSpacing: 16,
-                          mainAxisSpacing: 16,
-                        ),
-                        itemCount: _products.length,
-                        itemBuilder: (context, index) {
-                          return ProductCard(
-                            product: _products[index],
-                            onTap: () {
-                              Navigator.push(context, MaterialPageRoute(
-                                builder: (_) => ProductDetailsPage(product: _products[index])
-                              ));
-                            },
-                          ).animate().fadeIn(duration: 500.ms, delay: (50 * index).ms).scale(begin: const Offset(0.9, 0.9));
+            // Product Grid
+            if (_isLoading)
+              const SliverFillRemaining(
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (_products.isEmpty)
+              SliverFillRemaining(
+                child: Center(child: Text('No items found. Be the first to sell!', style: GoogleFonts.outfit())),
+              )
+            else
+              SliverPadding(
+                padding: const EdgeInsets.all(20),
+                sliver: SliverGrid(
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    childAspectRatio: 0.70, // Slightly taller for better cards
+                    crossAxisSpacing: 16,
+                    mainAxisSpacing: 16,
+                  ),
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      return ProductCard(
+                        product: _products[index],
+                        onTap: () {
+                          Navigator.push(context, MaterialPageRoute(
+                            builder: (_) => ProductDetailsPage(product: _products[index])
+                          ));
                         },
-                      ),
-                    ),
-          ),
-        ],
+                      ).animate().fadeIn(duration: 500.ms, delay: (50 * index).ms).scale(begin: const Offset(0.9, 0.9));
+                    },
+                    childCount: _products.length,
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
