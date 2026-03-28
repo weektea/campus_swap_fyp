@@ -41,6 +41,8 @@ import reviewRoutes from './routes/reviewRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
 import uploadRoutes from './routes/uploadRoutes.js';
 import recommendationRoutes from './routes/recommendationRoutes.js';
+import categoryRoutes from './routes/categoryRoutes.js';
+import disputeRoutes from './routes/disputeRoutes.js';
 
 
 
@@ -53,6 +55,8 @@ app.use('/api/reviews', reviewRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/recommendations', recommendationRoutes);
+app.use('/api/categories', categoryRoutes);
+app.use('/api/disputes', disputeRoutes);
 
 
 import adminRoutes from './routes/adminRoutes.js';
@@ -107,9 +111,10 @@ app.post('/api/products/classify', upload.single('file'), async (req, res) => {
 
         // Fallback Mock (if ML is down)
         res.json({
-            category: 'Electronics (Mock Fallback)',
+            category: 'Electronics & Gadgets',
+            sub_category: 'Smartphones',
             confidence: 0.95,
-            note: 'ML Service unavailable, using mock.'
+            note: 'ML Service unavailable, using mock matching new SubCategories.'
         });
     }
 });

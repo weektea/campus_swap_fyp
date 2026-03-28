@@ -25,11 +25,7 @@ const User = sequelize.define('User', {
         }
     },
     // ...
-    university_id: {
-        type: DataTypes.STRING,
-        allowNull: true,
-        unique: true, // Enforce uniqueness
-    },
+
     password_hash: {
         type: DataTypes.STRING,
         allowNull: false,
@@ -58,6 +54,30 @@ const User = sequelize.define('User', {
     role: {
         type: DataTypes.ENUM('student', 'admin', 'moderator'),
         defaultValue: 'student',
+    },
+    bio: {
+        type: DataTypes.STRING(150), // Limited chars as per UC04
+        allowNull: true,
+    },
+    privacy_setting: {
+        type: DataTypes.ENUM('Public', 'Private', 'Friends Only'),
+        defaultValue: 'Public', // From UC04
+    },
+    total_carbon_saved: {
+        type: DataTypes.FLOAT,
+        defaultValue: 0.0, // Used for Sustainability Dashboard UC03
+    },
+    is_active: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: true,
+    },
+    deactivated_until: {
+        type: DataTypes.DATE,
+        allowNull: true,
+    },
+    deactivation_reason: {
+        type: DataTypes.STRING,
+        allowNull: true,
     },
 }, {
     timestamps: true,

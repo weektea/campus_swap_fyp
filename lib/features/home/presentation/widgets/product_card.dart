@@ -30,13 +30,11 @@ class ProductCard extends StatelessWidget {
           children: [
             // Image Section with Hero
             Expanded(
-              flex: 5,
+              flex: 4,
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                   Hero(
-                    tag: 'product_image_${product.id}',
-                    child: product.imageUrl.isNotEmpty
+                   product.imageUrl.isNotEmpty
                       ? CachedNetworkImage(
                           imageUrl: product.imageUrl,
                           fit: BoxFit.cover,
@@ -59,7 +57,6 @@ class ProductCard extends StatelessWidget {
                           ),
                         ),
                       ),
-                   ),
                   
                   // Gradient Overlay for text readability (optional, but adds depth)
                   Positioned.fill(
@@ -106,9 +103,9 @@ class ProductCard extends StatelessWidget {
             ),
             // Details Section
             Expanded(
-              flex: 4,
+              flex: 5,
               child: Padding(
-                padding: const EdgeInsets.all(12.0),
+                padding: const EdgeInsets.all(10.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -134,7 +131,7 @@ class ProductCard extends StatelessWidget {
                           style: GoogleFonts.outfit(
                             color: Theme.of(context).colorScheme.primary,
                             fontWeight: FontWeight.w900,
-                            fontSize: product.type == 'Rent' ? 14 : 16, // Slightly smaller if rent
+                            fontSize: product.type == 'Rent' ? 14 : 15, // Slightly smaller
                           ),
                         ),
                       ],

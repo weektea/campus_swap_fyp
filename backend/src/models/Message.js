@@ -22,7 +22,14 @@ const Message = sequelize.define('Message', {
     is_read: {
         type: DataTypes.BOOLEAN,
         defaultValue: false
+    },
+    mapped_zone_id: {
+        type: DataTypes.UUID,
+        allowNull: true
     }
+}, {
+    timestamps: true,
+    updatedAt: false, // We don't usually need to track when a message was 'updated' unless edit is allowed
 });
 
 export default Message;

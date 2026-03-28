@@ -31,9 +31,10 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
     final apiClient = ApiClient();
     try {
         // 1. Fetch User Info
-        // Assuming we expose a public endpoint or reuse auth/user/:id which should be somewhat public for basic info
         final userRes = await apiClient.get('/auth/user/${widget.userId}');
-        _userProfile = userRes;
+        if (userRes != null && userRes['user'] != null) {
+            _userProfile = userRes['user'];
+        }
 
         // 2. Fetch User Listings
         final productsRes = await apiClient.get('/products?seller_id=${widget.userId}');
@@ -46,6 +47,17 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
         // print("Error fetching public profile: $e");
         if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  String _formatDate(String? isoString) {
+      if (isoString == null) return 'N/A';
+      try {
+          final dt = DateTime.parse(isoString);
+          final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+          return '${dt.day} ${months[dt.month - 1]} ${dt.year}';
+      } catch (e) {
+          return 'N/A';
+      }
   }
 
   @override
@@ -65,10 +77,10 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
                                 children: [
                                     CircleAvatar(
                                         radius: 40,
-                                        backgroundImage: (_userProfile != null && _userProfile!['profile_picture'] != null)
-                                            ? NetworkImage('${ApiClient.baseUrl.replaceAll('/api', '')}${_userProfile!['profile_picture']}')
+                                        backgroundImage: (_userProfile != null && _userProfile!['profile_image_url'] != null)
+                                            ? NetworkImage('${ApiClient.baseUrl.replaceAll('/api', '')}${_userProfile!['profile_image_url']}')
                                             : null,
-                                        child: (_userProfile == null || _userProfile!['profile_picture'] == null) 
+                                        child: (_userProfile == null || _userProfile!['profile_image_url'] == null) 
                                             ? Text(widget.userName[0].toUpperCase(), style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold))
                                             : null,
                                     ),
@@ -76,7 +88,7 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
                                     Text(widget.userName, style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.bold)),
                                     // Reputation / Eco stats could go here
                                     const SizedBox(height: 8),
-                                    Text("Member since ${_userProfile != null ? DateTime.parse(_userProfile!['createdAt']).year : 'N/A'}", style: GoogleFonts.outfit(color: Colors.grey))
+                                    Text("Member since ${_formatDate(_userProfile?['createdAt'])}", style: GoogleFonts.outfit(color: Colors.grey))
                                 ],
                             ),
                         ),
@@ -88,35 +100,55 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
                         
                         _listings.isEmpty 
                             ? Center(child: Text("No active listings", style: GoogleFonts.outfit(color: Colors.grey)))
-                            : GridView.builder(
+                            : ListView.separated(
                                 shrinkWrap: true,
                                 physics: const NeverScrollableScrollPhysics(),
-                                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                                    crossAxisCount: 2,
-                                    childAspectRatio: 0.75,
-                                    crossAxisSpacing: 16,
-                                    mainAxisSpacing: 16
-                                ),
                                 itemCount: _listings.length,
+                                separatorBuilder: (context, index) => const SizedBox(height: 12),
                                 itemBuilder: (context, index) {
                                     final product = _listings[index];
                                     return GestureDetector(
                                         onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailsPage(product: product))),
-                                        child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                                Expanded(
-                                                    child: ClipRRect(
+                                        child: Container(
+                                            padding: const EdgeInsets.all(12),
+                                            decoration: BoxDecoration(
+                                                color: Colors.white,
+                                                borderRadius: BorderRadius.circular(16),
+                                                border: Border.all(color: Colors.grey.shade200),
+                                            ),
+                                            child: Row(
+                                                children: [
+                                                    // Image
+                                                    ClipRRect(
                                                         borderRadius: BorderRadius.circular(12),
                                                         child: product.imageUrl.isNotEmpty
-                                                            ? CachedNetworkImage(imageUrl: product.imageUrl, fit: BoxFit.cover, width: double.infinity)
-                                                            : Container(color: Colors.grey[200]),
+                                                            ? CachedNetworkImage(imageUrl: product.imageUrl, width: 90, height: 90, fit: BoxFit.cover)
+                                                            : Container(width: 90, height: 90, color: Colors.grey[200]),
                                                     ),
-                                                ),
-                                                const SizedBox(height: 8),
-                                                Text(product.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
-                                                Text('RM ${product.price}', style: GoogleFonts.outfit(color: Theme.of(context).colorScheme.primary)),
-                                            ],
+                                                    const SizedBox(width: 16),
+                                                    // Details
+                                                    Expanded(
+                                                        child: Column(
+                                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                                            children: [
+                                                                Text(product.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 16)),
+                                                                const SizedBox(height: 6),
+                                                                Container(
+                                                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                                                    decoration: BoxDecoration(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)),
+                                                                    child: Text(product.type == 'Rent' ? 'RENTAL' : 'SALE', style: GoogleFonts.outfit(color: Theme.of(context).colorScheme.primary, fontSize: 10, fontWeight: FontWeight.bold)),
+                                                                ),
+                                                                const SizedBox(height: 8),
+                                                                Text(
+                                                                    'RM ${product.type == 'Rent' ? '${product.rentalPricePerDay.toStringAsFixed(2)}/day' : product.price.toStringAsFixed(2)}', 
+                                                                    style: GoogleFonts.outfit(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold, fontSize: 16)
+                                                                ),
+                                                            ],
+                                                        )
+                                                    ),
+                                                    const Icon(Icons.chevron_right, color: Colors.grey)
+                                                ],
+                                            ),
                                         ),
                                     );
                                 },

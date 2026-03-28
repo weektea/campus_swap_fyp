@@ -5,13 +5,18 @@ import { Op } from 'sequelize';
 export const sendMessage = async (req, res) => {
     try {
         const sender_id = req.user.id;
-        const { receiver_id, content } = req.body;
+        const { receiver_id, content, mapped_zone_id } = req.body;
 
         if (!receiver_id || !content) {
             return res.status(400).json({ error: 'Missing details' });
         }
 
-        const msg = await Message.create({ sender_id, receiver_id, content });
+        const msg = await Message.create({ 
+            sender_id, 
+            receiver_id, 
+            content,
+            mapped_zone_id: mapped_zone_id || null // UC25: Safe Campus Zone Sharing
+        });
         res.status(201).json(msg);
     } catch (error) {
         console.error('Send Msg Error:', error);

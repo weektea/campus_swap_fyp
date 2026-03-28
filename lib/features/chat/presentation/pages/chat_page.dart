@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:campus_swap/core/api/api_client.dart';
+import 'package:campus_swap/core/api/api_client.dart';
 import 'package:campus_swap/core/session/user_session.dart';
 import 'package:campus_swap/features/chat/presentation/pages/chat_detail_page.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class ChatPage extends StatefulWidget {
   const ChatPage({super.key});
@@ -52,7 +54,21 @@ class _ChatPageState extends State<ChatPage> {
       body: _isLoading 
         ? const Center(child: CircularProgressIndicator())
         : _conversations.isEmpty
-            ? Center(child: Text(UserSession().isLoggedIn ? 'No messages yet.' : 'Please login to view messages.'))
+            ? Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.chat_bubble_outline, size: 80, color: Colors.grey[300]),
+                    const SizedBox(height: 16),
+                    Text(UserSession().isLoggedIn ? 'No messages yet.' : 'Please login to view messages.', 
+                         style: GoogleFonts.outfit(fontSize: 18, color: Colors.grey[600], fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    if (UserSession().isLoggedIn)
+                       Text('Start a conversation by exploring items!', 
+                         style: GoogleFonts.outfit(fontSize: 14, color: Colors.grey[500])),
+                  ],
+                ),
+              )
             : ListView.separated(
                 itemCount: _conversations.length,
                 separatorBuilder: (context, index) => const Divider(height: 1),

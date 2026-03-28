@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:campus_swap/core/api/api_client.dart';
 import 'package:campus_swap/core/session/user_session.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:campus_swap/features/profile/presentation/pages/transaction_detail_page.dart';
 
 class NotificationsPage extends StatefulWidget {
   const NotificationsPage({super.key});
@@ -86,7 +87,14 @@ class _NotificationsPageState extends State<NotificationsPage> {
                                 trailing: isRead ? null : const Icon(Icons.circle, color: Colors.blue, size: 10),
                                 onTap: () {
                                     if (!isRead) _markAsRead(note['id']);
-                                    // Could navigate to details based on type/related_id
+                                    // Navigate to details based on type
+                                    if (note['type'] == 'Transaction' || note['type'] == 'System') {
+                                        if (note['related_id'] != null) {
+                                            Navigator.push(context, MaterialPageRoute(
+                                                builder: (_) => TransactionDetailPage(transactionId: note['related_id'])
+                                            ));
+                                        }
+                                    }
                                 },
                             ),
                         );

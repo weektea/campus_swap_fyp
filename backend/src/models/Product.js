@@ -19,9 +19,17 @@ const Product = sequelize.define('Product', {
         type: DataTypes.DECIMAL(10, 2),
         allowNull: false,
     },
+    category_id: {
+        type: DataTypes.UUID,
+        allowNull: true, // Made true so old items/flutter code don't crash
+    },
+    sub_category_id: {
+        type: DataTypes.UUID,
+        allowNull: true,
+    },
     category: {
-        type: DataTypes.STRING, // e.g., 'Electronics', 'Books'
-        allowNull: false,
+        type: DataTypes.STRING,
+        allowNull: true, // Legacy string category to keep app working while transitioning
     },
     condition: {
         type: DataTypes.ENUM('New', 'Like New', 'Good', 'Fair', 'Poor'),

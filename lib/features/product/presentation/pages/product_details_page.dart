@@ -22,6 +22,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
   bool _isSaved = false;
   bool _isBuying = false;
   List<Product> _sellerProducts = [];
+  List<Product> _similarProducts = [];
   // bool _isLoadingSellerItems = true;
 
   @override
@@ -29,6 +30,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
     super.initState();
     _trackView();
     _fetchSellerProducts();
+    _fetchSimilarProducts();
   }
 
   Future<void> _fetchSellerProducts() async {
@@ -48,8 +50,26 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
               }
           }
       } catch (e) {
-          // print("Error fetching seller items: $e");
-          // if (mounted) setState(() => _isLoadingSellerItems = false);
+          // Ignore
+      }
+  }
+
+  Future<void> _fetchSimilarProducts() async {
+      try {
+          final apiClient = ApiClient();
+          final response = await apiClient.get('/products?category=${widget.product.category}');
+          if (response is List) {
+              if (mounted) {
+                  setState(() {
+                      _similarProducts = response
+                          .map((data) => Product.fromJson(data))
+                          .where((p) => p.id != widget.product.id)
+                          .toList();
+                  });
+              }
+          }
+      } catch (e) {
+          // Ignore
       }
   }
 
@@ -110,6 +130,33 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                   ),
                 ),
               ),
+              if (UserSession().userId != widget.product.sellerId)
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: CircleAvatar(
+                    backgroundColor: Colors.white.withValues(alpha: 0.8),
+                    child: PopupMenuButton<String>(
+                      icon: Icon(Icons.more_vert, color: theme.colorScheme.onSurface),
+                      onSelected: (value) {
+                        if (value == 'report') {
+                          _reportListing();
+                        }
+                      },
+                      itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+                        const PopupMenuItem<String>(
+                          value: 'report',
+                          child: Row(
+                            children: [
+                              Icon(Icons.flag, color: Colors.red, size: 20),
+                              SizedBox(width: 8),
+                              Text('Report Listing', style: TextStyle(color: Colors.red)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
             ],
             flexibleSpace: FlexibleSpaceBar(
                 title: Text(widget.product.title, style: TextStyle(color: Colors.transparent)),
@@ -343,6 +390,66 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                     style: GoogleFonts.outfit(color: Colors.grey[700], height: 1.6, fontSize: 15),
                   ).animate().fadeIn(duration: 500.ms, delay: 400.ms),
                   
+                  const SizedBox(height: 32),
+                  // Similar Items Section
+                  if (_similarProducts.isNotEmpty) ...[
+                      Text("Similar Items Recommended", style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 18)),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        height: 140,
+                        child: ListView.builder(
+                            scrollDirection: Axis.horizontal,
+                            itemCount: _similarProducts.length,
+                            itemBuilder: (context, index) {
+                                final item = _similarProducts[index];
+                                return GestureDetector(
+                                    onTap: () {
+                                         Navigator.push(context, MaterialPageRoute(
+                                            builder: (_) => ProductDetailsPage(product: item)
+                                          ));
+                                    },
+                                    child: Container(
+                                        width: 110,
+                                        margin: const EdgeInsets.only(right: 12),
+                                        decoration: BoxDecoration(
+                                            color: Colors.white,
+                                            borderRadius: BorderRadius.circular(12),
+                                            border: Border.all(color: Colors.grey.shade200)
+                                        ),
+                                        child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                                Expanded(
+                                                    child: ClipRRect(
+                                                        borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                                                        child: item.imageUrl.isNotEmpty
+                                                            ? CachedNetworkImage(
+                                                                imageUrl: item.imageUrl,
+                                                                fit: BoxFit.cover,
+                                                                width: double.infinity,
+                                                              )
+                                                            : Container(color: Colors.grey[100]),
+                                                    ),
+                                                ),
+                                                Padding(
+                                                    padding: const EdgeInsets.all(8.0),
+                                                    child: Column(
+                                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                                        children: [
+                                                            Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.bold)),
+                                                            Text('RM ${item.price.toStringAsFixed(0)}', style: GoogleFonts.outfit(fontSize: 12, color: Theme.of(context).colorScheme.primary)),
+                                                        ],
+                                                    ),
+                                                )
+                                            ],
+                                        ),
+                                    ),
+                                );
+                            },
+                        ),
+                      ),
+                  ],
+
                   const SizedBox(height: 100),
                 ],
               ),
@@ -417,6 +524,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                      Navigator.push(context, MaterialPageRoute(builder: (_) => ChatDetailPage(
                          sellerName: widget.product.sellerName,
                          otherUserId: widget.product.sellerId,
+                         initialMessage: "Hi ${widget.product.sellerName}, I'm interested in your listing: [ ${widget.product.title} ] for RM ${widget.product.price.toStringAsFixed(2)}!",
                      )));
                   },
                   style: OutlinedButton.styleFrom(
@@ -541,6 +649,88 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
 
   String _selectedLocation = 'Library';
   final List<String> _campusLocations = ['Library', 'Student Center', 'Cafeteria A', 'Main Hall', 'Sports Complex', 'Hostel Block B'];
+  DateTime? _rentStartDate;
+  DateTime? _rentEndDate;
+
+  void _reportListing() {
+    if (!UserSession().isLoggedIn) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please login to report')));
+      return;
+    }
+    showDialog(
+      context: context,
+      builder: (context) {
+        String reason = '';
+        String selectedCategory = 'Scam/Fraud';
+        final List<String> categories = ['Scam/Fraud', 'Fake Item', 'Prohibited Item', 'Inappropriate Content', 'Other'];
+
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return AlertDialog(
+              title: Text('Report Listing', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  DropdownButtonFormField<String>(
+                    value: selectedCategory,
+                    decoration: const InputDecoration(
+                      labelText: 'Reason for Report',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: categories.map((cat) => DropdownMenuItem(value: cat, child: Text(cat, style: GoogleFonts.outfit()))).toList(),
+                    onChanged: (val) {
+                      if (val != null) setModalState(() => selectedCategory = val);
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  Text('Provide details:', style: GoogleFonts.outfit()),
+                  const SizedBox(height: 8),
+                  TextField(
+                    onChanged: (v) => reason = v,
+                    decoration: const InputDecoration(
+                      hintText: 'e.g., Fake item, scam...',
+                      border: OutlineInputBorder(),
+                    ),
+                    maxLines: 3,
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+                ElevatedButton(
+                  onPressed: () async {
+                    if (reason.trim().isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please provide details'), backgroundColor: Colors.red));
+                      return;
+                    }
+                    Navigator.pop(context);
+                    
+                    try {
+                        final apiClient = ApiClient();
+                        await apiClient.post('/reports', {
+                            'item_id': widget.product.id,
+                            'reporter_id': UserSession().userId,
+                            'category': selectedCategory,
+                            'description': reason,
+                            'status': 'Pending'
+                        });
+                    } catch (e) {
+                        // Ignore mock error
+                    }
+
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Listing reported successfully. Moderators will review.')));
+                  },
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                  child: const Text('Submit', style: TextStyle(color: Colors.white)),
+                ),
+              ],
+            );
+          }
+        );
+      },
+    );
+  }
 
   void _showBuyConfirmation(BuildContext context) {
     if (!UserSession().isLoggedIn) {
@@ -556,6 +746,13 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (context) => StatefulBuilder(
         builder: (context, setModalState) {
+          int rentDays = 0;
+          double totalRentCost = 0.0;
+          if (isRent && _rentStartDate != null && _rentEndDate != null) {
+            rentDays = _rentEndDate!.difference(_rentStartDate!).inDays + 1; // Inclusive
+            totalRentCost = rentDays * widget.product.rentalPricePerDay;
+          }
+
           return Padding(
             padding: EdgeInsets.only(
                 left: 24, 
@@ -600,9 +797,69 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                     ),
                 ),
                 
-                 const SizedBox(height: 24),
+                 const SizedBox(height: 16),
+
+                 if (isRent) ...[
+                   Text("Select Rental Period", style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+                   const SizedBox(height: 8),
+                   InkWell(
+                     onTap: () async {
+                       final DateTimeRange? picked = await showDateRangePicker(
+                         context: context,
+                         firstDate: DateTime.now(),
+                         lastDate: DateTime.now().add(const Duration(days: 365)),
+                         builder: (context, child) {
+                           return Theme(
+                             data: Theme.of(context).copyWith(
+                               colorScheme: Theme.of(context).colorScheme.copyWith(
+                                 primary: Theme.of(context).colorScheme.primary,
+                               ),
+                             ),
+                             child: child!,
+                           );
+                         },
+                       );
+                       if (picked != null) {
+                         int selectedDays = picked.end.difference(picked.start).inDays + 1;
+                         if (selectedDays > widget.product.maxRentalDuration) {
+                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                  content: Text('Maximum rental duration is ${widget.product.maxRentalDuration} days!'),
+                                  backgroundColor: Colors.red,
+                              ));
+                              return;
+                         }
+                         setModalState(() {
+                           _rentStartDate = picked.start;
+                           _rentEndDate = picked.end;
+                         });
+                       }
+                     },
+                     child: Container(
+                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                       decoration: BoxDecoration(
+                         border: Border.all(color: Colors.grey.shade300),
+                         borderRadius: BorderRadius.circular(12),
+                       ),
+                       child: Row(
+                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                         children: [
+                           Text(
+                             _rentStartDate != null && _rentEndDate != null
+                                 ? '${_rentStartDate!.toString().split(' ')[0]} to ${_rentEndDate!.toString().split(' ')[0]}'
+                                 : 'Tap to select dates',
+                             style: GoogleFonts.outfit(
+                               color: _rentStartDate != null ? Colors.black87 : Colors.grey.shade600,
+                             ),
+                           ),
+                           const Icon(Icons.calendar_today, size: 18, color: Colors.blue),
+                         ],
+                       ),
+                     ),
+                   ),
+                   const SizedBox(height: 16),
+                 ],
                 
-                Text(isRent ? 'You are about to send a rental request based on this item:' : 'Product Summary:', style: GoogleFonts.outfit(color: Colors.grey[600])),
+                Text(isRent ? 'Rental Summary:' : 'Product Summary:', style: GoogleFonts.outfit(color: Colors.grey[600])),
                  const SizedBox(height: 8),
                 Row(
                   children: [
@@ -618,10 +875,22 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(widget.product.title, style: GoogleFonts.outfit(fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
-                          Text(
-                              isRent ? 'RM ${widget.product.rentalPricePerDay.toStringAsFixed(2)} / day' : 'RM ${widget.product.price.toStringAsFixed(2)}', 
-                              style: GoogleFonts.outfit(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold)
-                          ),
+                          if (isRent) ...[
+                            Text(
+                              'RM ${widget.product.rentalPricePerDay.toStringAsFixed(2)} / day',
+                              style: GoogleFonts.outfit(color: Colors.grey[700], fontSize: 12)
+                            ),
+                            if (_rentStartDate != null && _rentEndDate != null)
+                              Text(
+                                'Total (${rentDays} days): RM ${totalRentCost.toStringAsFixed(2)}',
+                                style: GoogleFonts.outfit(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold)
+                              ),
+                          ] else ...[
+                            Text(
+                                'RM ${widget.product.price.toStringAsFixed(2)}', 
+                                style: GoogleFonts.outfit(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold)
+                            ),
+                          ],
                         ],
                       ),
                     )
@@ -631,13 +900,13 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: _isBuying ? null : () {
-                      // Navigator.pop(context); // Don't pop here, let _buyNow handle it or keep it open?
-                      // The original logic popped it immediately which is weird if it fails.
-                      // Let's keep modal open until success?
-                      // Actually, usually we pop confirmation then show loading overlay, or keep confirmation open with loading.
-                      // For simplicity, let's keep it open and show loading inside button.
-                      _buyNow(context); 
+                    onPressed: (_isBuying || (isRent && (_rentStartDate == null || _rentEndDate == null))) ? null : () {
+                      _buyNow(
+                        context, 
+                        isRent ? totalRentCost : widget.product.price,
+                        rentStartDate: _rentStartDate,
+                        rentEndDate: _rentEndDate,
+                      ); 
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Theme.of(context).colorScheme.primary,
@@ -658,17 +927,25 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
     );
   }
 
-  void _buyNow(BuildContext context) async {
+  void _buyNow(BuildContext context, double finalPrice, {DateTime? rentStartDate, DateTime? rentEndDate}) async {
       setState(() => _isBuying = true);
       try {
         final apiClient = ApiClient();
-        await apiClient.post('/transactions', {
+        
+        final Map<String, dynamic> payload = {
             'buyer_id': UserSession().userId, 
             'seller_id': widget.product.sellerId, 
             'product_id': widget.product.id,
-            'amount': widget.product.price,
+            'amount': finalPrice, // Use dynamically calculated price
             'meetup_location': _selectedLocation // Use selected location
-        });
+        };
+
+        if (widget.product.type == 'Rent' && rentStartDate != null && rentEndDate != null) {
+            payload['rental_start_date'] = rentStartDate.toIso8601String();
+            payload['rental_end_date'] = rentEndDate.toIso8601String();
+        }
+
+        await apiClient.post('/transactions', payload);
         
         if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -712,15 +989,11 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
           },
           itemCount: images.length,
           itemBuilder: (context, index) {
-            return Hero(
-                tag: 'product_image_${product.id}_$index', // Unique tag per image? careful with Hero
-                // Simple tag for first image usually works best for transition
-                child: CachedNetworkImage(
+            return CachedNetworkImage(
                     imageUrl: images[index],
                     fit: BoxFit.cover,
                     placeholder: (context, url) => Container(color: Colors.grey[200]),
                     errorWidget: (context, url, error) => const Icon(Icons.error),
-                ),
             );
           },
         ),

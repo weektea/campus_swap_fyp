@@ -155,7 +155,7 @@ export const updateProfile = async (req, res) => {
         }
 
         // Whitelist allowed updates
-        if (updates.profile_picture) user.profile_picture = updates.profile_picture;
+        if (updates.profile_picture) user.profile_image_url = updates.profile_picture;
         if (updates.full_name) user.full_name = updates.full_name;
         if (updates.phone_number) user.phone_number = updates.phone_number;
         // Add more fields if needed
@@ -168,7 +168,7 @@ export const updateProfile = async (req, res) => {
                 id: user.id,
                 email: user.email,
                 full_name: user.full_name,
-                profile_picture: user.profile_picture,
+                profile_picture: user.profile_image_url,
                 phone: user.phone_number,
                 role: user.role
             }
@@ -177,6 +177,24 @@ export const updateProfile = async (req, res) => {
     } catch (error) {
         console.error('Update Profile Error:', error);
         res.status(500).json({ error: 'Update failed' });
+    }
+};
+
+export const getUserProfile = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const user = await User.findByPk(id, {
+            attributes: ['id', 'email', 'full_name', 'profile_image_url', 'phone_number', 'role', 'total_carbon_saved', 'reputation_score', 'createdAt']
+        });
+        
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        
+        res.json({ user });
+    } catch (error) {
+        console.error('Get User Profile Error:', error);
+        res.status(500).json({ error: 'Failed to fetch user profile' });
     }
 };
 

@@ -1,3 +1,5 @@
+import 'package:campus_swap/core/api/api_client.dart';
+
 class Product {
   final String id;
   final String title;
@@ -12,6 +14,7 @@ class Product {
   final DateTime postedAt;
   final String type;
   final double rentalPricePerDay;
+  final int maxRentalDuration;
 
   const Product({
     required this.id,
@@ -27,11 +30,19 @@ class Product {
     required this.postedAt,
     this.type = 'Sale',
     this.rentalPricePerDay = 0.0,
+    this.maxRentalDuration = 7,
   });
 
   factory Product.fromJson(Map<String, dynamic> json) {
     var list = json['image_urls'] as List? ?? [];
-    List<String> images = list.map((i) => i.toString()).toList();
+    String baseHost = ApiClient.baseUrl.replaceAll('/api', '');
+    List<String> images = list.map((i) {
+      String path = i.toString();
+      if (path.startsWith('/uploads')) {
+        return '$baseHost$path';
+      }
+      return path;
+    }).toList();
     
     return Product(
       id: json['id'] as String,
@@ -48,6 +59,7 @@ class Product {
       postedAt: DateTime.parse(json['createdAt']),
       type: json['type'] as String? ?? 'Sale',
       rentalPricePerDay: double.tryParse(json['rental_price_per_day'].toString()) ?? 0.0,
+      maxRentalDuration: int.tryParse(json['max_rental_duration'].toString()) ?? 7,
     );
   }
 }

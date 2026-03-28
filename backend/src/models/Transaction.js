@@ -24,14 +24,26 @@ const Transaction = sequelize.define('Transaction', {
         allowNull: false,
     },
     status: {
-        type: DataTypes.ENUM('Pending', 'In Progress', 'Completed', 'Cancelled', 'Disputed'),
+        type: DataTypes.ENUM('Pending', 'Scheduled', 'To Confirm', 'Completed', 'Cancelled', 'Disputed'),
         defaultValue: 'Pending',
     },
     meetup_location: {
         type: DataTypes.STRING,
         allowNull: true,
     },
+    payment_proof_url: {
+        type: DataTypes.STRING,
+        allowNull: true, // Used for UC19
+    },
     scheduled_at: {
+        type: DataTypes.DATE,
+        allowNull: true,
+    },
+    rental_start_date: {
+        type: DataTypes.DATE,
+        allowNull: true, // Used for UC17
+    },
+    rental_end_date: {
         type: DataTypes.DATE,
         allowNull: true,
     },

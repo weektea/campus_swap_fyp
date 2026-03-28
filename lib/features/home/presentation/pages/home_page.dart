@@ -45,8 +45,25 @@ class _HomePageState extends State<HomePage> {
   String _sortBy = 'newest'; // newest, price_asc, price_desc
   RangeValues _priceRange = const RangeValues(0, 1000);
   String? _selectedCondition;
+  String _selectedListingType = 'All'; // 'All', 'Sale', 'Rent'
 
   List<Product> _recommendedProducts = [];
+
+  final List<String> _tabs = ['For You', 'All Listings', 'Popular', 'Newest'];
+  String _selectedTab = 'For You';
+
+  List<Product> get _gridProducts {
+      if (_selectedTab == 'For You') {
+          return _recommendedProducts.isNotEmpty ? _recommendedProducts : _products;
+      }
+      if (_selectedTab == 'Popular') {
+          // Standard layout but slightly different to mock Popular
+          var list = List<Product>.from(_products);
+          list.sort((a,b) => b.price.compareTo(a.price)); 
+          return list;
+      }
+      return _products;
+  }
 
   Future<void> _fetchRecommendations() async {
     // Only fetch for logged-in users? Or generic
@@ -106,6 +123,10 @@ class _HomePageState extends State<HomePage> {
 
       if (_selectedCondition != null) {
           params.add('condition=$_selectedCondition');
+      }
+
+      if (_selectedListingType != 'All') {
+          params.add('type=$_selectedListingType');
       }
 
       if (params.isNotEmpty) {
@@ -336,57 +357,63 @@ class _HomePageState extends State<HomePage> {
 
             const SliverToBoxAdapter(child: SizedBox(height: 24)),
 
-            if (_recommendedProducts.isNotEmpty) ...[
-               SliverToBoxAdapter(
-                 child: Padding(
-                   padding: const EdgeInsets.symmetric(horizontal: 20),
-                   child: Text("Recommended for You", style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold)),
-                 ),
-               ),
-               const SliverToBoxAdapter(child: SizedBox(height: 12)),
-               SliverToBoxAdapter(
-                 child: SizedBox(
-                   height: 240, // Height for horizontal card
-                   child: ListView.builder(
-                     padding: const EdgeInsets.symmetric(horizontal: 12),
-                     scrollDirection: Axis.horizontal,
-                     itemCount: _recommendedProducts.length,
-                     itemBuilder: (context, index) {
-                        return SizedBox(
-                           width: 160,
-                           child: Padding(
-                             padding: const EdgeInsets.symmetric(horizontal: 8.0), // Spacing between items
-                             child: ProductCard(
-                                product: _recommendedProducts[index],
-                                onTap: () {
-                                  Navigator.push(context, MaterialPageRoute(
-                                    builder: (_) => ProductDetailsPage(product: _recommendedProducts[index])
-                                  ));
-                                },
-                             ),
-                           ),
-                        );
-                     },
-                   ),
-                 ),
-               ),
-               const SliverToBoxAdapter(child: SizedBox(height: 24)),
-            ],
-            
+            // Display Tabs
             SliverToBoxAdapter(
-              child: Padding(
-                 padding: const EdgeInsets.symmetric(horizontal: 20),
-                 child: Text("All Listings", style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold)),
+              child: SizedBox(
+                height: 38,
+                child: ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _tabs.length,
+                  itemBuilder: (context, index) {
+                    final tab = _tabs[index];
+                    final isSelected = _selectedTab == tab;
+                    return GestureDetector(
+                      onTap: () {
+                        setState(() => _selectedTab = tab);
+                        if (tab == 'Newest') {
+                            _sortBy = 'newest';
+                            _fetchProducts();
+                        } else if (tab == 'All Listings') {
+                            _sortBy = 'newest'; 
+                            _fetchProducts(); 
+                        } else if (tab == 'Popular') {
+                            _fetchProducts();
+                        } else if (tab == 'For You') {
+                            _fetchRecommendations(); // Refresh recommendation
+                        }
+                      },
+                      child: Container(
+                        margin: const EdgeInsets.only(right: 12),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: isSelected ? Theme.of(context).colorScheme.primary : Colors.grey[100],
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Center(
+                          child: Text(
+                            tab,
+                            style: GoogleFonts.outfit(
+                              color: isSelected ? Colors.white : Colors.grey[700],
+                              fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ).animate().fadeIn(duration: 300.ms, delay: (50*index).ms);
+                  },
+                ),
               ),
             ),
-            const SliverToBoxAdapter(child: SizedBox(height: 12)),
+            const SliverToBoxAdapter(child: SizedBox(height: 16)),
 
             // Product Grid
             if (_isLoading)
               const SliverFillRemaining(
                 child: Center(child: CircularProgressIndicator()),
               )
-            else if (_products.isEmpty)
+            else if (_gridProducts.isEmpty)
               SliverFillRemaining(
                 child: Center(child: Text('No items found. Be the first to sell!', style: GoogleFonts.outfit())),
               )
@@ -403,15 +430,15 @@ class _HomePageState extends State<HomePage> {
                   delegate: SliverChildBuilderDelegate(
                     (context, index) {
                       return ProductCard(
-                        product: _products[index],
+                        product: _gridProducts[index],
                         onTap: () {
                           Navigator.push(context, MaterialPageRoute(
-                            builder: (_) => ProductDetailsPage(product: _products[index])
+                            builder: (_) => ProductDetailsPage(product: _gridProducts[index])
                           ));
                         },
                       ).animate().fadeIn(duration: 500.ms, delay: (50 * index).ms).scale(begin: const Offset(0.9, 0.9));
                     },
-                    childCount: _products.length,
+                    childCount: _gridProducts.length,
                   ),
                 ),
               ),
@@ -467,11 +494,26 @@ class _HomePageState extends State<HomePage> {
                   builder: (context, setModalState) {
                       return Padding(
                           padding: const EdgeInsets.all(24.0),
-                          child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                          child: SingleChildScrollView(
+                              child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                   Text("Filter Items", style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.bold)),
+                                  const SizedBox(height: 16),
+                                  Text("Listing Type", style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold)),
+                                  const SizedBox(height: 8),
+                                  SegmentedButton<String>(
+                                      segments: const [
+                                          ButtonSegment(value: 'All', label: Text('All')),
+                                          ButtonSegment(value: 'Sale', label: Text('Buy')),
+                                          ButtonSegment(value: 'Rent', label: Text('Rent')),
+                                      ],
+                                      selected: {_selectedListingType},
+                                      onSelectionChanged: (val) {
+                                          setModalState(() => _selectedListingType = val.first);
+                                      },
+                                  ),
                                   const SizedBox(height: 24),
                                   Text("Price Range: RM ${_priceRange.start.round()} - RM ${_priceRange.end.round()}", style: GoogleFonts.outfit()),
                                   RangeSlider(
@@ -531,6 +573,7 @@ class _HomePageState extends State<HomePage> {
                                       ),
                                   )
                               ],
+                          ),
                           ),
                       );
                   }

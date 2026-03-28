@@ -4,6 +4,7 @@ import 'package:campus_swap/core/session/user_session.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/services.dart';
 import 'dart:io' show File;
 
 class SellPage extends StatefulWidget {
@@ -16,6 +17,7 @@ class SellPage extends StatefulWidget {
 class _SellPageState extends State<SellPage> {
   bool _isAnalyzing = false;
   String? _selectedCategory;
+  String? _selectedSubCategory;
   String _listingType = 'Sale'; // 'Sale' or 'Rent'
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _priceController = TextEditingController();
@@ -86,11 +88,23 @@ class _SellPageState extends State<SellPage> {
       setState(() {
         _isAnalyzing = false;
         _selectedCategory = result['category'] ?? 'Others';
+        _selectedSubCategory = result['sub_category'] ?? 'Others';
+        
+        // Fulfill UC07: Auto-fill Title and Price based on category if empty
+        if (_titleController.text.isEmpty) {
+             _titleController.text = "Pre-loved ${_selectedCategory}";
+        }
+        if (_priceController.text.isEmpty) {
+             _priceController.text = _listingType == 'Sale' ? "15.00" : "5.00";
+        }
       });
+
+      // Auto-generate description now that we have a title and category
+      _generateDescription();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('AI Detected: ${result['category']} (${(result['confidence'] * 100).toStringAsFixed(0)}%)')),
+          SnackBar(content: Text('AI Auto-Filled: ${_selectedCategory} (${(result['confidence'] * 100).toStringAsFixed(0)}%)')),
         );
       }
     } catch (e) {
@@ -102,9 +116,15 @@ class _SellPageState extends State<SellPage> {
     }
   }
 
-   final List<String> _categories = [
-    'Books', 'Electronics', 'Clothing', 'Furniture', 'Stationery', 'Bicycles', 'Others'
-  ];
+   final Map<String, List<String>> _categoriesMap = {
+     'Books': ['Textbooks', 'Novels', 'Comics', 'Reference', 'Others'],
+     'Electronics': ['Laptops', 'Smartphones', 'Accessories', 'Audio', 'Others'],
+     'Fashion': ['Clothing', 'Shoes', 'Bags', 'Accessories'],
+     'Furniture': ['Chairs', 'Tables', 'Storage', 'Others'],
+     'Stationery': ['Writing', 'Paper', 'Art Supplies', 'Others'],
+     'Sports': ['Equipment', 'Apparel', 'Bicycles', 'Others'],
+     'Others': ['Miscellaneous']
+  };
 
   final List<String> _conditions = [
     'New', 'Like New', 'Good', 'Fair', 'Poor'
@@ -119,34 +139,62 @@ class _SellPageState extends State<SellPage> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) {
-        return Container(
-          padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Select Category', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 16),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: _categories.map((category) {
-                  return ChoiceChip(
-                    label: Text(category, style: GoogleFonts.outfit()),
-                    selected: _selectedCategory == category,
-                    onSelected: (selected) {
-                      if (selected) {
-                        setState(() {
-                          _selectedCategory = category;
-                        });
-                        Navigator.pop(context);
-                      }
-                    },
-                  );
-                }).toList(),
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final categories = _categoriesMap.keys.toList();
+            return Container(
+              padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+              height: MediaQuery.of(context).size.height * 0.5,
+              child: SingleChildScrollView(
+                 child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('1. Select Category', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: categories.map((c) => ChoiceChip(
+                         label: Text(c, style: GoogleFonts.outfit()),
+                         selected: _selectedCategory == c,
+                         onSelected: (sel) {
+                            if (sel) {
+                               setModalState(() {
+                                  _selectedCategory = c;
+                                  _selectedSubCategory = _categoriesMap[c]!.first; // Reset sub
+                               });
+                               setState(() {}); // Update parent
+                            }
+                         }
+                      )).toList(),
+                    ),
+                    const SizedBox(height: 24),
+                    if (_selectedCategory != null) ...[
+                        Text('2. Select Sub-Category', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 4,
+                          children: _categoriesMap[_selectedCategory!]!.map((sub) => ChoiceChip(
+                             label: Text(sub, style: GoogleFonts.outfit(color: _selectedSubCategory == sub ? Colors.white : Colors.black)),
+                             selected: _selectedSubCategory == sub,
+                             selectedColor: Theme.of(context).colorScheme.primary,
+                             onSelected: (sel) {
+                                if (sel) {
+                                   setModalState(() => _selectedSubCategory = sub);
+                                   setState(() {}); // Update parent
+                                   Navigator.pop(context);
+                                }
+                             }
+                          )).toList(),
+                        )
+                    ]
+                  ],
+                ),
               ),
-            ],
-          ),
+            );
+          }
         );
       },
     );
@@ -197,7 +245,8 @@ class _SellPageState extends State<SellPage> {
          final res = await apiClient.post('/products/generate-description', {
              'title': _titleController.text,
              'category': _selectedCategory,
-             'condition': _selectedCondition
+             'condition': _selectedCondition,
+             'type': _listingType
          });
          
          if (mounted) {
@@ -405,8 +454,9 @@ class _SellPageState extends State<SellPage> {
                     children: [
                       const Icon(Icons.auto_awesome, size: 20),
                       const SizedBox(width: 8),
-                      Text('Category: $_selectedCategory', style: GoogleFonts.outfit()),
-                      const Spacer(),
+                      Expanded(
+                          child: Text('Category: $_selectedCategory > ${_selectedSubCategory ?? ""}', style: GoogleFonts.outfit(), overflow: TextOverflow.ellipsis),
+                      ),
                       TextButton(
                           onPressed: _showCategoryPicker, 
                           child: Text('Edit', style: GoogleFonts.outfit())
@@ -434,6 +484,7 @@ class _SellPageState extends State<SellPage> {
 
             TextFormField(
               controller: _titleController,
+              maxLength: 50,
               decoration: InputDecoration(
                 labelText: 'Title',
                 hintText: 'e.g. Calculus Textbook',
@@ -449,7 +500,10 @@ class _SellPageState extends State<SellPage> {
                 prefixText: 'RM ',
                 labelStyle: GoogleFonts.outfit(),
               ),
-              keyboardType: TextInputType.number,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [
+                 FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
+              ],
               style: GoogleFonts.outfit(),
             ),
 
@@ -463,6 +517,8 @@ class _SellPageState extends State<SellPage> {
                     labelStyle: GoogleFonts.outfit(),
                   ),
                   keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  maxLength: 3,
                   style: GoogleFonts.outfit(),
                 ),
             ],
@@ -481,6 +537,7 @@ class _SellPageState extends State<SellPage> {
              TextFormField(
               controller: _descController,
               maxLines: 4,
+              maxLength: 1000,
               decoration: InputDecoration(
                 labelText: 'Description',
                 labelStyle: GoogleFonts.outfit(),
@@ -519,15 +576,38 @@ class _SellPageState extends State<SellPage> {
         return;
     }
 
-    if (_titleController.text.isEmpty || _priceController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Please fill in title and price', style: GoogleFonts.outfit())));
+    if (_titleController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Please provide a descriptive title', style: GoogleFonts.outfit())));
+      return;
+    }
+
+    if (_priceController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Please enter a price', style: GoogleFonts.outfit())));
+      return;
+    }
+
+    if (_selectedCategory == null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Please select a category', style: GoogleFonts.outfit())));
+      return;
+    }
+
+    if (_imageFiles.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Please upload at least one image of the item', style: GoogleFonts.outfit())));
       return;
     }
 
     final double price = double.tryParse(_priceController.text) ?? 0.0;
-    if (price < 0) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Price cannot be negative', style: GoogleFonts.outfit())));
+    if (price <= 0) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Price must be greater than 0', style: GoogleFonts.outfit())));
         return;
+    }
+
+    if (_listingType == 'Rent') {
+        int maxDays = int.tryParse(_maxDurationController.text) ?? 0;
+        if (maxDays < 1) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Max rental duration must be at least 1 day', style: GoogleFonts.outfit())));
+            return;
+        }
     }
 
     setState(() => _isSubmitting = true);
@@ -535,17 +615,23 @@ class _SellPageState extends State<SellPage> {
     try {
       final apiClient = ApiClient();
       
-      // 1. Upload Images
+      // 1. Upload Images (Optimized for Performance: Concurrent Uploads)
       List<String> uploadedImageUrls = [];
-      for (var img in _imageFiles) {
+      if (_imageFiles.isNotEmpty) {
           try {
-              final uploadRes = await apiClient.postMultipart('/upload', img);
-              if (uploadRes['url'] != null) {
-                  uploadedImageUrls.add(uploadRes['url']);
+              final uploadFutures = _imageFiles.map((img) => 
+                  apiClient.postMultipart('/upload', img).catchError((e) => {})
+              );
+              final uploadResults = await Future.wait(uploadFutures);
+              
+              for (var res in uploadResults) {
+                  if (res != null && res['url'] != null) {
+                      uploadedImageUrls.add(res['url']);
+                  }
               }
-           } catch(e) {
-              // print("Upload failed for one image: $e");
-           }
+          } catch(e) {
+              // Ignore partial failures
+          }
       }
 
       // 2. Upload Video (if any)
@@ -565,6 +651,7 @@ class _SellPageState extends State<SellPage> {
         'title': _titleController.text,
         'description': _descController.text,
         'category': _selectedCategory ?? 'Others',
+        'sub_category_id': _selectedSubCategory ?? 'Others', // Use name as value for MVP if UUID not strictly required
         'condition': _selectedCondition, 
         'seller_id': session.userId,
         'type': _listingType,

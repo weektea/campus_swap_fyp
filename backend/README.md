@@ -34,6 +34,15 @@ docker-compose up -d
 3. cd backend
    npm run dev
 
+# ML - another terminal local(2)
+1. cd ml 
+python main.py
+
+# Admin & Moderator - Panel
+1. cd admin_panel
+2. npm install (if not yet install)
+3. npm run dev
+
 # Test Register
 Test Student2
 24PMR12346

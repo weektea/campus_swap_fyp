@@ -7,6 +7,7 @@ import 'package:campus_swap/features/profile/presentation/pages/my_purchases_pag
 import 'package:campus_swap/features/profile/presentation/pages/saved_items_page.dart';
 import 'package:campus_swap/features/profile/presentation/pages/settings_page.dart';
 import 'package:campus_swap/features/profile/presentation/pages/help_page.dart';
+import 'package:campus_swap/features/profile/presentation/pages/sustainability_dashboard_page.dart';
 // import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 
@@ -37,10 +38,17 @@ class _ProfilePageState extends State<ProfilePage> {
       try {
           final apiClient = ApiClient();
           // Assuming we have a route GET /auth/me or similar, if not we use /auth/user/:id
-          final userData = await apiClient.get('/auth/user/${session.userId}');
-          if (userData != null && userData['profile_picture'] != null) {
+          final resData = await apiClient.get('/auth/user/${session.userId}');
+          if (resData != null && resData['user'] != null) {
+              final userData = resData['user'];
               setState(() {
-                  session.avatarUrl = userData['profile_picture'];
+                  if (userData['profile_image_url'] != null) {
+                      session.avatarUrl = userData['profile_image_url'];
+                  }
+                  // Extract True Backend Carbon Value
+                  if (userData['total_carbon_saved'] != null) {
+                      _co2Saved = double.tryParse(userData['total_carbon_saved'].toString()) ?? 0.0;
+                  }
               });
           }
       } catch (e) {
@@ -64,13 +72,10 @@ class _ProfilePageState extends State<ProfilePage> {
           if (res is List) {
               final completedSales = res.where((t) => t['status'] == 'Completed').toList();
               final count = completedSales.length;
-              // Assumption: 1 item = 2.5kg CO2
-              final saved = count * 2.5;
-              
               if (mounted) {
                   setState(() {
                       _itemsReused = count;
-                      _co2Saved = saved;
+                      // _co2Saved is now populated directly from the backend in _fetchUserProfile
                       _loadingStats = false;
                   });
               }
@@ -178,8 +183,14 @@ class _ProfilePageState extends State<ProfilePage> {
             const SizedBox(height: 32),
             
             // Sustainability Impact Card (FYP Requirement)
-            Container(
-              padding: const EdgeInsets.all(20),
+            GestureDetector(
+              onTap: () {
+                 if (!_loadingStats) {
+                     Navigator.push(context, MaterialPageRoute(builder: (_) => SustainabilityDashboardPage(itemsReused: _itemsReused, co2Saved: _co2Saved)));
+                 }
+              },
+              child: Container(
+                padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [const Color(0xFF1B5E20), Colors.green.shade600],
@@ -225,6 +236,7 @@ class _ProfilePageState extends State<ProfilePage> {
                   )
                 ],
               ),
+            ),
             ),
             const SizedBox(height: 32),
             

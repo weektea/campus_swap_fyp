@@ -19,6 +19,24 @@ export const createTransaction = async (req, res) => {
             return res.status(400).json({ error: 'Product is no longer available' });
         }
 
+        // UC17 Rental Constraints
+        let { rental_start_date, rental_end_date } = req.body;
+        if (product.type === 'Rent') {
+            if (!rental_start_date || !rental_end_date) {
+                return res.status(400).json({ error: 'Rental start and end dates are required for this product.' });
+            }
+            const startDate = new Date(rental_start_date);
+            const endDate = new Date(rental_end_date);
+            const diffTime = Math.abs(endDate - startDate);
+            const rentalDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            
+            if (product.max_rental_duration && rentalDays > product.max_rental_duration) {
+                return res.status(400).json({ error: `Cannot exceed maximum rental duration of ${product.max_rental_duration} days.` });
+            }
+            // Auto overwrite amount securely
+            amount = (rentalDays * parseFloat(product.rental_price_per_day)).toFixed(2);
+        }
+
         // Create Transaction
         const transaction = await Transaction.create({
             buyer_id,
@@ -27,6 +45,8 @@ export const createTransaction = async (req, res) => {
             amount,
             meetup_location,
             scheduled_at,
+            rental_start_date,
+            rental_end_date,
             status: 'Pending'
         });
 
@@ -36,8 +56,8 @@ export const createTransaction = async (req, res) => {
         // Notify Seller
         await createNotification(
             seller_id,
-            'New Purchase Request',
-            `A buyer wants to buy your item for RM ${amount}.`,
+            product.type === 'Rent' ? 'New Rental Request' : 'New Purchase Request',
+            `A student wants to ${product.type === 'Rent' ? 'rent' : 'buy'} your item for RM ${amount}.`,
             'Transaction',
             transaction.id
         );
@@ -83,6 +103,32 @@ export const getUserTransactions = async (req, res) => {
     }
 };
 
+export const getTransactionById = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const transaction = await Transaction.findByPk(id, {
+            include: [
+                { model: Product, as: 'product' },
+                { model: User, as: 'buyer', attributes: ['id', 'full_name', 'email', 'profile_picture'] },
+                { model: User, as: 'seller', attributes: ['id', 'full_name', 'email', 'profile_picture'] },
+                { model: Review, as: 'reviews', required: false }
+            ]
+        });
+
+        if (!transaction) return res.status(404).json({ error: 'Transaction not found' });
+
+        // Security check
+        if (req.user.id !== transaction.buyer_id && req.user.id !== transaction.seller_id) {
+             return res.status(403).json({ error: 'Not authorized to view this transaction' });
+        }
+
+        res.json(transaction);
+    } catch (error) {
+        console.error('Get Transaction By ID Error:', error);
+        res.status(500).json({ error: 'Failed to fetch transaction details' });
+    }
+};
+
 export const updateTransactionStatus = async (req, res) => {
     try {
         const { id } = req.params;
@@ -97,17 +143,20 @@ export const updateTransactionStatus = async (req, res) => {
         transaction.status = status;
         await transaction.save();
 
-        // If completed, mark product as Sold
+        const requesterId = req.user?.id;
+        const otherPartyId = requesterId === transaction.buyer_id ? transaction.seller_id : transaction.buyer_id;
+
+        // If completed, mark product as Sold or Reserved for rent
         if (status === 'Completed') {
             await Product.update(
                 { status: 'Sold' },
                 { where: { id: transaction.product_id } }
             );
-            // Notify Seller (Buyer completes)
+            // Notify Buyer that Seller completed it
             await createNotification(
-                transaction.seller_id,
+                transaction.buyer_id,
                 'Transaction Completed',
-                `Buyer has received the item. Money will be released.`,
+                `Seller has verified the completion. You can now rate your experience!`,
                 'Transaction',
                 transaction.id
             );
@@ -119,13 +168,11 @@ export const updateTransactionStatus = async (req, res) => {
                 { status: 'Available' },
                 { where: { id: transaction.product_id } }
             );
-            // Notify other party
-            // Simplification: if cancelled by buyer, notify seller and vice versa.
-            // For MVP, just notify both to be safe or just the one who didn't cancel (needs user context which we lack here slightly, so notify seller mainly)
+            // Notify the other party who did not cancel it
             await createNotification(
-                transaction.seller_id,
+                otherPartyId,
                 'Transaction Cancelled',
-                `The transaction for your item has been cancelled.`,
+                `The transaction has been cancelled.`,
                 'Transaction',
                 transaction.id
             );
@@ -135,8 +182,23 @@ export const updateTransactionStatus = async (req, res) => {
             // Notify Buyer
             await createNotification(
                 transaction.buyer_id,
-                'Meetup Confirmed',
-                `Seller has confirmed the meetup. Check details.`,
+                'Request Approved',
+                `Seller has accepted your request. Please proceed to Meetup/Payment.`,
+                'Transaction',
+                transaction.id
+            );
+        }
+
+        // UC19 Payment Proof
+        if (status === 'To Confirm') {
+            if (req.body.payment_proof_url) {
+                transaction.payment_proof_url = req.body.payment_proof_url;
+                await transaction.save();
+            }
+            await createNotification(
+                transaction.seller_id,
+                'Payment/Meetup Submitted',
+                `Buyer has submitted action. Please verify and complete the order.`,
                 'Transaction',
                 transaction.id
             );
