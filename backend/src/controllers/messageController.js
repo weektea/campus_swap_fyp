@@ -70,9 +70,10 @@ export const getChatList = async (req, res) => {
 
         // Extract unique partners
         const partners = new Map();
+        const userIdStr = String(userId);
 
         for (const msg of messages) {
-            const isSender = msg.sender_id === userId;
+            const isSender = String(msg.sender_id) === userIdStr;
             const partner = isSender ? msg.receiver : msg.sender;
 
             // Skip if partner is null (e.g. deleted user)

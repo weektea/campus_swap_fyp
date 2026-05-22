@@ -1,0 +1,142 @@
+import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:campus_swap/core/api/api_client.dart';
+import 'package:campus_swap/core/session/user_session.dart';
+
+class EditProfilePage extends StatefulWidget {
+  const EditProfilePage({super.key});
+
+  @override
+  State<EditProfilePage> createState() => _EditProfilePageState();
+}
+
+class _EditProfilePageState extends State<EditProfilePage> {
+  final _facultyController = TextEditingController();
+  final _yearController = TextEditingController();
+  final _bioController = TextEditingController();
+  String _privacySetting = 'Public';
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfileData();
+  }
+
+  Future<void> _loadProfileData() async {
+    setState(() => _isLoading = true);
+    try {
+      final apiClient = ApiClient();
+      final res = await apiClient.get('/auth/user/${UserSession().userId}');
+      if (res != null && res['user'] != null) {
+        final userData = res['user'];
+        _facultyController.text = userData['faculty'] ?? '';
+        _yearController.text = userData['year_of_study']?.toString() ?? '';
+        _bioController.text = userData['bio'] ?? '';
+        if (userData['privacy_setting'] != null) {
+          _privacySetting = userData['privacy_setting'];
+        }
+      }
+    } catch (e) {
+      // Ignore
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _saveProfile() async {
+    setState(() => _isLoading = true);
+    try {
+      final apiClient = ApiClient();
+      await apiClient.patch('/auth/user/${UserSession().userId}', {
+        'faculty': _facultyController.text,
+        'year_of_study': int.tryParse(_yearController.text),
+        'bio': _bioController.text,
+        'privacy_setting': _privacySetting,
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profile updated successfully!')));
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Update failed: $e')));
+      }
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text('Edit Profile', style: GoogleFonts.outfit(fontWeight: FontWeight.bold))),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text("Academic Info", style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey[700])),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _facultyController,
+                    decoration: InputDecoration(
+                        labelText: 'Faculty',
+                        hintText: 'e.g. FTMK, FKE, FSPU',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _yearController,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                        labelText: 'Year of Study (1-4)',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                  Text("About Me", style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey[700])),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _bioController,
+                    maxLines: 3,
+                    maxLength: 150,
+                    decoration: InputDecoration(
+                        labelText: 'Bio',
+                        hintText: 'Tell others about what you usually sell / buy...',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    value: _privacySetting,
+                    decoration: InputDecoration(
+                      labelText: 'Profile Privacy',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    items: ['Public', 'Friends', 'Private'].map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+                    onChanged: (val) {
+                      if (val != null) setState(() => _privacySetting = val);
+                    },
+                  ),
+                  const SizedBox(height: 48),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: ElevatedButton(
+                      onPressed: _saveProfile,
+                      style: ElevatedButton.styleFrom(
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      child: Text('Save Changes', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold)),
+                    ),
+                  )
+                ],
+              ),
+            ),
+    );
+  }
+}

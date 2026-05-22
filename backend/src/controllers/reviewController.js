@@ -48,29 +48,63 @@ export const createReview = async (req, res) => {
             comment
         });
 
-        // Sync to Transaction (Denormalization)
+        // Sync to Transaction (Denormalization) and Advance State Machine
         if (transaction.buyer_id === reviewer_id) {
             transaction.rating_from_buyer = rating;
+            transaction.buyer_comment = comment; // Save comment to transaction table as well if needed, although review table holds it.
+
+            if (transaction.review_status === 'PENDING_REVIEWS') {
+                transaction.review_status = 'BUYER_REVIEWED';
+            } else if (transaction.review_status === 'SELLER_REVIEWED') {
+                transaction.review_status = 'PUBLISHED';
+            }
         } else {
             transaction.rating_from_seller = rating;
+            transaction.seller_comment = comment;
+
+            if (transaction.review_status === 'PENDING_REVIEWS') {
+                transaction.review_status = 'SELLER_REVIEWED';
+            } else if (transaction.review_status === 'BUYER_REVIEWED') {
+                transaction.review_status = 'PUBLISHED';
+            }
         }
         await transaction.save();
 
-        // Update Reputation Score (Simple Average)
-        // Fetch all reviews for this user to calculate new average
-        const reviews = await Review.findAll({ where: { reviewee_id } });
-        const totalRating = reviews.reduce((sum, r) => sum + r.rating, 0);
-        const newScore = totalRating / reviews.length;
+        let newScore = null;
 
-        // Update User Model (assuming reputation_score field exists or we just calculate on fly)
-        // For MVP, if User model has this field:
-        const user = await User.findByPk(reviewee_id);
-        if (user) {
-            user.reputation_score = parseFloat(newScore.toFixed(1));
-            await user.save();
+        // ONLY Update Reputation Score if the review state is PUBLISHED
+        if (transaction.review_status === 'PUBLISHED') {
+            const updateReputation = async (userId) => {
+                const reviews = await Review.findAll({
+                    include: [{
+                        model: Transaction,
+                        as: 'transaction',
+                        where: { review_status: 'PUBLISHED' }
+                    }],
+                    where: { reviewee_id: userId }
+                });
+
+                if (reviews.length > 0) {
+                    const totalRating = reviews.reduce((sum, r) => sum + r.rating, 0);
+                    const calculatedScore = totalRating / reviews.length;
+                    
+                    const user = await User.findByPk(userId);
+                    if (user) {
+                        user.reputation_score = parseFloat(calculatedScore.toFixed(1));
+                        user.total_reviews = reviews.length;
+                        await user.save();
+                    }
+                    return calculatedScore;
+                }
+                return null;
+            };
+
+            // Recalculate for both buyer and seller since both are now published
+            await updateReputation(transaction.buyer_id);
+            newScore = await updateReputation(transaction.seller_id);
         }
 
-        res.status(201).json({ review, new_reputation: newScore });
+        res.status(201).json({ review, new_reputation: newScore, review_status: transaction.review_status });
     } catch (error) {
         console.error('Create Review Error:', error);
         res.status(500).json({ error: 'Failed to create review' });
@@ -83,11 +117,27 @@ export const getUserReviews = async (req, res) => {
         const reviews = await Review.findAll({
             where: { reviewee_id: user_id },
             include: [
-                { model: User, as: 'reviewer', attributes: ['full_name'] }
+                { model: User, as: 'reviewer', attributes: ['full_name'] },
+                { model: Transaction, as: 'transaction', attributes: ['review_status'] }
             ],
             order: [['createdAt', 'DESC']]
         });
-        res.json(reviews);
+
+        // Mask reviews that are not yet PUBLISHED
+        const maskedReviews = reviews.map(r => {
+            const reviewObj = r.toJSON();
+            if (reviewObj.transaction && reviewObj.transaction.review_status !== 'PUBLISHED') {
+                return {
+                    ...reviewObj,
+                    rating: null,
+                    comment: 'Awaiting the other party to submit their review to unlock.',
+                    is_hidden: true
+                };
+            }
+            return reviewObj;
+        });
+
+        res.json(maskedReviews);
     } catch (error) {
         console.error('Get Reviews Error:', error);
         res.status(500).json({ error: 'Failed to fetch reviews' });

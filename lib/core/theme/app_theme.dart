@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
   static const Color primaryColor = Color(0xFF00695C); // Teal 800
@@ -18,12 +19,18 @@ class AppTheme {
       surface: lightBackground,
       brightness: Brightness.light,
     ),
+    textTheme: GoogleFonts.outfitTextTheme(ThemeData.light().textTheme),
     scaffoldBackgroundColor: lightBackground,
     appBarTheme: const AppBarTheme(
       backgroundColor: primaryColor,
       foregroundColor: Colors.white,
       elevation: 0,
       centerTitle: true,
+      titleTextStyle: GoogleFonts.outfit(
+        fontWeight: FontWeight.bold,
+        fontSize: 20,
+        color: Colors.white,
+      ),
     ),
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
@@ -70,12 +77,18 @@ class AppTheme {
       surface: darkBackground,
       brightness: Brightness.dark,
     ),
+    textTheme: GoogleFonts.outfitTextTheme(ThemeData.dark().textTheme),
     scaffoldBackgroundColor: darkBackground,
     appBarTheme: const AppBarTheme(
       backgroundColor: Colors.black,
       foregroundColor: Colors.white,
       elevation: 0,
       centerTitle: true,
+      titleTextStyle: GoogleFonts.outfit(
+        fontWeight: FontWeight.bold,
+        fontSize: 20,
+        color: Colors.white,
+      ),
     ),
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(

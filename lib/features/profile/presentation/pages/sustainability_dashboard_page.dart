@@ -1,16 +1,84 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:campus_swap/core/api/api_client.dart';
+import 'package:campus_swap/core/session/user_session.dart';
 
-class SustainabilityDashboardPage extends StatelessWidget {
+class SustainabilityDashboardPage extends StatefulWidget {
   final int itemsReused;
   final double co2Saved;
+  final double co2Bought;
+  final double co2Sold;
 
-  const SustainabilityDashboardPage({super.key, required this.itemsReused, required this.co2Saved});
+  const SustainabilityDashboardPage({
+    super.key, 
+    required this.itemsReused, 
+    required this.co2Saved,
+    required this.co2Bought,
+    required this.co2Sold
+  });
+
+  @override
+  State<SustainabilityDashboardPage> createState() => _SustainabilityDashboardPageState();
+}
+
+class _SustainabilityDashboardPageState extends State<SustainabilityDashboardPage> {
+  Map<String, double> _categoryData = {};
+  List<dynamic> _leaderboard = [];
+  bool _isLoadingCategories = true;
+  bool _isLoadingLeaderboard = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchCategoryImpact();
+    _fetchLeaderboard();
+  }
+
+  Future<void> _fetchCategoryImpact() async {
+    try {
+      final apiClient = ApiClient();
+      final res = await apiClient.get('/sustainability/category-impact');
+      
+      if (res != null && res is Map) {
+         Map<String, double> parsed = {};
+         res.forEach((k, v) {
+            parsed[k.toString()] = double.tryParse(v.toString()) ?? 0.0;
+         });
+         if (mounted) {
+            setState(() {
+               _categoryData = parsed;
+               _isLoadingCategories = false;
+            });
+         }
+      }
+    } catch (e) {
+      debugPrint('Error fetching category impact: $e');
+      if (mounted) setState(() => _isLoadingCategories = false);
+    }
+  }
+
+  Future<void> _fetchLeaderboard() async {
+    try {
+      final apiClient = ApiClient();
+      final res = await apiClient.get('/sustainability/leaderboard');
+      
+      if (res != null && res is List) {
+         if (mounted) {
+            setState(() {
+               _leaderboard = res;
+               _isLoadingLeaderboard = false;
+            });
+         }
+      }
+    } catch (e) {
+      debugPrint('Error fetching leaderboard: $e');
+      if (mounted) setState(() => _isLoadingLeaderboard = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    // Mock calculations
-    final double treesPlanted = co2Saved / 21.0; // Assume 1 mature tree absorbs ~21kg CO2/year
+    final double treesPlanted = widget.co2Saved / 21.0; 
     
     return Scaffold(
       appBar: AppBar(
@@ -31,12 +99,14 @@ class SustainabilityDashboardPage extends StatelessWidget {
               ),
               child: Column(
                 children: [
+                   _buildStatMetric("Total Impact", "${widget.co2Saved.toStringAsFixed(1)} kg", Icons.public),
+                   const SizedBox(height: 16),
                    Row(
                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                      children: [
-                        _buildStatMetric("Items Reused", itemsReused.toString(), Icons.recycling),
-                        Container(width: 1, height: 50, color: Colors.white30),
-                        _buildStatMetric("CO2 Saved", "${co2Saved.toStringAsFixed(1)} kg", Icons.cloud_done),
+                        _buildStatMetric("Emissions Avoided\n(Bought)", "${widget.co2Bought.toStringAsFixed(1)} kg", Icons.shopping_bag_outlined, isSub: true),
+                        Container(width: 1, height: 40, color: Colors.white30),
+                        _buildStatMetric("Waste Diverted\n(Sold)", "${widget.co2Sold.toStringAsFixed(1)} kg", Icons.sell_outlined, isSub: true),
                      ],
                    ),
                    const SizedBox(height: 24),
@@ -73,11 +143,19 @@ class SustainabilityDashboardPage extends StatelessWidget {
                  children: [
                     Text("Impact by Category", style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 16),
-                    _buildCustomBarChart(),
+                    _isLoadingCategories 
+                        ? const Center(child: CircularProgressIndicator()) 
+                        : _categoryData.isEmpty 
+                            ? const Text("No transactions yet.")
+                            : _buildCustomBarChart(),
                     const SizedBox(height: 32),
                     Text("Campus Leaderboard", style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 16),
-                    _buildLeaderboard(),
+                    _isLoadingLeaderboard
+                        ? const Center(child: CircularProgressIndicator())
+                        : _leaderboard.isEmpty
+                            ? const Text("No leaderboard data.")
+                            : _buildLeaderboard(),
                  ],
               ),
             )
@@ -87,27 +165,23 @@ class SustainabilityDashboardPage extends StatelessWidget {
     );
   }
 
-  Widget _buildStatMetric(String label, String value, IconData icon) {
+  Widget _buildStatMetric(String label, String value, IconData icon, {bool isSub = false}) {
       return Column(
           children: [
-              Icon(icon, color: Colors.white, size: 28),
+              Icon(icon, color: Colors.white, size: isSub ? 20 : 28),
               const SizedBox(height: 8),
-              Text(value, style: GoogleFonts.outfit(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
-              Text(label, style: GoogleFonts.outfit(color: Colors.white70, fontSize: 12)),
+              Text(value, style: GoogleFonts.outfit(color: Colors.white, fontSize: isSub ? 18 : 28, fontWeight: FontWeight.bold)),
+              Text(label, style: GoogleFonts.outfit(color: Colors.white70, fontSize: isSub ? 10 : 14), textAlign: TextAlign.center),
           ]
       );
   }
 
   Widget _buildCustomBarChart() {
-      // Mock data for impact by category
-      final data = {
-          'Books': 40,
-          'Electronics': 85,
-          'Clothing': 30,
-          'Furniture': 50,
-      };
-      
-      final double maxVal = 100.0; // scale factor
+      // Find max value for scaling
+      double maxVal = 1.0;
+      if (_categoryData.isNotEmpty) {
+          maxVal = _categoryData.values.reduce((curr, next) => curr > next ? curr : next);
+      }
 
       return Container(
           padding: const EdgeInsets.all(16),
@@ -117,7 +191,7 @@ class SustainabilityDashboardPage extends StatelessWidget {
               boxShadow: [BoxShadow(color: Colors.grey.withValues(alpha: 0.1), blurRadius: 10, offset: const Offset(0,4))]
           ),
           child: Column(
-              children: data.entries.map((e) {
+              children: _categoryData.entries.map((e) {
                   final pct = e.value / maxVal;
                   return Padding(
                     padding: const EdgeInsets.symmetric(vertical: 8.0),
@@ -136,7 +210,7 @@ class SustainabilityDashboardPage extends StatelessWidget {
                                 )
                             ),
                             const SizedBox(width: 12),
-                            SizedBox(width: 40, child: Text("${e.value}kg", style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade600), textAlign: TextAlign.right)),
+                            SizedBox(width: 40, child: Text("${e.value.toStringAsFixed(1)}kg", style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade600), textAlign: TextAlign.right)),
                         ]
                     ),
                   );
@@ -146,13 +220,7 @@ class SustainabilityDashboardPage extends StatelessWidget {
   }
 
   Widget _buildLeaderboard() {
-      // Mock leaderboard data
-      final leaders = [
-          {'name': 'Alex Johnson', 'co2': '120.5 kg', 'rank': 1},
-          {'name': 'You (Current User)', 'co2': '${co2Saved.toStringAsFixed(1)} kg', 'rank': 2}, // Mock rank 2 for demonstration
-          {'name': 'Sarah Tan', 'co2': '45.2 kg', 'rank': 3},
-          {'name': 'Wei Ling', 'co2': '30.0 kg', 'rank': 4},
-      ];
+      final session = UserSession();
 
       return Container(
           decoration: BoxDecoration(
@@ -163,18 +231,22 @@ class SustainabilityDashboardPage extends StatelessWidget {
           child: ListView.separated(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              itemCount: leaders.length,
+              itemCount: _leaderboard.length,
               separatorBuilder: (_,__) => Divider(height: 1, color: Colors.grey.shade200),
               itemBuilder: (context, index) {
-                  final l = leaders[index];
-                  final isMe = l['name']!.toString().startsWith('You');
+                  final l = _leaderboard[index];
+                  final isMe = l['id']?.toString() == session.userId?.toString();
+                  final rank = l['rank'] ?? (index + 1);
+                  final name = isMe ? "You (${l['name']})" : l['name'].toString();
+                  final co2 = double.tryParse(l['co2'].toString()) ?? 0.0;
+
                   return ListTile(
                       leading: CircleAvatar(
-                          backgroundColor: _getRankColor(l['rank'] as int),
-                          child: Text("#${l['rank']}", style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                          backgroundColor: _getRankColor(rank as int),
+                          child: Text("#$rank", style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
                       ),
-                      title: Text(l['name'].toString(), style: GoogleFonts.outfit(fontWeight: isMe ? FontWeight.bold : FontWeight.normal, color: isMe ? Colors.green.shade700 : Colors.black87)),
-                      trailing: Text(l['co2'].toString(), style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Colors.green.shade600)),
+                      title: Text(name, style: GoogleFonts.outfit(fontWeight: isMe ? FontWeight.bold : FontWeight.normal, color: isMe ? Colors.green.shade700 : Colors.black87)),
+                      trailing: Text("${co2.toStringAsFixed(1)} kg", style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Colors.green.shade600)),
                       tileColor: isMe ? Colors.green.shade50 : null,
                       shape: isMe ? RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)) : null,
                   );

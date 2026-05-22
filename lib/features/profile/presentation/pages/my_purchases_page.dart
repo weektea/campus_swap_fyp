@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:campus_swap/core/api/api_client.dart';
 import 'package:campus_swap/core/session/user_session.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:campus_swap/core/widgets/empty_state_widget.dart';
+import 'package:campus_swap/features/product/presentation/pages/sell_page.dart';
 import 'package:campus_swap/features/profile/presentation/pages/transaction_detail_page.dart';
-
+import 'package:campus_swap/features/profile/presentation/pages/rate_experience_page.dart';
 class MyTransactionsPage extends StatefulWidget {
   const MyTransactionsPage({super.key});
 
@@ -16,6 +18,8 @@ class _MyTransactionsPageState extends State<MyTransactionsPage> with SingleTick
   List<dynamic> _buyingTransactions = [];
   List<dynamic> _sellingTransactions = [];
   bool _isLoading = true;
+  String _filterStatus = 'All';
+  final List<String> _statusOptions = ['All', 'Pending', 'Scheduled', 'Completed', 'Cancelled', 'Disputed'];
 
   @override
   void initState() {
@@ -137,7 +141,9 @@ class _MyTransactionsPageState extends State<MyTransactionsPage> with SingleTick
                     }
 
                     _updateStatus(transactionId, 'Disputed');
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Dispute submitted. A moderator will review it.')));
+                    if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Dispute submitted. A moderator will review it.')));
+                    }
                   },
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
                   child: const Text('Submit Dispute', style: TextStyle(color: Colors.white)),
@@ -150,45 +156,92 @@ class _MyTransactionsPageState extends State<MyTransactionsPage> with SingleTick
     );
   }
 
-  void _showRateDialog(String transactionId, String revieweeId) {
-    showDialog(
-      context: context, 
-      builder: (context) => RateUserDialog(
-        transactionId: transactionId, 
-        revieweeId: revieweeId,
-        onSubmitted: () {
-            _fetchAllTransactions(); // Refresh UI to hide button ideally or show "Rated"
-        }
-      )
-    );
+  void _showRateDialog(String transactionId, String revieweeId, bool isBuying, String revieweeName, String productName) {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => RateExperiencePage(
+      transactionId: transactionId,
+      revieweeId: revieweeId,
+      isSeller: !isBuying,
+      revieweeName: revieweeName,
+      productName: productName,
+      onSubmitted: () {
+          _fetchAllTransactions(); // Refresh UI to hide button ideally or show "Rated"
+      }
+    )));
   }
 
   @override
   Widget build(BuildContext context) {
+    final filteredBuying = _filterStatus == 'All' ? _buyingTransactions : _buyingTransactions.where((t) => t['status'] == _filterStatus).toList();
+    final filteredSelling = _filterStatus == 'All' ? _sellingTransactions : _sellingTransactions.where((t) => t['status'] == _filterStatus).toList();
+
     return Scaffold(
       appBar: AppBar(
-        title: Text('My Transactions', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+        title: Text('My Orders', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
         bottom: TabBar(
             controller: _tabController,
-            tabs: const [Tab(text: 'Purchases'), Tab(text: 'Sales')],
+            tabs: [
+                Tab(text: 'Purchases (${filteredBuying.length})'), 
+                Tab(text: 'Sales (${filteredSelling.length})')
+            ],
             labelStyle: GoogleFonts.outfit(fontWeight: FontWeight.bold),
         ),
       ),
-      body: _isLoading 
-        ? const Center(child: CircularProgressIndicator())
-        : TabBarView(
-            controller: _tabController,
-            children: [
-                _buildList(_buyingTransactions, isBuying: true),
-                _buildList(_sellingTransactions, isBuying: false),
-            ],
-        ),
+      body: Column(
+        children: [
+            if (!_isLoading) Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                child: Row(
+                    children: [
+                        Text("Filter by:", style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+                        const SizedBox(width: 12),
+                        Expanded(
+                            child: DropdownButtonFormField<String>(
+                                value: _filterStatus,
+                                isDense: true,
+                                decoration: InputDecoration(
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                ),
+                                items: _statusOptions.map((s) => DropdownMenuItem(value: s, child: Text(s, style: GoogleFonts.outfit()))).toList(),
+                                onChanged: (val) {
+                                    if (val != null) setState(() => _filterStatus = val);
+                                },
+                            ),
+                        )
+                    ],
+                ),
+            ),
+            Expanded(
+              child: _isLoading 
+                ? const Center(child: CircularProgressIndicator())
+                : TabBarView(
+                    controller: _tabController,
+                    children: [
+                        _buildList(filteredBuying, isBuying: true),
+                        _buildList(filteredSelling, isBuying: false),
+                    ],
+                ),
+            ),
+        ],
+      ),
     );
   }
 
   Widget _buildList(List<dynamic> transactions, {required bool isBuying}) {
       if (transactions.isEmpty) {
-          return Center(child: Text(isBuying ? 'No purchases yet.' : 'No sales yet.', style: GoogleFonts.outfit()));
+          return EmptyStateWidget(
+              icon: isBuying ? Icons.shopping_bag_outlined : Icons.receipt_long_outlined,
+              title: isBuying ? 'No Purchases Yet' : 'No Sales Yet',
+              message: isBuying ? 'You haven\'t bought anything yet. Explore the marketplace to find great deals!' : 'You haven\'t sold anything yet. List your items to start earning!',
+              buttonText: isBuying ? 'Explore Market' : 'Start Selling',
+              onActionPressed: () {
+                  if (isBuying) {
+                      Navigator.pop(context); // Go back to profile -> home
+                  } else {
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const SellPage())).then((_) => _fetchTransactions());
+                  }
+              },
+          );
       }
 
       return ListView.builder(
@@ -197,157 +250,78 @@ class _MyTransactionsPageState extends State<MyTransactionsPage> with SingleTick
         itemBuilder: (context, index) {
             final item = transactions[index];
             final product = item['product'] ?? {};
-            final otherParty = isBuying ? (item['seller'] ?? {}) : (item['buyer'] ?? {});
             final status = item['status'];
-            final reviews = item['reviews'] as List?;
-            final hasRated = reviews != null && reviews.isNotEmpty;
             final productImg = product['image_urls'] != null && (product['image_urls'] as List).isNotEmpty ? product['image_urls'][0] : (product['imageUrl'] ?? '');
 
-            return GestureDetector(
-                onTap: () {
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => TransactionDetailPage(transactionId: item['id'])));
-                },
-                child: Card(
-                    elevation: 2,
-                    margin: const EdgeInsets.only(bottom: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                         // Product Image with Overlay
-                         ClipRRect(
-                           borderRadius: BorderRadius.circular(12),
-                           child: Stack(
-                             children: [
-                               SizedBox(
-                                 width: 80, height: 80,
-                                 child: productImg.isNotEmpty 
-                                   ? Image.network('${ApiClient.baseUrl.replaceAll('/api', '')}$productImg', fit: BoxFit.cover, 
-                                        errorBuilder: (c,o,s) => Container(color: Colors.grey[200], child: const Icon(Icons.error))) 
-                                   : Container(color: Colors.grey[200]),
-                               ),
-                               if (status == 'Completed' || status == 'Reserved')
-                                 Positioned.fill(
-                                   child: Container(
-                                     color: Colors.black.withValues(alpha: 0.4),
-                                     child: Center(
-                                       child: Text(
-                                         status == 'Completed' ? 'SOLD' : 'RESERVED',
-                                         style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10),
-                                       ),
-                                     ),
-                                   ),
-                                 )
-                             ],
-                           ),
-                         ),
-                         const SizedBox(width: 12),
-                         Expanded(
-                           child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                                Row(
-                                    children: [
-                                        Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                            decoration: BoxDecoration(
-                                                color: _getStatusColor(status).withValues(alpha: 0.1),
-                                                borderRadius: BorderRadius.circular(8)
-                                            ),
-                                            child: Text(status, style: GoogleFonts.outfit(color: _getStatusColor(status), fontWeight: FontWeight.bold, fontSize: 10)),
-                                        ),
-                                        const Spacer(),
-                                        Text('RM ${item['amount']}', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 14, color: Theme.of(context).colorScheme.primary)),
-                                    ],
-                                ),
-                                const SizedBox(height: 8),
-                                Text(product['title'] ?? 'Unknown Item', maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 15)),
-                                Text(
-                                    isBuying ? 'Seller: ${otherParty['full_name'] ?? 'Unknown'}' : 'Buyer: ${otherParty['full_name'] ?? 'Unknown'}',
-                                    style: GoogleFonts.outfit(color: Colors.grey[600], fontSize: 12)
-                                ),
-                                const SizedBox(height: 8),
-                                _buildStatusStepper(status),
-                                const SizedBox(height: 8),
-                                // Actions Row (Extracted)
-                                Row(
-                                    mainAxisAlignment: MainAxisAlignment.end,
-                                    children: [
-                                        if (status == 'Pending') ...[
-                                            SizedBox(
-                                              height: 32,
-                                              child: TextButton(
-                                                  onPressed: () => _updateStatus(item['id'], 'Cancelled'),
-                                                  child: Text('Cancel', style: GoogleFonts.outfit(color: Colors.red, fontSize: 12)),
-                                              ),
-                                            ),
-                                            if (!isBuying) 
-                                                SizedBox(
-                                                  height: 32,
-                                                  child: ElevatedButton(
-                                                      onPressed: () => _updateStatus(item['id'], 'Scheduled'),
-                                                      style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 12)),
-                                                      child: Text('Confirm', style: GoogleFonts.outfit(fontSize: 12)),
-                                                  ),
-                                                ),
-                                        ],
-                                        if (status == 'Scheduled' && isBuying) ...[
-                                                SizedBox(
-                                                  height: 32,
-                                                  child: ElevatedButton(
-                                                      onPressed: () => _showPaymentDialog(item['id']),
-                                                      style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, padding: const EdgeInsets.symmetric(horizontal: 12)),
-                                                      child: Text('Submit Payment', style: GoogleFonts.outfit(color: Colors.white, fontSize: 12)),
-                                                  ),
-                                                ),
-                                        ],
-                                        if (status == 'To Confirm' && !isBuying) ...[
-                                                SizedBox(
-                                                  height: 32,
-                                                  child: ElevatedButton(
-                                                      onPressed: () => _updateStatus(item['id'], 'Completed'),
-                                                      style: ElevatedButton.styleFrom(backgroundColor: Colors.green, padding: const EdgeInsets.symmetric(horizontal: 12)),
-                                                      child: Text('Verify Payment', style: GoogleFonts.outfit(color: Colors.white, fontSize: 12)),
-                                                  ),
-                                                ),
-                                        ],
-                                        if (status == 'To Confirm' && isBuying) ...[
-                                                Text('Pending Verification', style: GoogleFonts.outfit(fontSize: 12, color: Colors.orange)),
-                                        ],
-                                         if (status == 'Completed' && isBuying) ...[
-                                                hasRated 
-                                                ? Row(children: [const Icon(Icons.star, color: Colors.amber, size: 14), const SizedBox(width: 4), Text('Rated', style: GoogleFonts.outfit(fontSize: 12, color: Colors.amber))]) 
-                                                : SizedBox(
-                                                  height: 32,
-                                                  child: OutlinedButton(
-                                                      onPressed: () => _showRateDialog(item['id'], otherParty['id']),
-                                                      style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 12)),
-                                                      child: Text('Rate', style: GoogleFonts.outfit(fontSize: 12)),
-                                                  ),
-                                                ),
-                                        ],
-                                        if (status == 'Scheduled' || status == 'Completed') ...[
-                                          const SizedBox(width: 8),
-                                          SizedBox(
-                                            height: 32,
-                                            child: TextButton.icon(
-                                                onPressed: () => _showDisputeDialog(item['id']),
-                                                icon: const Icon(Icons.warning_amber_rounded, size: 14, color: Colors.red),
-                                                label: Text('Report', style: GoogleFonts.outfit(color: Colors.red, fontSize: 12)),
-                                            ),
-                                          ),
-                                        ],
-                                    ],
-                                )
-                            ],
-                           ),
-                         )
-                      ],
-                    )
+            return Container(
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.grey.withOpacity(0.2), width: 1),
                 ),
-            ), // Closes Card
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                           // Product Image
+                           ClipRRect(
+                             borderRadius: BorderRadius.circular(12),
+                             child: SizedBox(
+                               width: 72, height: 72,
+                               child: productImg.isNotEmpty 
+                                 ? Image.network('${ApiClient.baseUrl.replaceAll('/api', '')}$productImg', fit: BoxFit.cover, 
+                                      errorBuilder: (c,o,s) => Container(color: Colors.grey[200], child: const Icon(Icons.error))) 
+                                 : Container(color: Colors.grey[200]),
+                             ),
+                           ),
+                           const SizedBox(width: 16),
+                           Expanded(
+                             child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                  Text(product['title'] ?? 'Unknown Item', maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 16)),
+                                  const SizedBox(height: 4),
+                                  Text('RM ${item['amount']}', style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 15, color: Theme.of(context).colorScheme.primary)),
+                                  const SizedBox(height: 8),
+                                  Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                      decoration: BoxDecoration(
+                                          color: _getStatusColor(status).withOpacity(0.15),
+                                          borderRadius: BorderRadius.circular(8)
+                                      ),
+                                      child: Text(status, style: GoogleFonts.outfit(color: _getStatusColor(status), fontWeight: FontWeight.w600, fontSize: 12)),
+                                  ),
+                              ],
+                             ),
+                           )
+                        ],
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                      child: SizedBox(
+                        width: double.infinity,
+                        height: 44,
+                        child: OutlinedButton(
+                            onPressed: () async {
+                                await Navigator.push(context, MaterialPageRoute(builder: (_) => TransactionDetailPage(transactionId: item['id'])));
+                                _fetchAllTransactions();
+                            },
+                            style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.black87,
+                                side: BorderSide(color: Colors.grey.withOpacity(0.3)),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
+                            ),
+                            child: Text('View Progress', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 14)),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
             );
         },
       );
@@ -457,94 +431,6 @@ class _MyTransactionsPageState extends State<MyTransactionsPage> with SingleTick
           ],
         );
       },
-    );
-  }
-}
-
-class RateUserDialog extends StatefulWidget {
-  final String transactionId;
-  final String revieweeId;
-  final VoidCallback onSubmitted;
-
-  const RateUserDialog({super.key, required this.transactionId, required this.revieweeId, required this.onSubmitted});
-
-  @override
-  State<RateUserDialog> createState() => _RateUserDialogState();
-}
-
-class _RateUserDialogState extends State<RateUserDialog> {
-  int _rating = 5;
-  final TextEditingController _commentController = TextEditingController();
-  bool _isSubmitting = false;
-
-  void _submitReview() async {
-    setState(() => _isSubmitting = true);
-    final session = UserSession();
-
-    try {
-      final apiClient = ApiClient();
-      await apiClient.post('/reviews', {
-        'transaction_id': widget.transactionId,
-        'reviewer_id': session.userId,
-        'reviewee_id': widget.revieweeId,
-        'rating': _rating,
-        'comment': _commentController.text
-      });
-
-      if (mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Review Submitted!')));
-        widget.onSubmitted();
-      }
-    } catch (e) {
-      if (mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
-      }
-    } finally {
-      if (mounted) setState(() => _isSubmitting = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text('Rate Experience', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(5, (index) {
-              return IconButton(
-                onPressed: () => setState(() => _rating = index + 1),
-                icon: Icon(
-                  index < _rating ? Icons.star_rounded : Icons.star_outline_rounded,
-                  color: Colors.amber,
-                  size: 32,
-                ),
-              );
-            }),
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _commentController,
-            decoration: InputDecoration(
-              hintText: 'How was your experience?',
-              hintStyle: GoogleFonts.outfit(),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-            maxLines: 3,
-          ),
-        ],
-      ),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: Text('Cancel', style: GoogleFonts.outfit())),
-        ElevatedButton(
-          onPressed: _isSubmitting ? null : _submitReview, 
-          child: _isSubmitting ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : Text('Submit', style: GoogleFonts.outfit()),
-        ),
-      ],
     );
   }
 }

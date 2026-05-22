@@ -30,6 +30,14 @@ const SupportTicket = sequelize.define('SupportTicket', {
     reply_content: {
         type: DataTypes.TEXT,
         allowNull: true, // For storing moderator's final answer
+    },
+    lockedByModeratorId: {
+        type: DataTypes.UUID,
+        allowNull: true,
+    },
+    lockedAt: {
+        type: DataTypes.DATE,
+        allowNull: true,
     }
 }, {
     timestamps: true, // Auto includes createdAt for ticket lifecycle tracking

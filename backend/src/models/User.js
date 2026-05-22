@@ -47,6 +47,10 @@ const User = sequelize.define('User', {
         type: DataTypes.FLOAT,
         defaultValue: 5.0,
     },
+    total_reviews: {
+        type: DataTypes.INTEGER,
+        defaultValue: 0,
+    },
     is_verified: {
         type: DataTypes.BOOLEAN,
         defaultValue: false,
@@ -66,6 +70,18 @@ const User = sequelize.define('User', {
     total_carbon_saved: {
         type: DataTypes.FLOAT,
         defaultValue: 0.0, // Used for Sustainability Dashboard UC03
+    },
+    carbon_saved_buyer: {
+        type: DataTypes.FLOAT,
+        defaultValue: 0.0,
+    },
+    carbon_saved_seller: {
+        type: DataTypes.FLOAT,
+        defaultValue: 0.0,
+    },
+    items_reused: {
+        type: DataTypes.INTEGER,
+        defaultValue: 0,
     },
     is_active: {
         type: DataTypes.BOOLEAN,

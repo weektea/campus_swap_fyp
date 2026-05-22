@@ -1,57 +1,32 @@
-import React, { useEffect, useState } from 'react';
-import api from '../services/api';
-import Layout from '../components/Layout';
-import { Trash2, Search } from 'lucide-react';
+import React from 'react';
+import { Search } from 'lucide-react';
 
-const UsersPage = () => {
-    const [users, setUsers] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [searchTerm, setSearchTerm] = useState('');
-
-    useEffect(() => {
-        fetchUsers();
-    }, []);
-
-    const fetchUsers = async () => {
-        try {
-            const response = await api.get('/admin/users');
-            setUsers(response.data);
-        } catch (error) {
-            console.error('Error fetching users:', error);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleDelete = async (id) => {
-        if (!window.confirm('Are you sure you want to delete this user?')) return;
-        try {
-            await api.delete(`/admin/users/${id}`);
-            setUsers(users.filter(u => u.id !== id));
-        } catch (error) {
-            alert('Failed to delete user');
-        }
-    };
-
-    const filteredUsers = users.filter(user =>
-        user.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        user.email?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-
+const Users = () => {
     return (
-        <Layout>
-            <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl">User Management</h2>
-                <div style={{ position: 'relative' }}>
-                    <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
-                    <input
-                        type="text"
-                        placeholder="Search users..."
-                        className="input"
-                        style={{ width: '300px', margin: 0, paddingLeft: '40px' }}
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                    />
+        <div>
+            <div className="flex justify-between items-center mb-8">
+                <h1 style={{ fontSize: '1.5rem', margin: 0 }}>User Directory</h1>
+                <div className="flex gap-4">
+                    <div style={{ 
+                        display: 'flex', alignItems: 'center', 
+                        background: 'white', 
+                        border: '1px solid var(--border)',
+                        borderRadius: '8px',
+                        padding: '8px 16px',
+                        width: '250px'
+                    }}>
+                        <Search size={18} color="var(--text-muted)" style={{ marginRight: '8px' }} />
+                        <input 
+                            type="text" 
+                            placeholder="Search users..." 
+                            style={{ border: 'none', background: 'transparent', outline: 'none', width: '100%' }}
+                        />
+                    </div>
+                    <select className="input" style={{ width: '150px', marginBottom: 0 }}>
+                        <option>All Status</option>
+                        <option>Active</option>
+                        <option>Banned</option>
+                    </select>
                 </div>
             </div>
 
@@ -59,54 +34,57 @@ const UsersPage = () => {
                 <table>
                     <thead>
                         <tr>
-                            <th>ID</th>
-                            <th>Username</th>
-                            <th>Email</th>
-                            <th>Role</th>
-                            <th>Joined</th>
-                            <th>Actions</th>
+                            <th>USER ID</th>
+                            <th>NAME/EMAIL</th>
+                            <th>ROLE</th>
+                            <th>ECO-SCORE</th>
+                            <th>REPORTS AGAINST</th>
+                            <th>STATUS</th>
+                            <th>ACTIONS</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {filteredUsers.map(user => (
-                            <tr key={user.id}>
-                                <td className="text-sm">#{user.id}</td>
-                                <td>
-                                    <div className="flex items-center gap-2">
-                                        <div style={{ width: '32px', height: '32px', background: '#334155', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px' }}>
-                                            {user.full_name?.[0]?.toUpperCase()}
-                                        </div>
-                                        {user.full_name}
-                                    </div>
-                                </td>
-                                <td className="text-sm">{user.email}</td>
-                                <td>
-                                    <span style={{
-                                        padding: '4px 8px',
-                                        borderRadius: '4px',
-                                        fontSize: '12px',
-                                        background: user.role === 'admin' ? 'rgba(168, 85, 247, 0.2)' : 'rgba(59, 130, 246, 0.2)',
-                                        color: user.role === 'admin' ? '#d8b4fe' : '#93c5fd'
-                                    }}>
-                                        {user.role}
-                                    </span>
-                                </td>
-                                <td className="text-sm">{new Date(user.createdAt).toLocaleDateString()}</td>
-                                <td>
-                                    <button
-                                        onClick={() => handleDelete(user.id)}
-                                        style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer' }}
-                                    >
-                                        <Trash2 size={18} />
-                                    </button>
-                                </td>
-                            </tr>
-                        ))}
+                        <tr>
+                            <td style={{ color: 'var(--text-muted)' }}>USR-1024</td>
+                            <td>
+                                <div>Sarah Chen</div>
+                                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>sarah.chen@university.edu</div>
+                            </td>
+                            <td style={{ color: 'var(--text-muted)' }}>Student</td>
+                            <td style={{ color: 'var(--primary)', fontWeight: 'bold' }}>85</td>
+                            <td style={{ color: 'var(--text-muted)' }}>0</td>
+                            <td>
+                                <span style={{ padding: '4px 12px', background: '#dcfce7', borderRadius: '12px', color: '#16a34a', fontSize: '0.75rem', fontWeight: 'bold' }}>
+                                    Active
+                                </span>
+                            </td>
+                            <td>
+                                <button style={{ background: 'none', border: 'none', color: 'var(--primary)', fontWeight: 'bold', cursor: 'pointer' }}>View Details</button>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style={{ color: 'var(--text-muted)' }}>USR-0892</td>
+                            <td>
+                                <div>Mark Johnson</div>
+                                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>mark.j@university.edu</div>
+                            </td>
+                            <td style={{ color: 'var(--text-muted)' }}>Student</td>
+                            <td style={{ color: 'var(--primary)', fontWeight: 'bold' }}>25</td>
+                            <td style={{ color: 'var(--danger)', fontWeight: 'bold' }}>7</td>
+                            <td>
+                                <span style={{ padding: '4px 12px', background: '#fee2e2', borderRadius: '12px', color: '#dc2626', fontSize: '0.75rem', fontWeight: 'bold' }}>
+                                    Banned
+                                </span>
+                            </td>
+                            <td>
+                                <button style={{ background: 'none', border: 'none', color: 'var(--primary)', fontWeight: 'bold', cursor: 'pointer' }}>View Details</button>
+                            </td>
+                        </tr>
                     </tbody>
                 </table>
             </div>
-        </Layout>
+        </div>
     );
 };
 
-export default UsersPage;
+export default Users;

@@ -1,10 +1,36 @@
 import React from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, ShoppingBag, LogOut } from 'lucide-react';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
+import { 
+    LayoutDashboard, 
+    AlertTriangle, 
+    ShieldAlert, 
+    Users, 
+    BarChart3, 
+    DatabaseBackup, 
+    Headset, 
+    History,
+    Search,
+    Bell
+} from 'lucide-react';
 
 const Layout = ({ children }) => {
     const navigate = useNavigate();
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    const location = useLocation();
+    
+    // In dev bypass, we might not have a full user object initially
+    const userStr = localStorage.getItem('user');
+    const user = userStr ? JSON.parse(userStr) : { role: 'admin' };
+    
+    const menuItems = [
+        { path: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
+        { path: '/triage', label: 'Reports', icon: <AlertTriangle size={20} /> },
+        { path: '/disputes', label: 'Disputes', icon: <ShieldAlert size={20} /> },
+        { path: '/users', label: 'User Management', icon: <Users size={20} /> },
+        { path: '/analytics', label: 'Analytics', icon: <BarChart3 size={20} /> },
+        { path: '#', label: 'Backup & Restore', icon: <DatabaseBackup size={20} /> },
+        { path: '#', label: 'Support Tickets', icon: <Headset size={20} /> },
+        { path: '#', label: 'My History', icon: <History size={20} /> },
+    ];
 
     const handleLogout = () => {
         localStorage.removeItem('token');
@@ -13,48 +39,95 @@ const Layout = ({ children }) => {
     };
 
     return (
-        <div className="flex">
-            <aside className="sidebar">
-                <div style={{ padding: '0 0 2rem 0', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                    <div style={{ width: '32px', height: '32px', background: 'linear-gradient(135deg, #3b82f6, #2563eb)', borderRadius: '8px' }}></div>
-                    <h1 style={{ fontSize: '1.25rem', fontWeight: 'bold' }}>CampusSwap</h1>
-                </div>
-
-                <nav style={{ flex: 1 }}>
-                    <NavLink to="/dashboard" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
-                        <LayoutDashboard size={20} />
-                        Dashboard
-                    </NavLink>
-                    <NavLink to="/users" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
-                        <Users size={20} />
-                        Users
-                    </NavLink>
-                    <NavLink to="/transactions" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
-                        <ShoppingBag size={20} />
-                        Transactions
-                    </NavLink>
-                </nav>
-
-                <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1rem', marginTop: 'auto' }}>
-                    <div style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                        <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            {user.email?.[0]?.toUpperCase()}
+        <div>
+            {/* Sidebar */}
+            <div className="sidebar">
+                <div style={{ padding: '0 8px', marginBottom: '32px' }}>
+                    <div className="flex items-center gap-4">
+                        <div style={{ background: 'var(--primary)', padding: '8px', borderRadius: '8px', fontWeight: 'bold' }}>
+                            CM
                         </div>
-                        <div style={{ overflow: 'hidden' }}>
-                            <div style={{ fontSize: '0.875rem', fontWeight: '500' }}>Admin</div>
-                            <div style={{ fontSize: '0.75rem', color: '#94a3b8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user.email}</div>
+                        <div>
+                            <div style={{ fontWeight: 'bold', fontSize: '1rem' }}>Campus Swap</div>
+                            <div style={{ color: '#9ca3af', fontSize: '0.75rem' }}>
+                                {user.role === 'admin' ? 'Administrator Portal' : 'Moderator Portal'}
+                            </div>
                         </div>
                     </div>
-                    <button onClick={handleLogout} className="nav-link" style={{ width: '100%', border: 'none', background: 'transparent', cursor: 'pointer' }}>
-                        <LogOut size={20} />
-                        Logout
+                </div>
+
+                <div className="flex-col">
+                    {menuItems.map((item) => (
+                        <Link 
+                            key={item.label}
+                            to={item.path} 
+                            className={`nav-link ${location.pathname === item.path ? 'active' : ''}`}
+                        >
+                            {item.icon}
+                            <span>{item.label}</span>
+                        </Link>
+                    ))}
+                </div>
+                
+                <div style={{ position: 'absolute', bottom: '24px', left: '24px', right: '24px' }}>
+                    <button 
+                        onClick={handleLogout}
+                        className="btn btn-outline" 
+                        style={{ width: '100%', color: '#9ca3af', borderColor: '#374151' }}
+                    >
+                        Sign Out
                     </button>
                 </div>
-            </aside>
+            </div>
 
-            <main className="main-content" style={{ width: '100%' }}>
-                {children}
-            </main>
+            {/* Main Content */}
+            <div className="main-content">
+                <div className="topbar">
+                    <div style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
+                        <div style={{ 
+                            display: 'flex', alignItems: 'center', 
+                            background: 'var(--bg-color)', 
+                            border: '1px solid var(--border)',
+                            borderRadius: '8px',
+                            padding: '8px 16px',
+                            width: '400px'
+                        }}>
+                            <Search size={18} color="var(--text-muted)" style={{ marginRight: '8px' }} />
+                            <input 
+                                type="text" 
+                                placeholder="Search tickets, users, or listings..." 
+                                style={{ border: 'none', background: 'transparent', outline: 'none', width: '100%' }}
+                            />
+                        </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-6">
+                        <div style={{ position: 'relative' }}>
+                            <Bell size={24} color="var(--text-muted)" />
+                            <div style={{ 
+                                position: 'absolute', top: 0, right: 0, 
+                                width: '8px', height: '8px', 
+                                background: 'var(--danger)', 
+                                borderRadius: '50%' 
+                            }} />
+                        </div>
+                        <div style={{ 
+                            width: '32px', height: '32px', 
+                            background: 'var(--primary)', 
+                            color: 'white', 
+                            borderRadius: '50%',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontWeight: 'bold', fontSize: '0.875rem'
+                        }}>
+                            {user.role === 'admin' ? 'AD' : 'MJ'}
+                        </div>
+                    </div>
+                </div>
+
+                <div className="page-container">
+                    {children}
+                </div>
+            </div>
         </div>
     );
 };

@@ -3,7 +3,7 @@ import { Op } from 'sequelize';
 
 export const createProduct = async (req, res) => {
     try {
-        const { title, description, price, category, condition, seller_id, image_urls, video_url, type, rental_price_per_day, max_rental_duration } = req.body;
+        const { title, description, price, category, condition, seller_id, image_urls, video_url, type, rental_price_per_day, max_rental_duration, rental_deposit } = req.body;
 
         // Basic validation
         if (!title || !seller_id || (price === undefined && !rental_price_per_day)) {
@@ -23,7 +23,8 @@ export const createProduct = async (req, res) => {
             status: 'Available',
             type: type || 'Sale',
             rental_price_per_day,
-            max_rental_duration
+            max_rental_duration,
+            rental_deposit
         });
 
         res.status(201).json(newProduct);
@@ -55,11 +56,22 @@ export const getAllProducts = async (req, res) => {
             whereClause.category = category;
         }
 
-        if (min_price) {
-            whereClause.price = { ...whereClause.price, [Op.gte]: parseFloat(min_price) };
-        }
-        if (max_price) {
-            whereClause.price = { ...whereClause.price, [Op.lte]: parseFloat(max_price) };
+        // Price Filtering logic to handle both Sale and Rent types
+        if (min_price || max_price) {
+            // By default, assume we are filtering on `price` (Sale items)
+            let priceField = 'price';
+            
+            if (type === 'Rent') {
+                priceField = 'rental_price_per_day';
+            }
+
+            whereClause[priceField] = {};
+            if (min_price) {
+                whereClause[priceField][Op.gte] = parseFloat(min_price);
+            }
+            if (max_price) {
+                whereClause[priceField][Op.lte] = parseFloat(max_price);
+            }
         }
         if (condition) {
             whereClause.condition = condition;
@@ -67,6 +79,19 @@ export const getAllProducts = async (req, res) => {
 
         if (type && type !== 'All') {
             whereClause.type = type; // Support filtering by Sale/Rent from Flutter UI
+        }
+
+        // Feature: Hide reported items
+        const { exclude_reported_by } = req.query;
+        if (exclude_reported_by) {
+            const reportedItems = await Report.findAll({
+                where: { reporter_id: exclude_reported_by },
+                attributes: ['product_id']
+            });
+            const reportedIds = reportedItems.map(r => r.product_id);
+            if (reportedIds.length > 0) {
+                whereClause.id = { [Op.notIn]: reportedIds };
+            }
         }
 
         console.log('----- DEBUG PRODUCTS -----');
@@ -91,7 +116,7 @@ export const getAllProducts = async (req, res) => {
             include: [{
                 model: User,
                 as: 'seller',
-                attributes: ['full_name', 'email', 'reputation_score'],
+                attributes: ['full_name', 'email', 'reputation_score', 'total_reviews'],
                 required: false // Force LEFT JOIN
             }],
             order: order
@@ -124,8 +149,8 @@ export const updateProduct = async (req, res) => {
             return res.status(403).json({ error: 'Access denied' });
         }
 
-        // UC09 Constraint: Prevent updating active orders or removed items
-        if (['Reserved', 'Sold', 'Removed'].includes(product.status)) {
+        // UC09 Constraint: Prevent updating active orders, removed, or suspended items
+        if (['Reserved', 'Sold', 'Removed', 'Suspended'].includes(product.status)) {
             return res.status(400).json({ error: `Cannot update a listing that is currently ${product.status}` });
         }
 

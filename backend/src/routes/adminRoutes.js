@@ -16,6 +16,7 @@ router.put('/reports/:id', authenticateToken, isAdminOrModerator, adminControlle
 
 // Manage Support Tickets
 router.get('/tickets', authenticateToken, isAdminOrModerator, adminController.getTickets);
+router.post('/tickets/:id/lock', authenticateToken, isAdminOrModerator, adminController.lockTicket);
 router.put('/tickets/:id', authenticateToken, isAdminOrModerator, adminController.replyTicket);
 
 

@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { User } from '../models/index.js';
+import { User, Transaction, Dispute } from '../models/index.js';
+import { Op } from 'sequelize';
 
 export const register = async (req, res) => {
     try {
@@ -114,6 +115,11 @@ export const login = async (req, res) => {
             return res.status(400).json({ error: 'Invalid ID/email or password' });
         }
 
+        // Security check: Is user banned?
+        if (user.is_active === false) {
+            return res.status(403).json({ error: 'Account suspended. Please contact support.' });
+        }
+
         // 2. Check Password
         const isMatch = await bcrypt.compare(password, user.password_hash);
         if (!isMatch) {
@@ -184,7 +190,7 @@ export const getUserProfile = async (req, res) => {
     try {
         const { id } = req.params;
         const user = await User.findByPk(id, {
-            attributes: ['id', 'email', 'full_name', 'profile_image_url', 'phone_number', 'role', 'total_carbon_saved', 'reputation_score', 'createdAt']
+            attributes: ['id', 'email', 'full_name', 'profile_image_url', 'phone_number', 'role', 'total_carbon_saved', 'carbon_saved_buyer', 'carbon_saved_seller', 'items_reused', 'reputation_score', 'total_reviews', 'createdAt']
         });
         
         if (!user) {
@@ -212,6 +218,25 @@ export const deleteAccount = async (req, res) => {
         const user = await User.findByPk(userId);
         if (!user) {
             return res.status(404).json({ error: 'User not found' });
+        }
+
+        // UC05: Prevent Deactivation if user has active orders or disputes
+        const activeOrders = await Transaction.count({
+            where: {
+                [Op.or]: [{ buyer_id: userId }, { seller_id: userId }],
+                status: ['Pending', 'Scheduled', 'To Confirm']
+            }
+        });
+
+        const activeDisputes = await Dispute.count({
+            where: {
+                complainant_id: userId,
+                status: ['New', 'Investigating', 'Escalated']
+            }
+        });
+
+        if (activeOrders > 0 || activeDisputes > 0) {
+            return res.status(403).json({ error: 'Cannot deactivate: You have active orders or disputes' });
         }
 
         await user.destroy();

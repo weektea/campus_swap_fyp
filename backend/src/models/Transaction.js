@@ -57,6 +57,22 @@ const Transaction = sequelize.define('Transaction', {
         validate: { min: 1, max: 5 },
         allowNull: true,
     },
+    buyer_comment: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+    },
+    seller_comment: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+    },
+    review_status: {
+        type: DataTypes.ENUM('PENDING_REVIEWS', 'BUYER_REVIEWED', 'SELLER_REVIEWED', 'PUBLISHED'),
+        defaultValue: 'PENDING_REVIEWS',
+    },
+    completed_at: {
+        type: DataTypes.DATE,
+        allowNull: true,
+    },
 }, {
     timestamps: true,
 });

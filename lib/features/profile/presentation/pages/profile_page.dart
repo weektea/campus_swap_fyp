@@ -21,8 +21,12 @@ class ProfilePage extends StatefulWidget {
 class _ProfilePageState extends State<ProfilePage> {
   int _itemsReused = 0;
   double _co2Saved = 0.0;
+  double _co2Bought = 0.0;
+  double _co2Sold = 0.0;
   bool _loadingStats = true;
   bool _isUploading = false;
+  double _reputationScore = 5.0;
+  int _totalReviews = 0;
 
   @override
   void initState() {
@@ -49,6 +53,21 @@ class _ProfilePageState extends State<ProfilePage> {
                   if (userData['total_carbon_saved'] != null) {
                       _co2Saved = double.tryParse(userData['total_carbon_saved'].toString()) ?? 0.0;
                   }
+                  if (userData['carbon_saved_buyer'] != null) {
+                      _co2Bought = double.tryParse(userData['carbon_saved_buyer'].toString()) ?? 0.0;
+                  }
+                  if (userData['carbon_saved_seller'] != null) {
+                      _co2Sold = double.tryParse(userData['carbon_saved_seller'].toString()) ?? 0.0;
+                  }
+                  if (userData['items_reused'] != null) {
+                      _itemsReused = int.tryParse(userData['items_reused'].toString()) ?? 0;
+                  }
+                  if (userData['reputation_score'] != null) {
+                      _reputationScore = double.tryParse(userData['reputation_score'].toString()) ?? 5.0;
+                  }
+                  if (userData['total_reviews'] != null) {
+                      _totalReviews = int.tryParse(userData['total_reviews'].toString()) ?? 0;
+                  }
               });
           }
       } catch (e) {
@@ -70,12 +89,8 @@ class _ProfilePageState extends State<ProfilePage> {
           final res = await apiClient.get('/transactions/user/${session.userId}?type=selling');
 // ...
           if (res is List) {
-              final completedSales = res.where((t) => t['status'] == 'Completed').toList();
-              final count = completedSales.length;
               if (mounted) {
                   setState(() {
-                      _itemsReused = count;
-                      // _co2Saved is now populated directly from the backend in _fetchUserProfile
                       _loadingStats = false;
                   });
               }
@@ -171,7 +186,21 @@ class _ProfilePageState extends State<ProfilePage> {
               session.email ?? 'Not Logged In',
               style: const TextStyle(fontSize: 16, color: Colors.grey),
             ),
-             const SizedBox(height: 8),
+            if (session.isLoggedIn) ...[
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.star_rounded, size: 20, color: Colors.amber),
+                  const SizedBox(width: 4),
+                  Text(
+                    '${_reputationScore.toStringAsFixed(1)} ($_totalReviews)',
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87),
+                  ),
+                ],
+              ),
+            ],
+            const SizedBox(height: 8),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               decoration: BoxDecoration(
@@ -186,7 +215,7 @@ class _ProfilePageState extends State<ProfilePage> {
             GestureDetector(
               onTap: () {
                  if (!_loadingStats) {
-                     Navigator.push(context, MaterialPageRoute(builder: (_) => SustainabilityDashboardPage(itemsReused: _itemsReused, co2Saved: _co2Saved)));
+                     Navigator.push(context, MaterialPageRoute(builder: (_) => SustainabilityDashboardPage(itemsReused: _itemsReused, co2Saved: _co2Saved, co2Bought: _co2Bought, co2Sold: _co2Sold)));
                  }
               },
               child: Container(
@@ -241,7 +270,7 @@ class _ProfilePageState extends State<ProfilePage> {
             const SizedBox(height: 32),
             
             // Menu Items
-            _buildMenuItem(context, Icons.inventory_2_outlined, 'My Listings', () {
+            _buildMenuItem(context, Icons.inventory_2_outlined, 'My Inventory', () {
                Navigator.push(context, MaterialPageRoute(builder: (_) => const MyListingsPage()));
             }),
             _buildMenuItem(context, Icons.shopping_bag_outlined, 'My Transactions', () {

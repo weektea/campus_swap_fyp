@@ -8,6 +8,7 @@ import 'package:campus_swap/features/profile/presentation/pages/help_page.dart';
 import 'package:campus_swap/core/api/api_client.dart';
 import 'package:campus_swap/features/profile/presentation/pages/change_password_page.dart';
 import 'package:campus_swap/features/profile/presentation/pages/privacy_settings_page.dart';
+import 'package:campus_swap/features/profile/presentation/pages/edit_profile_page.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -38,6 +39,14 @@ class _SettingsPageState extends State<SettingsPage> {
         children: [
           Text("Account", style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey[700])),
           const SizedBox(height: 16),
+          ListTile(
+            leading: const Icon(Icons.person_outline),
+            title: Text("Edit Profile Info", style: GoogleFonts.outfit()),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+               Navigator.push(context, MaterialPageRoute(builder: (_) => const EditProfilePage()));
+            },
+          ),
           ListTile(
             leading: const Icon(Icons.lock_outline),
             title: Text("Change Password", style: GoogleFonts.outfit()),

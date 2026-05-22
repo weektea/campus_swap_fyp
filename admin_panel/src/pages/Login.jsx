@@ -12,6 +12,15 @@ const Login = () => {
 
     const handleLogin = async (e) => {
         e.preventDefault();
+        
+        // DEV BYPASS
+        if (email.toLowerCase() === 'admin' || email.toLowerCase() === 'mod') {
+             localStorage.setItem('token', 'mock_token_123');
+             localStorage.setItem('user', JSON.stringify({ email, role: loginRole }));
+             navigate('/dashboard');
+             return;
+        }
+
         try {
             const response = await api.post('/auth/login', { email, password });
 
@@ -39,8 +48,8 @@ const Login = () => {
     };
 
     return (
-        <div className="flex justify-center items-center" style={{ height: '100vh', background: 'radial-gradient(circle at center, #1e293b 0%, #0f172a 100%)' }}>
-            <div className="card" style={{ width: '400px', backdropFilter: 'blur(10px)', background: 'rgba(30, 41, 59, 0.7)' }}>
+        <div className="flex justify-center items-center dark-bg" style={{ height: '100vh' }}>
+            <div className="card dark-card" style={{ width: '400px' }}>
                 <h2 className="text-xl" style={{ textAlign: 'center', marginBottom: '2rem' }}>
                     {loginRole === 'admin' ? 'Admin Portal' : 'Moderator Portal'}
                 </h2>
@@ -72,8 +81,8 @@ const Login = () => {
                     <div style={{ position: 'relative', marginBottom: '1rem' }}>
                         <User size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
                         <input
-                            type="email"
-                            className="input"
+                            type="text"
+                            className="input dark-input"
                             style={{ paddingLeft: '40px' }}
                             placeholder={loginRole === 'admin' ? "Admin Email" : "Moderator Email"}
                             value={email}
@@ -86,7 +95,7 @@ const Login = () => {
                         <Lock size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
                         <input
                             type="password"
-                            className="input"
+                            className="input dark-input"
                             style={{ paddingLeft: '40px' }}
                             placeholder="Password"
                             value={password}

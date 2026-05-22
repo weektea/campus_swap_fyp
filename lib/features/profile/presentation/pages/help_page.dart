@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:campus_swap/features/profile/presentation/pages/submit_ticket_page.dart';
 
 class HelpPage extends StatelessWidget {
   const HelpPage({super.key});
@@ -24,7 +25,7 @@ class HelpPage extends StatelessWidget {
             Center(
               child: ElevatedButton.icon(
                 onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Support Ticket Created")));
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const SubmitTicketPage()));
                 }, 
                 icon: const Icon(Icons.email_outlined),
                 label: const Text("Contact Support"),

@@ -6,8 +6,8 @@ import 'package:campus_swap/features/home/presentation/widgets/product_card.dart
 import 'package:campus_swap/features/home/presentation/widgets/category_chip.dart';
 import 'package:campus_swap/features/chat/presentation/pages/chat_page.dart';
 import 'package:campus_swap/features/product/presentation/pages/sell_page.dart';
-import 'package:campus_swap/features/saved/presentation/pages/saved_page.dart';
 import 'package:campus_swap/features/profile/presentation/pages/profile_page.dart';
+import 'package:campus_swap/features/profile/presentation/pages/my_purchases_page.dart';
 import 'package:campus_swap/features/notification/presentation/pages/notifications_page.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -24,6 +24,7 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   @override
   void dispose() {
+    _searchController.dispose();
     NotificationService().stopPolling();
     super.dispose();
   }
@@ -32,6 +33,8 @@ class _HomePageState extends State<HomePage> {
   int _selectedCategoryIndex = 0;
   List<Product> _products = [];
   bool _isLoading = true;
+  Set<String> _savedProductIds = {};
+  final TextEditingController _searchController = TextEditingController();
 
   final List<Map<String, dynamic>> _categories = [
     {'label': 'All', 'icon': Icons.grid_view_rounded},
@@ -82,11 +85,60 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  Future<void> _fetchSavedItems() async {
+      if (!UserSession().isLoggedIn) return;
+      try {
+          final apiClient = ApiClient();
+          final response = await apiClient.get('/saved');
+          if (response is List && mounted) {
+              setState(() {
+                  _savedProductIds = response.map((item) => item['id'].toString()).toSet();
+              });
+          }
+      } catch(e) {
+          // Ignore fetch error silently
+      }
+  }
+
+  Future<void> _toggleFavorite(String productId) async {
+      if (!UserSession().isLoggedIn) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please login to save items.')));
+          return;
+      }
+      
+      // Optimistic update
+      setState(() {
+          if (_savedProductIds.contains(productId)) {
+              _savedProductIds.remove(productId);
+          } else {
+              _savedProductIds.add(productId);
+          }
+      });
+
+      try {
+          final apiClient = ApiClient();
+          await apiClient.post('/saved/toggle', {'product_id': productId});
+      } catch (e) {
+          // Revert on failure
+          setState(() {
+              if (_savedProductIds.contains(productId)) {
+                  _savedProductIds.remove(productId);
+              } else {
+                  _savedProductIds.add(productId);
+              }
+          });
+          if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to update wishlist.')));
+          }
+      }
+  }
+
   @override
   void initState() {
     super.initState();
     _fetchProducts();
     _fetchRecommendations();
+    _fetchSavedItems();
     if (UserSession().isLoggedIn) {
       NotificationService().startPolling();
     }
@@ -95,7 +147,9 @@ class _HomePageState extends State<HomePage> {
   @override
   void didChangeDependencies() {
      super.didChangeDependencies();
-     // Reload if coming back? 
+     if (UserSession().isLoggedIn) {
+        _fetchSavedItems(); // Reload saved items just in case it was toggled on another tab
+     }
   }
 
   Future<void> _fetchProducts([String? query]) async {
@@ -129,6 +183,10 @@ class _HomePageState extends State<HomePage> {
           params.add('type=$_selectedListingType');
       }
 
+      if (UserSession().isLoggedIn) {
+          params.add('exclude_reported_by=${UserSession().userId}');
+      }
+
       if (params.isNotEmpty) {
         endpoint += '?${params.join('&')}';
       }
@@ -153,7 +211,7 @@ class _HomePageState extends State<HomePage> {
       _buildHomeView(),
       const ChatPage(),
       const SellPage(),
-      const SavedPage(),
+      const MyTransactionsPage(),
       const ProfilePage(),
     ];
 
@@ -185,10 +243,10 @@ class _HomePageState extends State<HomePage> {
             selectedIcon: Icon(Icons.add_circle_rounded, size: 32),
             label: 'Sell',
           ),
-           NavigationDestination(
-            icon: Icon(Icons.favorite_outline_rounded),
-             selectedIcon: Icon(Icons.favorite_rounded),
-            label: 'Saved',
+          NavigationDestination(
+            icon: Icon(Icons.receipt_long_outlined),
+            selectedIcon: Icon(Icons.receipt_long_rounded),
+            label: 'Orders',
           ),
           NavigationDestination(
             icon: Icon(Icons.person_outline_rounded),
@@ -282,7 +340,7 @@ class _HomePageState extends State<HomePage> {
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                child: Container(
+                  child: Container(
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(16),
@@ -295,6 +353,7 @@ class _HomePageState extends State<HomePage> {
                     ],
                   ),
                   child: TextField(
+                    controller: _searchController,
                     decoration: InputDecoration(
                       hintText: 'Search books, electronics...',
                       hintStyle: GoogleFonts.outfit(color: Colors.grey[400]),
@@ -321,7 +380,12 @@ class _HomePageState extends State<HomePage> {
                       contentPadding: const EdgeInsets.symmetric(vertical: 16),
                     ),
                     style: GoogleFonts.outfit(),
-                    onSubmitted: (value) => _fetchProducts(value),
+                    onSubmitted: (value) {
+                      if (_selectedTab == 'For You') {
+                        setState(() => _selectedTab = 'All Listings');
+                      }
+                      _fetchProducts(value);
+                    },
                     textInputAction: TextInputAction.search,
                   ),
                 ),
@@ -408,6 +472,35 @@ class _HomePageState extends State<HomePage> {
             ),
             const SliverToBoxAdapter(child: SizedBox(height: 16)),
 
+            // "For You" notice banner
+            if (_selectedTab == 'For You')
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.amber.shade300, width: 1),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.info_outline_rounded, color: Colors.amber.shade700, size: 18),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'For You shows personalised picks — search, sort & filter apply to All Listings tab.',
+                            style: GoogleFonts.outfit(fontSize: 12, color: Colors.amber.shade800),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            if (_selectedTab == 'For You') const SliverToBoxAdapter(child: SizedBox(height: 12)),
+
             // Product Grid
             if (_isLoading)
               const SliverFillRemaining(
@@ -429,12 +522,15 @@ class _HomePageState extends State<HomePage> {
                   ),
                   delegate: SliverChildBuilderDelegate(
                     (context, index) {
+                      final product = _gridProducts[index];
                       return ProductCard(
-                        product: _gridProducts[index],
+                        product: product,
+                        isFavorite: _savedProductIds.contains(product.id),
+                        onFavoriteToggle: () => _toggleFavorite(product.id),
                         onTap: () {
                           Navigator.push(context, MaterialPageRoute(
-                            builder: (_) => ProductDetailsPage(product: _gridProducts[index])
-                          ));
+                            builder: (_) => ProductDetailsPage(product: product)
+                          )).then((_) => _fetchSavedItems());
                         },
                       ).animate().fadeIn(duration: 500.ms, delay: (50 * index).ms).scale(begin: const Offset(0.9, 0.9));
                     },

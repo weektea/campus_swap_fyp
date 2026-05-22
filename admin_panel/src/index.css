@@ -1,30 +1,26 @@
 :root {
-  --bg-color: #0f172a;
-  --card-bg: #1e293b;
-  --primary: #3b82f6;
-  --primary-hover: #2563eb;
-  --text-main: #f8fafc;
-  --text-muted: #94a3b8;
-  --border: #334155;
+  --bg-color: #f4f6f5; /* Light grey/white for main content */
+  --card-bg: #ffffff;
+  --sidebar-bg: #1e2622;
+  --primary: #0d503c; /* Campus Swap Green */
+  --primary-hover: #0a4030;
+  --text-main: #111827;
+  --text-muted: #6b7280;
+  --border: #e5e7eb;
   --danger: #ef4444;
-  --success: #22c55e;
+  --success: #10b981;
+  --warning: #f59e0b;
 }
 
 body {
   margin: 0;
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: 'Outfit', 'Inter', system-ui, sans-serif;
   background-color: var(--bg-color);
   color: var(--text-main);
   -webkit-font-smoothing: antialiased;
 }
 
 /* Layout Utilities */
-.container {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 2rem;
-}
-
 .flex { display: flex; }
 .flex-col { flex-direction: column; }
 .items-center { align-items: center; }
@@ -33,14 +29,15 @@ body {
 .gap-2 { gap: 0.5rem; }
 .gap-4 { gap: 1rem; }
 .gap-6 { gap: 1.5rem; }
+.w-full { width: 100%; }
+.h-full { height: 100%; }
 
 /* Components */
 .card {
   background: var(--card-bg);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 16px;
   padding: 1.5rem;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
 }
 
 .btn {
@@ -50,7 +47,7 @@ body {
   padding: 0.75rem 1.5rem;
   border-radius: 8px;
   cursor: pointer;
-  font-weight: 500;
+  font-weight: 600;
   transition: all 0.2s;
 }
 
@@ -62,13 +59,19 @@ body {
   background: var(--danger);
 }
 
+.btn-outline {
+  background: transparent;
+  color: var(--text-main);
+  border: 1px solid var(--border);
+}
+
 .input {
   width: 100%;
   padding: 0.75rem;
   border-radius: 8px;
   border: 1px solid var(--border);
-  background: #0f172a;
-  color: white;
+  background: white;
+  color: var(--text-main);
   margin-bottom: 1rem;
   box-sizing: border-box;
 }
@@ -77,23 +80,6 @@ body {
   outline: 2px solid var(--primary);
   border-color: transparent;
 }
-
-/* Dashboard Grid */
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 1.5rem;
-  margin-bottom: 2rem;
-}
-
-.stat-value {
-  font-size: 2rem;
-  font-weight: 700;
-  color: var(--primary);
-}
-
-.text-sm { font-size: 0.875rem; color: var(--text-muted); }
-.text-xl { font-size: 1.25rem; font-weight: 600; }
 
 /* Table */
 table {
@@ -105,28 +91,42 @@ th, td {
   text-align: left;
   padding: 1rem;
   border-bottom: 1px solid var(--border);
+  font-size: 0.875rem;
 }
 
 th {
   color: var(--text-muted);
-  font-weight: 500;
+  font-weight: 600;
+  background: #f9fafb;
 }
 
 /* Navigation */
 .sidebar {
-  width: 260px;
-  background: var(--card-bg);
+  width: 250px;
+  background: var(--sidebar-bg);
   height: 100vh;
   position: fixed;
   left: 0;
   top: 0;
-  border-right: 1px solid var(--border);
-  padding: 1.5rem;
+  padding: 1.5rem 1rem;
+  color: white;
 }
 
 .main-content {
-  margin-left: 260px;
-  padding: 2rem;
+  margin-left: 250px;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar {
+  height: 70px;
+  background: white;
+  border-bottom: 1px solid var(--border);
+  padding: 0 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .nav-link {
@@ -134,13 +134,37 @@ th {
   align-items: center;
   gap: 0.75rem;
   padding: 0.75rem 1rem;
-  color: var(--text-muted);
+  color: #9ca3af;
   text-decoration: none;
   border-radius: 8px;
   margin-bottom: 0.5rem;
+  transition: all 0.2s;
 }
 
 .nav-link:hover, .nav-link.active {
-  background: rgba(59, 130, 246, 0.1);
-  color: var(--primary);
+  background: var(--primary);
+  color: white;
+}
+
+.page-container {
+  padding: 2rem;
+  flex: 1;
+}
+
+/* Utilities for overrides in Login etc */
+.dark-bg {
+  background: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%);
+  color: white;
+}
+
+.dark-card {
+  background: rgba(30, 41, 59, 0.7);
+  border: 1px solid #334155;
+  color: white;
+}
+
+.dark-input {
+  background: #0f172a;
+  border: 1px solid #334155;
+  color: white;
 }

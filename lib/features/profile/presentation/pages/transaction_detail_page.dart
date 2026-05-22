@@ -3,7 +3,6 @@ import 'package:campus_swap/core/api/api_client.dart';
 import 'package:campus_swap/core/session/user_session.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:campus_swap/features/chat/presentation/pages/chat_detail_page.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 class TransactionDetailPage extends StatefulWidget {
   final String transactionId;
@@ -55,71 +54,66 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
       }
   }
 
-  Color _getStatusColor(String status) {
-      switch(status) {
-          case 'Pending': return Colors.orange;
-          case 'Scheduled': return Colors.blue;
-          case 'To Confirm': return Colors.amber;
-          case 'Completed': return Colors.green;
-          case 'Cancelled': return Colors.red;
-          case 'Disputed': return Colors.purple;
-          default: return Colors.grey;
-      }
-  }
-
   Widget _buildStatusStepper(String status) {
       if (status == 'Cancelled' || status == 'Disputed') {
           return Center(child: Text('Transaction $status', style: GoogleFonts.outfit(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 18)));
       }
       
       final stages = ['Pending', 'Scheduled', 'To Confirm', 'Completed'];
-      final labels = ['Pending', 'Meetup', 'Payment', 'Done'];
+      final labels = ['Pending', 'Scheduled', 'To Confirm', 'Done'];
       int currentIndex = stages.indexOf(status);
       if (currentIndex == -1) currentIndex = 0;
 
       return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        child: Row(
-          children: List.generate(stages.length * 2 - 1, (index) {
-             if (index % 2 != 0) {
-                int stepIndex = index ~/ 2;
-                bool isActive = currentIndex > stepIndex;
-                return Expanded(
-                  child: Container(
-                    height: 3, 
-                    color: isActive ? Theme.of(context).colorScheme.primary : Colors.grey[200]
-                  )
-                );
-             } else {
-                int stepIndex = index ~/ 2;
-                bool isPassed = currentIndex > stepIndex;
-                bool isCurrent = currentIndex == stepIndex;
-                Color nodeColor = isPassed || isCurrent ? Theme.of(context).colorScheme.primary : Colors.grey[300]!;
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: List.generate(stages.length, (index) {
+             bool isPassed = currentIndex > index;
+             bool isCurrent = currentIndex == index;
+             Color nodeColor = isPassed || isCurrent ? Theme.of(context).colorScheme.primary : Colors.white;
+             Color borderColor = isPassed || isCurrent ? Theme.of(context).colorScheme.primary : Colors.grey[300]!;
 
-                return Column(
-                   mainAxisSize: MainAxisSize.min,
+             return Row(
+               crossAxisAlignment: CrossAxisAlignment.start,
+               children: [
+                 Column(
                    children: [
-                      Container(
-                         width: 24, height: 24,
-                         decoration: BoxDecoration(
-                            color: nodeColor,
-                            shape: BoxShape.circle,
-                            border: isCurrent ? Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3), width: 4) : null,
-                         ),
-                         child: isPassed ? const Icon(Icons.check, size: 14, color: Colors.white) : null,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                         labels[stepIndex], 
-                         style: GoogleFonts.outfit(
-                            fontSize: 11, 
-                            fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
-                            color: isPassed || isCurrent ? Colors.black87 : Colors.grey
-                         )
+                     Container(
+                        width: 28, height: 28,
+                        decoration: BoxDecoration(
+                           color: nodeColor,
+                           shape: BoxShape.circle,
+                           border: Border.all(color: borderColor, width: 1.5),
+                        ),
+                        child: isPassed 
+                           ? const Icon(Icons.check, size: 16, color: Colors.white) 
+                           : (isCurrent 
+                               ? const Icon(Icons.check, size: 16, color: Colors.white) 
+                               : Center(child: Text('${index + 1}', style: TextStyle(color: Colors.grey[400], fontSize: 12)))),
+                     ),
+                     if (index < stages.length - 1)
+                       Container(
+                         width: 2,
+                         height: 32,
+                         color: (currentIndex > index) ? Theme.of(context).colorScheme.primary : Colors.grey[300],
+                       )
+                   ],
+                 ),
+                 const SizedBox(width: 16),
+                 Padding(
+                   padding: const EdgeInsets.only(top: 4.0),
+                   child: Text(
+                      labels[index], 
+                      style: GoogleFonts.outfit(
+                         fontSize: 15, 
+                         fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+                         color: isPassed || isCurrent ? Colors.black87 : Colors.grey[600]
                       )
-                   ]
-                );
-             }
+                   ),
+                 )
+               ],
+             );
           }),
         ),
       );
@@ -216,7 +210,7 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
                   onPressed: () {
                        Navigator.push(context, MaterialPageRoute(builder: (_) => ChatDetailPage(
                            sellerName: otherPartyName,
-                           otherUserId: otherParty['id']
+                           otherUserId: otherParty['id']?.toString() ?? ''
                        )));
                   },
                   icon: const Icon(Icons.chat_bubble_outline, size: 16),
@@ -237,63 +231,94 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
   }
 
   Widget _buildActionPanel(String status, bool isBuying) {
-      if (status == 'Cancelled' || status == 'Completed' || status == 'Disputed') {
-          return Center(child: Text('No pending actions needed.', style: GoogleFonts.outfit(color: Colors.grey)));
+      if (status == 'Cancelled' || status == 'Disputed') {
+          return const SizedBox.shrink();
       }
 
-      Widget actionBtn = const SizedBox.shrink();
-
-      if (status == 'Pending') {
-          if (isBuying) {
-             actionBtn = Text('Wait for the seller to confirm your request.', style: GoogleFonts.outfit());
-          } else {
-             actionBtn = Row(
-               children: [
-                 Expanded(child: OutlinedButton(onPressed: () => _updateStatus('Cancelled'), style: OutlinedButton.styleFrom(foregroundColor: Colors.red), child: const Text('Cancel Request'))),
-                 const SizedBox(width: 16),
-                 Expanded(child: ElevatedButton(onPressed: () => _updateStatus('Scheduled'), child: const Text('Confirm Order'))),
-               ],
-             );
-          }
-      } else if (status == 'Scheduled') {
-          if (isBuying) {
-             actionBtn = SizedBox(
-                 width: double.infinity,
-                 child: ElevatedButton.icon(
-                      onPressed: () => _updateStatus('To Confirm'),
-                      icon: const Icon(Icons.payment),
-                      label: const Text('Submit Payment / Handover Confirm'),
-                      style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16))
-                 ),
-             );
-          } else {
-             actionBtn = Text('Wait for the buyer to submit payment or confirm receiving the item.', style: GoogleFonts.outfit());
-          }
-      } else if (status == 'To Confirm') {
-          if (isBuying) {
-             actionBtn = Text('Payment submitted. Awaiting seller validation.', style: GoogleFonts.outfit(color: Colors.orange));
-          } else {
-             actionBtn = SizedBox(
-                 width: double.infinity,
-                 child: ElevatedButton.icon(
-                      onPressed: () => _updateStatus('Completed'),
-                      icon: const Icon(Icons.verified),
-                      label: const Text('Verify Payment & Complete Order'),
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 16))
-                 ),
-             );
-          }
+      if (status == 'Completed') {
+          // Keep existing completed logic for rating
+          return Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primary.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Theme.of(context).colorScheme.primary.withOpacity(0.2))
+            ),
+            child: Text('Order completed! Go to My Transactions to rate your experience.', style: GoogleFonts.outfit())
+          );
       }
 
-      return Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.05),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2))
-          ),
-          child: actionBtn
-      );
+      if (status == 'Scheduled' && isBuying) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.blue.withOpacity(0.2)),
+                ),
+                child: Text(
+                  'Please upload payment proof to proceed to the next step.',
+                  style: GoogleFonts.outfit(color: Colors.blue[800]),
+                ),
+              ),
+              const SizedBox(height: 24),
+              Text('Upload Payment Proof', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 12),
+              // Dashed border placeholder for upload
+              Container(
+                width: double.infinity,
+                height: 120,
+                decoration: BoxDecoration(
+                  color: Colors.grey.withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.withOpacity(0.3), style: BorderStyle.none),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.upload_file_outlined, color: Colors.grey[600], size: 32),
+                    const SizedBox(height: 8),
+                    Text('Click to upload', style: GoogleFonts.outfit(color: Colors.grey[600])),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: ElevatedButton(
+                  onPressed: () => _updateStatus('To Confirm'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF82A093), // Approximate theme primary from images
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
+                  ),
+                  child: Text('Upload Proof', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: OutlinedButton(
+                  onPressed: () => _updateStatus('Cancelled'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.red,
+                    side: BorderSide(color: Colors.red.withOpacity(0.5)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
+                  ),
+                  child: Text('Cancel Order', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 16)),
+                ),
+              ),
+            ],
+          );
+      }
+
+      // Default empty placeholder for other statuses
+      return const SizedBox.shrink();
   }
 }

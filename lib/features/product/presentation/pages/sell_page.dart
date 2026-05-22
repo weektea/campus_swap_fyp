@@ -23,6 +23,7 @@ class _SellPageState extends State<SellPage> {
   final TextEditingController _priceController = TextEditingController();
   final TextEditingController _descController = TextEditingController();
   final TextEditingController _maxDurationController = TextEditingController();
+  final TextEditingController _depositController = TextEditingController();
 
   final List<XFile> _imageFiles = [];
   XFile? _videoFile;
@@ -92,7 +93,7 @@ class _SellPageState extends State<SellPage> {
         
         // Fulfill UC07: Auto-fill Title and Price based on category if empty
         if (_titleController.text.isEmpty) {
-             _titleController.text = "Pre-loved ${_selectedCategory}";
+             _titleController.text = "Pre-loved $_selectedCategory";
         }
         if (_priceController.text.isEmpty) {
              _priceController.text = _listingType == 'Sale' ? "15.00" : "5.00";
@@ -104,7 +105,7 @@ class _SellPageState extends State<SellPage> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('AI Auto-Filled: ${_selectedCategory} (${(result['confidence'] * 100).toStringAsFixed(0)}%)')),
+          SnackBar(content: Text('AI Auto-Filled: $_selectedCategory (${(result['confidence'] * 100).toStringAsFixed(0)}%)')),
         );
       }
     } catch (e) {
@@ -264,12 +265,35 @@ class _SellPageState extends State<SellPage> {
      }
   }
 
+  void _resetForm() {
+      _titleController.clear();
+      _priceController.clear();
+      _descController.clear();
+      _maxDurationController.clear();
+      _depositController.clear();
+      setState(() {
+          _imageFiles.clear();
+          _videoFile = null;
+          _selectedCategory = null;
+          _selectedSubCategory = null;
+          _selectedCondition = 'Good';
+          _listingType = 'Sale';
+      });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: Text('New Listing', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
         automaticallyImplyLeading: false,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh_rounded),
+            onPressed: _resetForm,
+            tooltip: 'Reset Form',
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
@@ -521,6 +545,21 @@ class _SellPageState extends State<SellPage> {
                   maxLength: 3,
                   style: GoogleFonts.outfit(),
                 ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _depositController,
+                  decoration: InputDecoration(
+                    labelText: 'Deposit (RM)',
+                    hintText: 'e.g. 50.00',
+                    prefixText: 'RM ',
+                    labelStyle: GoogleFonts.outfit(),
+                  ),
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [
+                     FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
+                  ],
+                  style: GoogleFonts.outfit(),
+                ),
             ],
 
              const SizedBox(height: 8),
@@ -620,7 +659,7 @@ class _SellPageState extends State<SellPage> {
       if (_imageFiles.isNotEmpty) {
           try {
               final uploadFutures = _imageFiles.map((img) => 
-                  apiClient.postMultipart('/upload', img).catchError((e) => {})
+                  apiClient.postMultipart('/upload', img).catchError((e) => null)
               );
               final uploadResults = await Future.wait(uploadFutures);
               
@@ -664,6 +703,7 @@ class _SellPageState extends State<SellPage> {
       } else {
           body['rental_price_per_day'] = double.tryParse(_priceController.text) ?? 0.0;
           body['max_rental_duration'] = int.tryParse(_maxDurationController.text) ?? 7;
+          body['rental_deposit'] = double.tryParse(_depositController.text) ?? 0.0;
       }
 
       await apiClient.post('/products', body);

@@ -6,31 +6,51 @@ import 'package:google_fonts/google_fonts.dart';
 class ProductCard extends StatelessWidget {
   final Product product;
   final VoidCallback onTap;
+  final bool isFavorite;
+  final VoidCallback? onFavoriteToggle;
 
   const ProductCard({
     super.key,
     required this.product,
     required this.onTap,
+    this.isFavorite = false,
+    this.onFavoriteToggle,
   });
+
+  String _formatTimeAgo(DateTime dateTime) {
+    final difference = DateTime.now().difference(dateTime);
+    if (difference.inDays > 0) {
+      return '${difference.inDays}d ago';
+    } else if (difference.inHours > 0) {
+      return '${difference.inHours}h ago';
+    } else if (difference.inMinutes > 0) {
+      return '${difference.inMinutes}m ago';
+    } else {
+      return 'Just now';
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final isRent = product.type.toLowerCase() == 'rent';
+    final primaryColor = Theme.of(context).colorScheme.primary;
+
     return GestureDetector(
       onTap: onTap,
       child: Card(
         clipBehavior: Clip.antiAlias,
-        elevation: 2,
-        shadowColor: Colors.black.withValues(alpha: 0.05),
-        surfaceTintColor: Colors.white,
+        elevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: Colors.grey[200]!, width: 1),
         ),
+        color: Colors.white,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Image Section with Hero
+            // Image Section with Badges
             Expanded(
-              flex: 4,
+              flex: 5,
               child: Stack(
                 fit: StackFit.expand,
                 children: [
@@ -58,107 +78,185 @@ class ProductCard extends StatelessWidget {
                         ),
                       ),
                   
-                  // Gradient Overlay for text readability (optional, but adds depth)
-                  Positioned.fill(
+                  // Top Left Badge: FOR RENT or FOR SALE
+                  Positioned(
+                    top: 8,
+                    left: 8,
                     child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            Colors.black.withValues(alpha: 0.0),
-                            Colors.black.withValues(alpha: 0.05),
-                          ],
-                          stops: const [0.7, 1.0],
+                        color: isRent ? const Color(0xFF00C875) : const Color(0xFF337BFF), // Green for rent, Blue for sale
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        isRent ? 'FOR RENT' : 'FOR SALE',
+                        style: GoogleFonts.outfit(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 0.5,
                         ),
                       ),
                     ),
                   ),
 
+                  // Top Right Badge: Favorite Heart
                   Positioned(
                     top: 8,
                     right: 8,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
+                      width: 32,
+                      height: 32,
                       decoration: BoxDecoration(
-                        color: product.type == 'Rent' ? Colors.blue.withValues(alpha: 0.9) : Colors.white.withValues(alpha: 0.9), // Blue for Rent
-                        borderRadius: BorderRadius.circular(12),
+                        color: Colors.white,
+                        shape: BoxShape.circle,
                         boxShadow: [
-                          BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 4)
-                        ]
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.1),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          )
+                        ],
                       ),
-                      child: Text(
-                        product.type == 'Rent' ? 'Rent' : product.condition,
-                        style: GoogleFonts.outfit(
-                          color: product.type == 'Rent' ? Colors.white : Colors.black87,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
+                      child: IconButton(
+                        padding: EdgeInsets.zero,
+                        icon: Icon(
+                          isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded, 
+                          size: 18, 
+                          color: isFavorite ? Colors.red : const Color(0xFF1E293B)
                         ),
+                        onPressed: onFavoriteToggle,
                       ),
                     ),
                   ),
                 ],
               ),
             ),
+            
             // Details Section
             Expanded(
               flex: 5,
               child: Padding(
-                padding: const EdgeInsets.all(10.0),
+                padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 10.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    // Title
+                    Text(
+                      product.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.outfit(
+                        fontWeight: FontWeight.w500,
+                        fontSize: 15,
+                        color: const Color(0xFF0F172A),
+                      ),
+                    ),
+                    
+                    const SizedBox(height: 6),
+                    
+                    // Price and Condition Row
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        Text(
-                          product.title,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.outfit(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 15,
-                            height: 1.2
+                        // Price
+                        RichText(
+                          text: TextSpan(
+                            children: [
+                              TextSpan(
+                                text: isRent 
+                                    ? 'RM ${product.rentalPricePerDay.toStringAsFixed(2)}'
+                                    : 'RM ${product.price.toStringAsFixed(0)}',
+                                style: GoogleFonts.outfit(
+                                  color: const Color(0xFF0F172A),
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 18,
+                                ),
+                              ),
+                              if (isRent)
+                                TextSpan(
+                                  text: ' /day',
+                                  style: GoogleFonts.outfit(
+                                    color: Colors.grey[600],
+                                    fontSize: 12,
+                                  ),
+                                ),
+                            ],
                           ),
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          product.type == 'Rent' 
-                            ? 'RM ${product.rentalPricePerDay.toStringAsFixed(2)} / day'
-                            : 'RM ${product.price.toStringAsFixed(2)}',
-                          style: GoogleFonts.outfit(
-                            color: Theme.of(context).colorScheme.primary,
-                            fontWeight: FontWeight.w900,
-                            fontSize: product.type == 'Rent' ? 14 : 15, // Slightly smaller
+                        const Spacer(),
+                        // Condition Badge
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.grey[100],
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            product.condition,
+                            style: GoogleFonts.outfit(
+                              color: const Color(0xFF475569),
+                              fontSize: 10,
+                              fontWeight: FontWeight.w500,
+                            ),
                           ),
                         ),
                       ],
                     ),
+                    
+                    const SizedBox(height: 8),
+                    Divider(color: Colors.grey[200], height: 1),
+                    const SizedBox(height: 8),
+                    
+                    // Bottom Row: Avatar, Name, Location, Time
                     Row(
                       children: [
                         CircleAvatar(
-                          radius: 9,
-                          backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                          radius: 10,
+                          backgroundColor: primaryColor.withValues(alpha: 0.1),
                           child: Text(
                              product.sellerName.isNotEmpty ? product.sellerName[0].toUpperCase() : '?',
-                             style: TextStyle(fontSize: 8, color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold),
+                             style: TextStyle(fontSize: 10, color: primaryColor, fontWeight: FontWeight.bold),
                           )
                         ),
                         const SizedBox(width: 6),
                         Expanded(
-                          child: Text(
-                            product.sellerName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.outfit(
-                              color: Colors.grey[600],
-                              fontSize: 12,
-                            ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      product.sellerName,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: GoogleFonts.outfit(
+                                        color: const Color(0xFF334155),
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  const Icon(Icons.star_rounded, size: 12, color: Colors.amber),
+                                  Text(
+                                    product.sellerReputation.toStringAsFixed(1),
+                                    style: GoogleFonts.outfit(fontSize: 10, color: Colors.grey[600]),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ),
                         ),
-                        Icon(Icons.more_horiz, size: 16, color: Colors.grey[400])
+                        Text(
+                          _formatTimeAgo(product.postedAt),
+                          style: GoogleFonts.outfit(
+                            color: Colors.grey[400],
+                            fontSize: 10,
+                          ),
+                        ),
                       ],
                     ),
                   ],

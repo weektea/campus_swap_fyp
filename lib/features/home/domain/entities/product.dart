@@ -15,6 +15,12 @@ class Product {
   final String type;
   final double rentalPricePerDay;
   final int maxRentalDuration;
+  final String subCategoryName;
+  final double rentalDeposit;
+  final double co2Saved;
+  final String status;
+  final double sellerReputation;
+  final int sellerTotalReviews;
 
   const Product({
     required this.id,
@@ -31,6 +37,12 @@ class Product {
     this.type = 'Sale',
     this.rentalPricePerDay = 0.0,
     this.maxRentalDuration = 7,
+    this.subCategoryName = '',
+    this.rentalDeposit = 0.0,
+    this.co2Saved = 0.0,
+    this.status = 'Available',
+    this.sellerReputation = 5.0,
+    this.sellerTotalReviews = 0,
   });
 
   factory Product.fromJson(Map<String, dynamic> json) {
@@ -60,6 +72,12 @@ class Product {
       type: json['type'] as String? ?? 'Sale',
       rentalPricePerDay: double.tryParse(json['rental_price_per_day'].toString()) ?? 0.0,
       maxRentalDuration: int.tryParse(json['max_rental_duration'].toString()) ?? 7,
+      subCategoryName: json['sub_category_name'] as String? ?? '',
+      rentalDeposit: double.tryParse(json['rental_deposit'].toString()) ?? 0.0,
+      co2Saved: double.tryParse(json['co2_saved'].toString()) ?? 0.0,
+      status: json['status'] as String? ?? 'Available',
+      sellerReputation: double.tryParse(json['seller']?['reputation_score']?.toString() ?? '5.0') ?? 5.0,
+      sellerTotalReviews: int.tryParse(json['seller']?['total_reviews']?.toString() ?? '0') ?? 0,
     );
   }
 }

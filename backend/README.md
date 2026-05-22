@@ -49,3 +49,8 @@ Test Student2
 016-1234567
 student1@student.tarc.edu.my
 Test1234@
+
+# Test environment setup
+flutter run --dart-define=API_HOST=192.168.100.23
+
+flutter build apk --dart-define=API_HOST=192.168.100.23

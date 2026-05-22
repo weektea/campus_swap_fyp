@@ -28,7 +28,7 @@ const upload = multer({
     fileFilter: (req, file, cb) => {
         const allowedTypes = /jpeg|jpg|png|webp|mp4|webm|mov/;
         const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-        const mimetype = allowedTypes.test(file.mimetype);
+        const mimetype = allowedTypes.test(file.mimetype) || file.mimetype === 'application/octet-stream';
 
         if (extname && mimetype) {
             return cb(null, true);

@@ -14,7 +14,6 @@ app.use(cors());
 app.use(express.json());
 
 // Database Connection
-// Database Connection
 import sequelize from './config/database.js';
 import { User, Product, Transaction } from './models/index.js';
 
@@ -41,10 +40,10 @@ import reviewRoutes from './routes/reviewRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
 import uploadRoutes from './routes/uploadRoutes.js';
 import recommendationRoutes from './routes/recommendationRoutes.js';
+import { startCronJobs } from './scripts/cronJobs.js';
 import categoryRoutes from './routes/categoryRoutes.js';
 import disputeRoutes from './routes/disputeRoutes.js';
-
-
+import sustainabilityRoutes from './routes/sustainabilityRoutes.js';
 
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productRoutes);
@@ -57,7 +56,7 @@ app.use('/api/upload', uploadRoutes);
 app.use('/api/recommendations', recommendationRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/disputes', disputeRoutes);
-
+app.use('/api/sustainability', sustainabilityRoutes);
 
 import adminRoutes from './routes/adminRoutes.js';
 app.use('/api/admin', adminRoutes);
@@ -154,8 +153,9 @@ app.post('/api/products/generate-description', async (req, res) => {
     }
 });
 
-// Start Server
-// Start Server
+// Start timeout cron jobs
+startCronJobs();
+
 app.listen(port, '0.0.0.0', () => {
     console.log(`Server running on port ${port}`);
 });

@@ -4,6 +4,7 @@ import 'package:campus_swap/features/home/domain/entities/product.dart';
 import 'package:campus_swap/features/product/presentation/pages/product_details_page.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:campus_swap/core/session/user_session.dart';
 
 class PublicProfilePage extends StatefulWidget {
   final String userId;
@@ -37,9 +38,14 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
         }
 
         // 2. Fetch User Listings
-        final productsRes = await apiClient.get('/products?seller_id=${widget.userId}');
+        String endpoint = '/products?seller_id=${widget.userId}';
+        if (UserSession().isLoggedIn) {
+            endpoint += '&exclude_reported_by=${UserSession().userId}';
+        }
+        final productsRes = await apiClient.get(endpoint);
         if (productsRes is List) {
             _listings = productsRes.map((data) => Product.fromJson(data)).toList();
+            _listings = _listings.where((p) => p.status == 'Available').toList();
         }
 
         if (mounted) setState(() => _isLoading = false);
@@ -86,7 +92,20 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
                                     ),
                                     const SizedBox(height: 12),
                                     Text(widget.userName, style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.bold)),
-                                    // Reputation / Eco stats could go here
+                                    if (_userProfile != null && _userProfile!['reputation_score'] != null) ...[
+                                      const SizedBox(height: 8),
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          const Icon(Icons.star_rounded, size: 20, color: Colors.amber),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            '${double.parse(_userProfile!['reputation_score'].toString()).toStringAsFixed(1)} (${_userProfile!['total_reviews'] ?? 0})',
+                                            style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
                                     const SizedBox(height: 8),
                                     Text("Member since ${_formatDate(_userProfile?['createdAt'])}", style: GoogleFonts.outfit(color: Colors.grey))
                                 ],

@@ -6,15 +6,22 @@ import 'package:image_picker/image_picker.dart';
 import 'package:campus_swap/core/session/user_session.dart';
 
 class ApiClient {
-  // Determine Base URL based on platform
-  // Determine Base URL based on platform
+  static const String _envHost = String.fromEnvironment('API_HOST', defaultValue: '');
+
   static String get baseUrl {
     if (kIsWeb) {
       return 'http://localhost:3000/api'; // Browsers access localhost directly
+    } 
+    
+    // Use injected IP for physical devices if provided via --dart-define
+    if (_envHost.isNotEmpty) {
+      return 'http://$_envHost:3000/api';
+    }
+
+    if (Platform.isAndroid) {
+      return 'http://10.0.2.2:3000/api'; // Android Emulator alias to host localhost
     } else {
-      // For physical devices (Android/iOS) AND emulators, use the computer's LAN IP.
-      // This is the most reliable way for local testing on the same Wi-Fi.
-      return 'http://192.168.100.23:3000/api'; 
+      return 'http://localhost:3000/api'; // iOS Simulator or others
     }
   } 
 
@@ -28,6 +35,15 @@ class ApiClient {
 
   Future<dynamic> post(String endpoint, Map<String, dynamic> data) async {
     final response = await http.post(
+      Uri.parse('$baseUrl$endpoint'),
+      headers: _getHeaders(),
+      body: jsonEncode(data),
+    );
+    return _handleResponse(response);
+  }
+
+  Future<dynamic> put(String endpoint, Map<String, dynamic> data) async {
+    final response = await http.put(
       Uri.parse('$baseUrl$endpoint'),
       headers: _getHeaders(),
       body: jsonEncode(data),
@@ -83,7 +99,14 @@ class ApiClient {
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return jsonDecode(response.body);
     } else {
-      throw Exception('API Error: ${response.statusCode} ${response.body}');
+      String errorMessage = 'API Error: ${response.statusCode}';
+      try {
+        final errorBody = jsonDecode(response.body);
+        if (errorBody['error'] != null) {
+          errorMessage = errorBody['error'];
+        }
+      } catch (_) {}
+      throw ApiException(errorMessage);
     }
   }
 
@@ -95,4 +118,12 @@ class ApiClient {
     }
     return headers;
   }
+}
+
+class ApiException implements Exception {
+  final String message;
+  ApiException(this.message);
+
+  @override
+  String toString() => message;
 }

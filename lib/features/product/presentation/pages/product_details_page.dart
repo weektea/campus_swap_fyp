@@ -8,6 +8,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:campus_swap/features/profile/presentation/pages/public_profile_page.dart';
+import 'package:campus_swap/features/product/presentation/pages/edit_listing_page.dart';
 
 class ProductDetailsPage extends StatefulWidget {
   final Product product;
@@ -36,7 +37,11 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
   Future<void> _fetchSellerProducts() async {
       try {
           final apiClient = ApiClient();
-          final response = await apiClient.get('/products?seller_id=${widget.product.sellerId}');
+          String endpoint = '/products?seller_id=${widget.product.sellerId}';
+          if (UserSession().isLoggedIn) {
+              endpoint += '&exclude_reported_by=${UserSession().userId}';
+          }
+          final response = await apiClient.get(endpoint);
           if (response is List) {
               if (mounted) {
                   setState(() {
@@ -57,7 +62,11 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
   Future<void> _fetchSimilarProducts() async {
       try {
           final apiClient = ApiClient();
-          final response = await apiClient.get('/products?category=${widget.product.category}');
+          String endpoint = '/products?category=${widget.product.category}';
+          if (UserSession().isLoggedIn) {
+              endpoint += '&exclude_reported_by=${UserSession().userId}';
+          }
+          final response = await apiClient.get(endpoint);
           if (response is List) {
               if (mounted) {
                   setState(() {
@@ -117,19 +126,20 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                   ),
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: CircleAvatar(
-                  backgroundColor: Colors.white.withValues(alpha: 0.8),
-                  child: IconButton(
-                    icon: Icon(
-                      _isSaved ? Icons.favorite : Icons.favorite_border,
-                      color: _isSaved ? Colors.red : theme.colorScheme.onSurface,
+              if (UserSession().userId != widget.product.sellerId)
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: CircleAvatar(
+                    backgroundColor: Colors.white.withValues(alpha: 0.8),
+                    child: IconButton(
+                      icon: Icon(
+                        _isSaved ? Icons.favorite : Icons.favorite_border,
+                        color: _isSaved ? Colors.red : theme.colorScheme.onSurface,
+                      ),
+                      onPressed: _toggleSave,
                     ),
-                    onPressed: _toggleSave,
                   ),
                 ),
-              ),
               if (UserSession().userId != widget.product.sellerId)
                 Padding(
                   padding: const EdgeInsets.all(8.0),
@@ -188,6 +198,24 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                           ),
                         ),
                       ),
+                      if (widget.product.subCategoryName.isNotEmpty) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            widget.product.subCategoryName,
+                            style: GoogleFonts.outfit(
+                              color: Colors.grey[800],
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ],
+                      const Spacer(),
                       Row(
                         children: [
                            Icon(Icons.schedule, size: 14, color: Colors.grey[600]),
@@ -263,6 +291,57 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                       ),
                      ],
                   ).animate().fadeIn(duration: 500.ms, delay: 200.ms),
+                  
+                  if (widget.product.type == 'Rent') ...[
+                     const SizedBox(height: 12),
+                     Container(
+                       padding: const EdgeInsets.all(12),
+                       decoration: BoxDecoration(
+                         color: Colors.blue.withValues(alpha: 0.05),
+                         borderRadius: BorderRadius.circular(12),
+                         border: Border.all(color: Colors.blue.withValues(alpha: 0.2)),
+                       ),
+                       child: Row(
+                         children: [
+                           Icon(Icons.info_outline, color: Colors.blue[700], size: 20),
+                           const SizedBox(width: 8),
+                           Expanded(
+                             child: Column(
+                               crossAxisAlignment: CrossAxisAlignment.start,
+                               children: [
+                                 Text("Rental Details", style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Colors.blue[800])),
+                                 Text("Deposit required: RM ${widget.product.rentalDeposit.toStringAsFixed(2)}", style: GoogleFonts.outfit(color: Colors.blue[800], fontSize: 13)),
+                                 Text("Max Duration: ${widget.product.maxRentalDuration} days", style: GoogleFonts.outfit(color: Colors.blue[800], fontSize: 13)),
+                               ]
+                             )
+                           )
+                         ]
+                       )
+                     ).animate().fadeIn(duration: 500.ms, delay: 250.ms),
+                  ],
+
+                  if (widget.product.co2Saved > 0) ...[
+                     const SizedBox(height: 12),
+                     Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                           color: Colors.green.withValues(alpha: 0.1),
+                           borderRadius: BorderRadius.circular(8),
+                           border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
+                        ),
+                        child: Row(
+                           mainAxisSize: MainAxisSize.min,
+                           children: [
+                               const Icon(Icons.eco, color: Colors.green, size: 18),
+                               const SizedBox(width: 8),
+                               Text(
+                                   "Eco-Impact: Saves ${widget.product.co2Saved}kg CO2",
+                                   style: GoogleFonts.outfit(color: Colors.green[800], fontWeight: FontWeight.bold, fontSize: 13)
+                               )
+                           ],
+                        ),
+                     ).animate().fadeIn(duration: 500.ms, delay: 280.ms),
+                  ],
                   const SizedBox(height: 32),
                   
                   // Seller Section
@@ -306,11 +385,23 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                                   "Seller",
                                   style: GoogleFonts.outfit(color: Colors.grey[500], fontSize: 12)
                               ),
-                              Text(
-                                widget.product.sellerName,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 16),
+                              Row(
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      widget.product.sellerName,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 16),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  const Icon(Icons.star_rounded, size: 16, color: Colors.amber),
+                                  Text(
+                                    '${widget.product.sellerReputation.toStringAsFixed(1)} (${widget.product.sellerTotalReviews})',
+                                    style: GoogleFonts.outfit(fontSize: 14, color: Colors.grey[700], fontWeight: FontWeight.bold),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
@@ -481,38 +572,40 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
       final isSeller = session.userId == widget.product.sellerId;
 
       if (isSeller) {
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 0.0),
-            child: Row(
-              children: [
-                   Expanded(
-                     child: OutlinedButton.icon(
-                        onPressed: _markAsSold, 
-                        icon: const Icon(Icons.check_circle_outline),
-                        label: Text('Mark Sold', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.green,
-                          side: const BorderSide(color: Colors.green),
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                        ),
-                      ),
-                   ),
-                   const SizedBox(width: 12),
-                   Expanded(
-                     child: ElevatedButton.icon(
-                        onPressed: _deleteProduct, 
-                        icon: const Icon(Icons.delete_outline),
-                        label: Text('Delete', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.red[50],
-                          foregroundColor: Colors.red,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          elevation: 0,
-                        ),
-                     ),
-                   ),
-              ],
-            ),
+          return Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                     Navigator.push(context, MaterialPageRoute(
+                        builder: (_) => EditListingPage(product: widget.product)
+                     ));
+                  },
+                  icon: const Icon(Icons.edit_outlined),
+                  label: Text('Edit Listing', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    side: BorderSide(color: theme.colorScheme.primary),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                 child: ElevatedButton.icon(
+                    onPressed: _deleteProduct, 
+                    icon: const Icon(Icons.delete_outline),
+                    label: Text('Remove', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red[50],
+                      foregroundColor: Colors.red,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      elevation: 0,
+                    ),
+                 ),
+              ),
+            ],
           );
       }
 
@@ -525,6 +618,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                          sellerName: widget.product.sellerName,
                          otherUserId: widget.product.sellerId,
                          initialMessage: "Hi ${widget.product.sellerName}, I'm interested in your listing: [ ${widget.product.title} ] for RM ${widget.product.price.toStringAsFixed(2)}!",
+                         relatedProduct: widget.product,
                      )));
                   },
                   style: OutlinedButton.styleFrom(
@@ -553,32 +647,6 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
           );
   }
 
-  void _markAsSold() async {
-      final confirm = await showDialog(
-          context: context, 
-          builder: (context) => AlertDialog(
-              title: Text("Mark as Sold?", style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
-              content: Text("This will mark the item as sold and hide it from future searches.", style: GoogleFonts.outfit()),
-              actions: [
-                  TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancel")),
-                  TextButton(onPressed: () => Navigator.pop(context, true), child: const Text("Confirm", style: TextStyle(color: Colors.green))),
-              ],
-          )
-      );
-
-      if (confirm == true) {
-          try {
-              final apiClient = ApiClient();
-              await apiClient.patch('/products/${widget.product.id}', {'status': 'Sold'});
-              if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Item marked as Sold!")));
-                  Navigator.pop(context); // Go back
-              }
-          } catch (e) {
-              if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Failed: $e")));
-          }
-      }
-  }
 
   void _deleteProduct() async {
       final confirm = await showDialog(
@@ -719,7 +787,9 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                         // Ignore mock error
                     }
 
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Listing reported successfully. Moderators will review.')));
+                    if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Listing reported successfully. Moderators will review.')));
+                    }
                   },
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
                   child: const Text('Submit', style: TextStyle(color: Colors.white)),
@@ -822,10 +892,12 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                        if (picked != null) {
                          int selectedDays = picked.end.difference(picked.start).inDays + 1;
                          if (selectedDays > widget.product.maxRentalDuration) {
-                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                  content: Text('Maximum rental duration is ${widget.product.maxRentalDuration} days!'),
-                                  backgroundColor: Colors.red,
-                              ));
+                              if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                      content: Text('Maximum rental duration is ${widget.product.maxRentalDuration} days!'),
+                                      backgroundColor: Colors.red,
+                                  ));
+                              }
                               return;
                          }
                          setModalState(() {
@@ -880,11 +952,11 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                               'RM ${widget.product.rentalPricePerDay.toStringAsFixed(2)} / day',
                               style: GoogleFonts.outfit(color: Colors.grey[700], fontSize: 12)
                             ),
-                            if (_rentStartDate != null && _rentEndDate != null)
-                              Text(
-                                'Total (${rentDays} days): RM ${totalRentCost.toStringAsFixed(2)}',
-                                style: GoogleFonts.outfit(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold)
-                              ),
+                              if (_rentStartDate != null && _rentEndDate != null)
+                                Text(
+                                  'Total ($rentDays days): RM ${totalRentCost.toStringAsFixed(2)}',
+                                  style: GoogleFonts.outfit(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold)
+                                ),
                           ] else ...[
                             Text(
                                 'RM ${widget.product.price.toStringAsFixed(2)}', 

@@ -3,14 +3,18 @@ import 'dart:async';
 import 'package:campus_swap/core/api/api_client.dart';
 import 'package:campus_swap/core/session/user_session.dart';
 import 'package:campus_swap/features/profile/presentation/pages/public_profile_page.dart';
+import 'package:campus_swap/features/home/domain/entities/product.dart';
+import 'package:campus_swap/features/product/presentation/pages/product_details_page.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class ChatDetailPage extends StatefulWidget {
   final String sellerName;
   final String? otherUserId; // Needed for API
   final String? initialMessage; // Contextual smart greeting
+  final Product? relatedProduct;
 
-  const ChatDetailPage({super.key, required this.sellerName, this.otherUserId, this.initialMessage});
+  const ChatDetailPage({super.key, required this.sellerName, this.otherUserId, this.initialMessage, this.relatedProduct});
 
   @override
   State<ChatDetailPage> createState() => _ChatDetailPageState();
@@ -97,7 +101,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
   bool _isMe(dynamic message) {
      final session = UserSession();
-     return message['sender_id'] == session.userId;
+     // Compare as strings to handle int vs string mismatch between DB and JWT
+     return message['sender_id']?.toString() == session.userId?.toString();
   }
 
   String _formatDate(String isoString) {
@@ -135,7 +140,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                       const Text('Select a Safe Meetup Zone', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 16),
                       ...campusLocations.map((loc) => ListTile(
-                          leading: const Icon(Icons.location_on, color: Colors.blue),
+                          leading: Icon(Icons.location_on, color: Theme.of(context).colorScheme.primary),
                           title: Text(loc),
                           onTap: () {
                               _controller.text = "📍 Let's meet at $loc\nMAP:$loc";
@@ -194,6 +199,59 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                ],
              )
           ),
+          if (widget.relatedProduct != null)
+             GestureDetector(
+               onTap: () {
+                   Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailsPage(product: widget.relatedProduct!)));
+               },
+               child: Container(
+                  margin: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                     color: Colors.white,
+                     borderRadius: BorderRadius.circular(12),
+                     boxShadow: [
+                        BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2))
+                     ],
+                     border: Border.all(color: Colors.grey.withOpacity(0.1)),
+                  ),
+                  child: Row(
+                     children: [
+                        ClipRRect(
+                           borderRadius: BorderRadius.circular(8),
+                           child: widget.relatedProduct!.imageUrl.isNotEmpty
+                              ? CachedNetworkImage(
+                                  imageUrl: widget.relatedProduct!.imageUrl,
+                                  width: 50,
+                                  height: 50,
+                                  fit: BoxFit.cover,
+                                )
+                              : Container(width: 50, height: 50, color: Colors.grey[200]),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                           child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                 Text(
+                                    widget.relatedProduct!.title,
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                 ),
+                                 const SizedBox(height: 4),
+                                 Text(
+                                    'RM ${widget.relatedProduct!.price.toStringAsFixed(2)}',
+                                    style: TextStyle(color: Theme.of(context).colorScheme.primary, fontSize: 13, fontWeight: FontWeight.bold),
+                                 ),
+                              ],
+                           ),
+                        ),
+                        const Icon(Icons.chevron_right, color: Colors.grey),
+                     ],
+                  ),
+               ),
+             ),
           Expanded(
             child: _isLoading 
               ? const Center(child: CircularProgressIndicator())
@@ -270,7 +328,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                              },
                              icon: const Icon(Icons.map, size: 16),
                              label: const Text('Open Maps', style: TextStyle(fontSize: 12)),
-                             style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: Colors.blue, minimumSize: const Size(200, 32)),
+                             style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: Theme.of(context).colorScheme.primary, minimumSize: const Size(200, 32)),
                          )
                       ]
                    );
@@ -336,7 +394,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
             child: Row(
               children: [
                 IconButton(
-                  icon: const Icon(Icons.location_on, color: Colors.blue),
+                  icon: Icon(Icons.location_on, color: Theme.of(context).colorScheme.primary),
                   onPressed: _showSafeMeetupDialog,
                 ),
                 Expanded(
@@ -350,7 +408,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                IconButton(onPressed: _sendMessage, icon: const Icon(Icons.send, color: Colors.blue))
+                IconButton(onPressed: _sendMessage, icon: Icon(Icons.send, color: Theme.of(context).colorScheme.primary))
               ],
             ),
           )
