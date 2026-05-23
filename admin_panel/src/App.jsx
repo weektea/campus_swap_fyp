@@ -3,10 +3,17 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
-import Triage from './pages/Triage';
-import Dispute from './pages/Dispute';
+import Reports from './pages/Reports';
+import Tickets from './pages/Tickets';
+import Backup from './pages/Backup';
+import History from './pages/History';
 import Users from './pages/Users';
+import Dispute from './pages/Dispute';
+import Listings from './pages/Listings';
 import Analytics from './pages/Analytics';
+import Transactions from './pages/Transactions';
+import Categories from './pages/Categories';
+import Reviews from './pages/Reviews';
 import PrivateRoute from './components/PrivateRoute';
 
 function App() {
@@ -24,10 +31,34 @@ function App() {
           </PrivateRoute>
         } />
 
-        <Route path="/triage" element={
+        <Route path="/reports" element={
           <PrivateRoute>
             <Layout>
-              <Triage />
+              <Reports />
+            </Layout>
+          </PrivateRoute>
+        } />
+
+        <Route path="/tickets" element={
+          <PrivateRoute>
+            <Layout>
+              <Tickets />
+            </Layout>
+          </PrivateRoute>
+        } />
+
+        <Route path="/backup" element={
+          <PrivateRoute>
+            <Layout>
+              <Backup />
+            </Layout>
+          </PrivateRoute>
+        } />
+
+        <Route path="/history" element={
+          <PrivateRoute>
+            <Layout>
+              <History />
             </Layout>
           </PrivateRoute>
         } />
@@ -48,6 +79,14 @@ function App() {
           </PrivateRoute>
         } />
 
+        <Route path="/listings" element={
+          <PrivateRoute>
+            <Layout>
+              <Listings />
+            </Layout>
+          </PrivateRoute>
+        } />
+
         <Route path="/analytics" element={
           <PrivateRoute>
             <Layout>
@@ -56,7 +95,32 @@ function App() {
           </PrivateRoute>
         } />
 
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/transactions" element={
+          <PrivateRoute>
+            <Layout>
+              <Transactions />
+            </Layout>
+          </PrivateRoute>
+        } />
+
+        <Route path="/categories" element={
+          <PrivateRoute>
+            <Layout>
+              <Categories />
+            </Layout>
+          </PrivateRoute>
+        } />
+
+        <Route path="/reviews" element={
+          <PrivateRoute>
+            <Layout>
+              <Reviews />
+            </Layout>
+          </PrivateRoute>
+        } />
+
+        {/* Catch all */}
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </Router>
   );

@@ -7,6 +7,7 @@ import Dispute from './Dispute.js';
 import SafeMeetupZone from './SafeMeetupZone.js';
 import Review from './Review.js';
 import Notification from './Notification.js';
+import BackupLog from './BackupLog.js';
 
 // User <-> Product (Seller relationship)
 User.hasMany(Product, { foreignKey: 'seller_id', as: 'listings' });
@@ -83,5 +84,5 @@ Dispute.belongsTo(Transaction, { foreignKey: 'transaction_id', as: 'transaction'
 export { 
     User, Product, Transaction, SavedItem, Message, Review, 
     Notification, UserInteraction, Category, SubCategory, 
-    Report, SupportTicket, Dispute, SafeMeetupZone 
+    Report, SupportTicket, Dispute, SafeMeetupZone, BackupLog
 };

@@ -238,7 +238,7 @@ class _MyTransactionsPageState extends State<MyTransactionsPage> with SingleTick
                   if (isBuying) {
                       Navigator.pop(context); // Go back to profile -> home
                   } else {
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => const SellPage())).then((_) => _fetchTransactions());
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const SellPage())).then((_) => _fetchAllTransactions());
                   }
               },
           );

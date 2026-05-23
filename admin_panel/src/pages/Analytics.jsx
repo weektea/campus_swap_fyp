@@ -1,11 +1,35 @@
-import React from 'react';
-import { Download, Calendar } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Calendar, Download } from 'lucide-react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import api from '../services/api';
 
 const Analytics = () => {
+    const [metrics, setMetrics] = useState(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchMetrics = async () => {
+            try {
+                const res = await api.get('/admin/metrics');
+                setMetrics(res.data);
+            } catch (err) {
+                console.error('Failed to fetch metrics', err);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchMetrics();
+    }, []);
+
+    if (loading) return <div className="p-8 text-center text-gray-500">Loading analytics...</div>;
+
+    const COLORS = ['#16a34a', '#2563eb', '#d97706', '#dc2626', '#8b5cf6'];
+
     return (
         <div>
             <div className="flex justify-between items-center mb-8">
-                <h1 style={{ fontSize: '1.5rem', margin: 0 }}>System Metrics</h1>
+                <h1 style={{ fontSize: '1.5rem', margin: 0 }}>System Analytics</h1>
                 <div className="flex gap-4">
                     <div style={{ 
                         display: 'flex', alignItems: 'center', 
@@ -17,96 +41,84 @@ const Analytics = () => {
                         <Calendar size={18} color="var(--text-muted)" style={{ marginRight: '8px' }} />
                         <span style={{ color: 'var(--text-muted)' }}>Last 30 Days</span>
                     </div>
-                    <button className="btn flex items-center gap-2">
-                        <Download size={16} />
-                        Export PDF
-                    </button>
-                    <button className="btn flex items-center gap-2">
-                        <Download size={16} />
-                        Export CSV
-                    </button>
                 </div>
             </div>
 
             {/* Metric Cards Row */}
             <div className="flex gap-6 mb-8">
                 <div className="card flex-1">
-                    <div style={{ color: 'var(--text-muted)', marginBottom: '16px' }}>Total Volume</div>
-                    <div style={{ fontSize: '1.75rem', fontWeight: 'bold' }}>RM 45,200</div>
+                    <div style={{ color: 'var(--text-muted)', marginBottom: '16px' }}>Total Volume (GMV)</div>
+                    <div style={{ fontSize: '1.75rem', fontWeight: 'bold' }}>RM {metrics?.gmv || 0}</div>
                 </div>
                 <div className="card flex-1">
-                    <div style={{ color: 'var(--text-muted)', marginBottom: '16px' }}>Active Users</div>
-                    <div style={{ fontSize: '1.75rem', fontWeight: 'bold' }}>3,421</div>
+                    <div style={{ color: 'var(--text-muted)', marginBottom: '16px' }}>Completed Transactions</div>
+                    <div style={{ fontSize: '1.75rem', fontWeight: 'bold' }}>{metrics?.completed_transactions || 0}</div>
                 </div>
                 <div className="card flex-1" style={{ background: '#f0fdf4', borderColor: '#bbf7d0' }}>
                     <div style={{ color: '#16a34a', marginBottom: '16px' }}>Platform CO2 Saved</div>
-                    <div style={{ fontSize: '1.75rem', fontWeight: 'bold', color: '#15803d' }}>1,250 kg</div>
+                    <div style={{ fontSize: '1.75rem', fontWeight: 'bold', color: '#15803d' }}>
+                        {metrics?.carbon_saved_kg ? Number(metrics.carbon_saved_kg).toFixed(2) : 0} kg
+                    </div>
                 </div>
                 <div className="card flex-1" style={{ background: '#fef2f2', borderColor: '#fecaca' }}>
-                    <div style={{ color: '#dc2626', marginBottom: '16px' }}>Open Disputes</div>
-                    <div style={{ fontSize: '1.75rem', fontWeight: 'bold', color: '#b91c1c' }}>14</div>
+                    <div style={{ color: '#dc2626', marginBottom: '16px' }}>Active Users / Total</div>
+                    <div style={{ fontSize: '1.75rem', fontWeight: 'bold', color: '#b91c1c' }}>
+                        {metrics?.active_users || 0} <span style={{ fontSize: '1rem', color: '#f87171' }}>/ {metrics?.total_users || 0}</span>
+                    </div>
                 </div>
             </div>
 
             {/* Charts Row */}
             <div className="flex gap-6">
-                <div className="card flex-col" style={{ flex: 2, height: '350px' }}>
-                    <h3 style={{ margin: '0 0 1.5rem 0', fontSize: '1rem' }}>Daily Transactions</h3>
-                    <div style={{ flex: 1, display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between' }}>
-                        {[...Array(30)].map((_, i) => (
-                            <div 
-                                key={i} 
-                                style={{ 
-                                    width: '12px', 
-                                    height: `${Math.floor(Math.random() * 60 + 20)}%`, 
-                                    background: 'var(--primary)',
-                                    borderRadius: '4px 4px 0 0'
-                                }} 
-                            />
-                        ))}
-                    </div>
-                    <div className="flex justify-between" style={{ marginTop: '12px', color: 'var(--text-muted)', fontSize: '0.75rem' }}>
-                        <span>Day 1</span>
-                        <span>Day 15</span>
-                        <span>Day 30</span>
+                <div className="card flex-col" style={{ flex: 2, height: '400px' }}>
+                    <h3 style={{ margin: '0 0 1.5rem 0', fontSize: '1rem' }}>Daily Sales (GMV) - Last 30 Days</h3>
+                    <div style={{ flex: 1, width: '100%' }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                            <LineChart data={metrics?.daily_sales || []}>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                                <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6b7280' }} dy={10} />
+                                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6b7280' }} dx={-10} />
+                                <Tooltip 
+                                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
+                                    formatter={(value) => [`RM ${value}`, 'Sales']}
+                                />
+                                <Line type="monotone" dataKey="sales" stroke="var(--primary)" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
+                            </LineChart>
+                        </ResponsiveContainer>
                     </div>
                 </div>
 
-                <div className="card flex-col" style={{ flex: 1, height: '350px' }}>
-                    <h3 style={{ margin: '0 0 1.5rem 0', fontSize: '1rem' }}>Listings by Category</h3>
-                    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        {/* Placeholder CSS donut chart */}
-                        <div style={{ 
-                            width: '150px', height: '150px', 
-                            borderRadius: '50%', 
-                            background: 'conic-gradient(#16a34a 0% 40%, #2563eb 40% 75%, #f59e0b 75% 100%)',
-                            position: 'relative',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center'
-                        }}>
-                            <div style={{ width: '100px', height: '100px', background: 'white', borderRadius: '50%' }}></div>
-                        </div>
-                    </div>
-                    <div>
-                        <div className="flex justify-between items-center mb-2">
-                            <div className="flex items-center gap-2">
-                                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#16a34a' }}></div>
-                                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Books</span>
-                            </div>
-                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>40%</span>
-                        </div>
-                        <div className="flex justify-between items-center mb-2">
-                            <div className="flex items-center gap-2">
-                                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#2563eb' }}></div>
-                                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Electronics</span>
-                            </div>
-                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>35%</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                            <div className="flex items-center gap-2">
-                                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#f59e0b' }}></div>
-                                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Furniture</span>
-                            </div>
-                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>25%</span>
+                <div className="card flex-col" style={{ flex: 1, height: '400px' }}>
+                    <h3 style={{ margin: '0 0 1.5rem 0', fontSize: '1rem' }}>Top Eco-Categories (Carbon)</h3>
+                    <div style={{ flex: 1, width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <ResponsiveContainer width="100%" height={220}>
+                            <PieChart>
+                                <Pie
+                                    data={metrics?.category_distribution || []}
+                                    cx="50%"
+                                    cy="50%"
+                                    innerRadius={60}
+                                    outerRadius={90}
+                                    paddingAngle={2}
+                                    dataKey="value"
+                                >
+                                    {(metrics?.category_distribution || []).map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                    ))}
+                                </Pie>
+                                <Tooltip formatter={(value) => [`${Number(value).toFixed(2)} kg`, 'Carbon Saved']} />
+                            </PieChart>
+                        </ResponsiveContainer>
+                        <div style={{ width: '100%', marginTop: '1rem' }}>
+                            {(metrics?.category_distribution || []).slice(0,4).map((entry, index) => (
+                                <div key={index} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '0.875rem' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: COLORS[index % COLORS.length] }} />
+                                        <span>{entry.name}</span>
+                                    </div>
+                                    <span style={{ fontWeight: 'bold' }}>{Number(entry.value).toFixed(1)} kg</span>
+                                </div>
+                            ))}
                         </div>
                     </div>
                 </div>

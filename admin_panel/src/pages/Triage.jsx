@@ -1,83 +1,266 @@
-import React from 'react';
-import { Lock, AlertTriangle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Lock, AlertTriangle, CheckCircle, ChevronRight } from 'lucide-react';
+import api from '../services/api';
 
 const Triage = () => {
+    const [tasks, setTasks] = useState([]);
+    const [selectedTask, setSelectedTask] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [modNotes, setModNotes] = useState('');
+    const [action, setAction] = useState('Dismiss'); // Dismiss, Uphold, Escalate
+    const [currentUser, setCurrentUser] = useState(null);
+
+    useEffect(() => {
+        const userStr = localStorage.getItem('user');
+        if (userStr) setCurrentUser(JSON.parse(userStr));
+        fetchTasks();
+    }, []);
+
+    const fetchTasks = async () => {
+        setLoading(true);
+        try {
+            const [ticketsRes, reportsRes] = await Promise.all([
+                api.get('/admin/tickets'),
+                api.get('/admin/reports')
+            ]);
+            
+            const combined = [
+                ...ticketsRes.data.map(t => ({
+                    id: `TKT-${t.id}`,
+                    realId: t.id,
+                    type: 'ticket',
+                    target: `User: ${t.student?.email || 'Unknown'}`,
+                    content: t.issue_description,
+                    submittedAt: t.createdAt,
+                    status: t.status,
+                    lockedBy: t.lockedByModeratorId,
+                    raw: t
+                })),
+                ...reportsRes.data.map(r => ({
+                    id: `REP-${r.id}`,
+                    realId: r.id,
+                    type: 'report',
+                    target: r.product ? `Listing: ${r.product.title}` : 'General',
+                    content: r.reason,
+                    submittedAt: r.createdAt,
+                    status: r.status,
+                    lockedBy: null,
+                    raw: r
+                }))
+            ];
+
+            // Filter for only actionable ones (e.g. not Resolved)
+            const actionable = combined.filter(t => !['Resolved', 'Dismissed'].includes(t.status));
+            actionable.sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
+            
+            setTasks(actionable);
+            if (actionable.length > 0 && !selectedTask) {
+                setSelectedTask(actionable[0]);
+            }
+        } catch (err) {
+            console.error('Failed to fetch triage tasks', err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleLockTicket = async () => {
+        if (selectedTask?.type !== 'ticket') return;
+        try {
+            await api.post(`/admin/tickets/${selectedTask.realId}/lock`);
+            fetchTasks(); // Refresh to show we locked it
+            // Update selected task locally to prevent UI flicker
+            setSelectedTask({ ...selectedTask, lockedBy: currentUser?.id, status: 'In-Progress' });
+        } catch (err) {
+            alert(err.response?.data?.error || 'Failed to lock ticket');
+        }
+    };
+
+    const handleSubmitAction = async () => {
+        if (!selectedTask) return;
+        
+        try {
+            if (selectedTask.type === 'report') {
+                await api.put(`/admin/reports/${selectedTask.realId}`, {
+                    status: action, // Uphold, Dismissed, Escalated
+                    admin_notes: modNotes
+                });
+            } else if (selectedTask.type === 'ticket') {
+                await api.put(`/admin/tickets/${selectedTask.realId}`, {
+                    status: action, // Resolved, Escalated
+                    reply_content: modNotes
+                });
+            }
+            alert('Action applied successfully!');
+            setModNotes('');
+            setSelectedTask(null);
+            fetchTasks();
+        } catch (err) {
+            alert(err.response?.data?.error || 'Failed to submit action');
+        }
+    };
+
+    if (loading) return <div className="p-8 text-center text-gray-500">Loading tasks...</div>;
+
     return (
-        <div>
-            <div style={{ background: '#e8f5e9', padding: '12px 32px', margin: '-2rem -2rem 2rem -2rem', display: 'flex', alignItems: 'center', gap: '8px', color: '#2e7d32', fontWeight: 'bold' }}>
-                <Lock size={18} />
-                <span>Ticket #REP-102 is currently locked by you.</span>
+        <div className="flex gap-6 h-full" style={{ minHeight: '80vh' }}>
+            {/* Sidebar List */}
+            <div className="card flex flex-col gap-2" style={{ width: '300px', padding: '1rem', overflowY: 'auto' }}>
+                <h3 style={{ margin: '0 0 1rem 0' }}>Actionable Tasks ({tasks.length})</h3>
+                {tasks.map(task => (
+                    <div 
+                        key={task.id}
+                        onClick={() => { setSelectedTask(task); setModNotes(''); setAction(task.type === 'report' ? 'Dismiss' : 'Resolved'); }}
+                        style={{ 
+                            padding: '12px', 
+                            borderRadius: '8px', 
+                            border: '1px solid var(--border)',
+                            background: selectedTask?.id === task.id ? '#eff6ff' : 'white',
+                            borderColor: selectedTask?.id === task.id ? '#bfdbfe' : 'var(--border)',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '4px'
+                        }}
+                    >
+                        <div className="flex justify-between items-center">
+                            <span style={{ fontWeight: 'bold', fontSize: '0.875rem' }}>{task.id}</span>
+                            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{new Date(task.submittedAt).toLocaleDateString()}</span>
+                        </div>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {task.target}
+                        </div>
+                        <div>
+                            <span style={{ padding: '2px 6px', background: '#f3f4f6', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 'bold' }}>
+                                {task.status}
+                            </span>
+                        </div>
+                    </div>
+                ))}
+                {tasks.length === 0 && <div style={{ color: 'var(--text-muted)', textAlign: 'center', marginTop: '2rem' }}>No open tasks.</div>}
             </div>
 
-            <div className="flex gap-8 items-start">
-                {/* Left Column */}
-                <div className="card" style={{ flex: 3, padding: 0, overflow: 'hidden' }}>
-                    <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--border)' }}>
-                        <h2 style={{ margin: 0, fontSize: '1.25rem' }}>Reported Content Snapshot</h2>
+            {/* Main Content */}
+            <div className="flex-1 flex flex-col gap-6">
+                {!selectedTask ? (
+                    <div className="card flex items-center justify-center h-full" style={{ color: 'var(--text-muted)' }}>
+                        Select a task from the left to begin triage.
                     </div>
-                    
-                    <div style={{ padding: '1.5rem' }}>
-                        <div className="flex gap-6 mb-6">
-                            <div style={{ width: '120px', height: '120px', background: '#f3f4f6', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9ca3af' }}>
-                                Chair Image
+                ) : (
+                    <>
+                        {selectedTask.type === 'ticket' && selectedTask.lockedBy === currentUser?.id && (
+                            <div style={{ background: '#e8f5e9', padding: '12px 32px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px', color: '#2e7d32', fontWeight: 'bold' }}>
+                                <Lock size={18} />
+                                <span>Ticket {selectedTask.id} is currently locked by you.</span>
                             </div>
-                            <div>
-                                <h3 style={{ margin: '0 0 8px 0', fontSize: '1.25rem' }}>Vintage Wooden Chair</h3>
-                                <div style={{ color: 'var(--text-muted)', marginBottom: '4px' }}>Price: RM 45</div>
-                                <div style={{ color: 'var(--text-muted)' }}>Seller: @student_seller</div>
+                        )}
+                        {selectedTask.type === 'ticket' && selectedTask.lockedBy && selectedTask.lockedBy !== currentUser?.id && (
+                            <div style={{ background: '#fef2f2', padding: '12px 32px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px', color: '#dc2626', fontWeight: 'bold' }}>
+                                <Lock size={18} />
+                                <span>Ticket {selectedTask.id} is locked by another moderator.</span>
+                            </div>
+                        )}
+
+                        <div className="flex gap-6 items-start">
+                            {/* Left Column: Details */}
+                            <div className="card" style={{ flex: 3, padding: 0, overflow: 'hidden' }}>
+                                <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--border)' }}>
+                                    <h2 style={{ margin: 0, fontSize: '1.25rem' }}>{selectedTask.type === 'report' ? 'Report Details' : 'Support Ticket Details'}</h2>
+                                </div>
+                                
+                                <div style={{ padding: '1.5rem' }}>
+                                    {selectedTask.type === 'report' && selectedTask.raw.product && (
+                                        <div className="flex gap-6 mb-6">
+                                            <div style={{ width: '120px', height: '120px', background: '#f3f4f6', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9ca3af', overflow: 'hidden' }}>
+                                                {selectedTask.raw.product.image_urls && selectedTask.raw.product.image_urls[0] ? (
+                                                    <img src={`http://localhost:3000${selectedTask.raw.product.image_urls[0]}`} alt="Product" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                ) : (
+                                                    'No Image'
+                                                )}
+                                            </div>
+                                            <div>
+                                                <h3 style={{ margin: '0 0 8px 0', fontSize: '1.25rem' }}>{selectedTask.raw.product.title}</h3>
+                                                <div style={{ color: 'var(--text-muted)', marginBottom: '4px' }}>Price: RM {selectedTask.raw.product.price}</div>
+                                                <div style={{ color: 'var(--text-muted)', marginBottom: '4px' }}>Condition: {selectedTask.raw.product.condition}</div>
+                                                <div style={{ color: 'var(--text-muted)' }}>Seller ID: {selectedTask.raw.product.seller_id}</div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    <div className="flex gap-4 items-start mb-4 bg-gray-50 p-4 rounded-lg">
+                                        <AlertTriangle color="var(--danger)" />
+                                        <div>
+                                            <div style={{ fontWeight: 'bold', marginBottom: '8px' }}>User's Claim / Issue: </div>
+                                            <div style={{ lineHeight: 1.6 }}>{selectedTask.content}</div>
+                                        </div>
+                                    </div>
+                                    
+                                    {selectedTask.raw.reporter && (
+                                        <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginTop: '1rem' }}>
+                                            Reported by: {selectedTask.raw.reporter.email}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Right Column: Terminal */}
+                            <div className="card" style={{ flex: 2 }}>
+                                <h2 style={{ margin: '0 0 1.5rem 0', fontSize: '1.25rem' }}>Moderation Terminal</h2>
+                                
+                                {selectedTask.type === 'ticket' && !selectedTask.lockedBy && (
+                                    <button className="btn mb-4" style={{ width: '100%', background: '#f59e0b' }} onClick={handleLockTicket}>
+                                        Lock & Investigate
+                                    </button>
+                                )}
+
+                                <div style={{ marginBottom: '1.5rem', opacity: (selectedTask.type === 'ticket' && selectedTask.lockedBy !== currentUser?.id && currentUser?.role !== 'admin') ? 0.5 : 1, pointerEvents: (selectedTask.type === 'ticket' && selectedTask.lockedBy !== currentUser?.id && currentUser?.role !== 'admin') ? 'none' : 'auto' }}>
+                                    <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-muted)', fontSize: '0.875rem' }}>Action Type</label>
+                                    <select className="input" value={action} onChange={(e) => setAction(e.target.value)} style={{ marginBottom: 0, appearance: 'auto', width: '100%' }}>
+                                        {selectedTask.type === 'report' ? (
+                                            <>
+                                                <option value="Dismissed">Dismiss Report</option>
+                                                <option value="Uphold">Uphold & Suspend Listing</option>
+                                                <option value="Escalated">Escalate to Admin</option>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <option value="Resolved">Resolve Ticket</option>
+                                                <option value="Escalated">Escalate to Admin</option>
+                                            </>
+                                        )}
+                                    </select>
+                                </div>
+
+                                <div style={{ marginBottom: '2rem', opacity: (selectedTask.type === 'ticket' && selectedTask.lockedBy !== currentUser?.id && currentUser?.role !== 'admin') ? 0.5 : 1, pointerEvents: (selectedTask.type === 'ticket' && selectedTask.lockedBy !== currentUser?.id && currentUser?.role !== 'admin') ? 'none' : 'auto' }}>
+                                    <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-muted)', fontSize: '0.875rem' }}>
+                                        {selectedTask.type === 'ticket' ? 'Reply to User' : 'Internal Mod Notes'}
+                                    </label>
+                                    <textarea 
+                                        className="input" 
+                                        rows="6" 
+                                        value={modNotes}
+                                        onChange={(e) => setModNotes(e.target.value)}
+                                        placeholder={selectedTask.type === 'ticket' ? "Message to user..." : "Document your findings..."}
+                                        style={{ resize: 'vertical', width: '100%' }}
+                                    ></textarea>
+                                </div>
+
+                                <button 
+                                    className="btn" 
+                                    onClick={handleSubmitAction}
+                                    disabled={selectedTask.type === 'ticket' && selectedTask.lockedBy !== currentUser?.id && currentUser?.role !== 'admin'}
+                                    style={{ 
+                                        width: '100%', 
+                                        background: action === 'Uphold' ? 'var(--danger)' : 'var(--primary)',
+                                        opacity: (selectedTask.type === 'ticket' && selectedTask.lockedBy !== currentUser?.id && currentUser?.role !== 'admin') ? 0.5 : 1
+                                    }}
+                                >
+                                    Submit Action
+                                </button>
                             </div>
                         </div>
-
-                        <p style={{ color: 'var(--text-muted)', lineHeight: 1.6, marginBottom: '2rem' }}>
-                            Beautiful vintage wooden chair in excellent condition. Perfect for study or dining. Sturdy construction with minor wear consistent with age.
-                        </p>
-
-                        <div className="flex gap-4 items-start mb-4">
-                            <AlertTriangle color="var(--danger)" />
-                            <div>
-                                <span style={{ fontWeight: 'bold' }}>Reporter's Claim: </span>
-                                <span>Item is completely broken, not as described. Chair leg is cracked and unusable.</span>
-                            </div>
-                        </div>
-
-                        <div style={{ width: '150px', height: '150px', background: '#e5e7eb', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6b7280', textAlign: 'center', padding: '1rem' }}>
-                            Evidence Photo: Broken Chair Leg
-                        </div>
-                    </div>
-                </div>
-
-                {/* Right Column */}
-                <div className="card" style={{ flex: 2 }}>
-                    <h2 style={{ margin: '0 0 2rem 0', fontSize: '1.25rem' }}>Moderation Terminal</h2>
-                    
-                    <div style={{ marginBottom: '1.5rem' }}>
-                        <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-muted)', fontSize: '0.875rem' }}>Select Violation Category</label>
-                        <select className="input" style={{ marginBottom: 0, appearance: 'auto' }}>
-                            <option>Item Condition Misrepresented</option>
-                            <option>Fake Item</option>
-                            <option>Scam</option>
-                            <option>Inappropriate Content</option>
-                        </select>
-                    </div>
-
-                    <div style={{ marginBottom: '2rem' }}>
-                        <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-muted)', fontSize: '0.875rem' }}>Internal Mod Notes</label>
-                        <textarea 
-                            className="input" 
-                            rows="6" 
-                            placeholder="Document your findings and reasoning..."
-                            style={{ resize: 'vertical' }}
-                        ></textarea>
-                    </div>
-
-                    <button className="btn btn-outline" style={{ width: '100%', marginBottom: '12px' }}>
-                        Dismiss Report
-                    </button>
-                    
-                    <button className="btn btn-danger" style={{ width: '100%' }}>
-                        Uphold & Suspend Listing
-                    </button>
-                </div>
+                    </>
+                )}
             </div>
         </div>
     );

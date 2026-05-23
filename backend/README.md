@@ -43,6 +43,9 @@ python main.py
 2. npm install (if not yet install)
 3. npm run dev
 
+# Email: admin@campus-swap.edu.my
+# Password: password123
+
 # Test Register
 Test Student2
 24PMR12346

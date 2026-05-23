@@ -14,6 +14,10 @@ const SubCategory = sequelize.define('SubCategory', {
     name: {
         type: DataTypes.STRING,
         allowNull: false,
+    },
+    carbon_conversion_factor: {
+        type: DataTypes.FLOAT,
+        defaultValue: 0.0,
     }
 }, {
     timestamps: false,

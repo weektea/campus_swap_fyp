@@ -44,7 +44,7 @@ const Product = sequelize.define('Product', {
         allowNull: true,
     },
     status: {
-        type: DataTypes.ENUM('Available', 'Reserved', 'Sold', 'Removed'),
+        type: DataTypes.ENUM('Available', 'Reserved', 'Sold', 'Removed', 'Suspended'),
         defaultValue: 'Available',
     },
     price_negotiable: {

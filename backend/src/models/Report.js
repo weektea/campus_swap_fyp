@@ -24,7 +24,7 @@ const Report = sequelize.define('Report', {
         allowNull: false, // Mandatory explanation from student
     },
     status: {
-        type: DataTypes.ENUM('Pending', 'In-Progress', 'Uphold', 'Dismissed'),
+        type: DataTypes.ENUM('Pending', 'In-Progress', 'Uphold', 'Dismissed', 'Escalated'),
         defaultValue: 'Pending',
     },
     admin_notes: {

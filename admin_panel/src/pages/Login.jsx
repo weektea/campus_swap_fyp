@@ -12,14 +12,6 @@ const Login = () => {
 
     const handleLogin = async (e) => {
         e.preventDefault();
-        
-        // DEV BYPASS
-        if (email.toLowerCase() === 'admin' || email.toLowerCase() === 'mod') {
-             localStorage.setItem('token', 'mock_token_123');
-             localStorage.setItem('user', JSON.stringify({ email, role: loginRole }));
-             navigate('/dashboard');
-             return;
-        }
 
         try {
             const response = await api.post('/auth/login', { email, password });

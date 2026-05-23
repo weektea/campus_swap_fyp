@@ -21,7 +21,7 @@ class AppTheme {
     ),
     textTheme: GoogleFonts.outfitTextTheme(ThemeData.light().textTheme),
     scaffoldBackgroundColor: lightBackground,
-    appBarTheme: const AppBarTheme(
+    appBarTheme: AppBarTheme(
       backgroundColor: primaryColor,
       foregroundColor: Colors.white,
       elevation: 0,
@@ -79,7 +79,7 @@ class AppTheme {
     ),
     textTheme: GoogleFonts.outfitTextTheme(ThemeData.dark().textTheme),
     scaffoldBackgroundColor: darkBackground,
-    appBarTheme: const AppBarTheme(
+    appBarTheme: AppBarTheme(
       backgroundColor: Colors.black,
       foregroundColor: Colors.white,
       elevation: 0,

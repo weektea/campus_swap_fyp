@@ -1,27 +1,98 @@
-import React from 'react';
-import { TrendingUp, TrendingDown, Circle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { TrendingUp, Circle, Clock } from 'lucide-react';
+import api from '../services/api';
 
 const Dashboard = () => {
+    const [metrics, setMetrics] = useState(null);
+    const [tasks, setTasks] = useState([]);
+    const [myLockedTasks, setMyLockedTasks] = useState(0);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchDashboardData = async () => {
+            try {
+                // Catch errors for each request so one failure doesn't kill the dashboard
+                let metricsData = {}, ticketsData = [], reportsData = [];
+                try {
+                    const res = await api.get('/admin/metrics');
+                    metricsData = res.data;
+                } catch (e) { console.error(e); }
+
+                try {
+                    const res = await api.get('/admin/tickets');
+                    ticketsData = res.data;
+                } catch (e) { console.error(e); }
+
+                try {
+                    const res = await api.get('/admin/reports');
+                    reportsData = res.data;
+                } catch (e) { console.error(e); }
+                
+                setMetrics(metricsData);
+                
+                const user = JSON.parse(localStorage.getItem('user') || '{}');
+                let lockedCount = 0;
+
+                const combined = [
+                    ...ticketsData.map(t => {
+                        if (t.lockedByModeratorId === user.id) lockedCount++;
+                        return {
+                            id: `TKT-${t.id}`,
+                            type: 'Support Ticket',
+                            target: `User: ${t.student?.email || 'Unknown'}`,
+                            submittedAt: t.createdAt,
+                            status: t.status,
+                            lockedBy: t.lockedByModeratorId,
+                            raw: t
+                        };
+                    }),
+                    ...reportsData.map(r => ({
+                        id: `REP-${r.id}`,
+                        type: 'Report',
+                        target: r.product ? `Listing: ${r.product.title}` : 'General',
+                        submittedAt: r.createdAt,
+                        status: r.status,
+                        lockedBy: null,
+                        raw: r
+                    }))
+                ];
+
+                setMyLockedTasks(lockedCount);
+
+                combined.sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
+                setTasks(combined.slice(0, 5));
+                
+                setLoading(false);
+            } catch (err) {
+                console.error('Failed to fetch dashboard data:', err);
+                setLoading(false);
+            }
+        };
+
+        fetchDashboardData();
+    }, []);
+
+    if (loading) return <div className="p-8 text-center text-gray-500">Loading metrics...</div>;
+
     return (
         <div>
             {/* Stat Cards */}
             <div className="flex gap-6 mb-8">
                 <div className="card flex-1">
                     <div className="flex justify-between items-center mb-4">
-                        <span style={{ color: 'var(--text-muted)' }}>Pending Reports</span>
-                        <div className="flex items-center gap-2" style={{ color: 'var(--danger)', fontWeight: 'bold' }}>
+                        <span style={{ color: 'var(--text-muted)' }}>Total Users</span>
+                        <div className="flex items-center gap-2" style={{ color: 'var(--success)', fontWeight: 'bold' }}>
                             <TrendingUp size={16} />
-                            <span>+3</span>
                         </div>
                     </div>
-                    <div style={{ fontSize: '2rem', fontWeight: 300 }}>14</div>
+                    <div style={{ fontSize: '2rem', fontWeight: 300 }}>{metrics?.total_users || 0}</div>
                 </div>
                 
                 <div className="card flex-1">
                     <div className="flex justify-between items-center mb-4">
-                        <span style={{ color: 'var(--text-muted)' }}>Open Disputes</span>
+                        <span style={{ color: 'var(--text-muted)' }}>Active Disputes</span>
                     </div>
-                    <div style={{ fontSize: '2rem', fontWeight: 300 }}>5</div>
+                    <div style={{ fontSize: '2rem', fontWeight: 300, color: 'var(--danger)' }}>{metrics?.active_disputes || 0}</div>
                 </div>
 
                 <div className="card flex-1">
@@ -29,7 +100,7 @@ const Dashboard = () => {
                         <span style={{ color: 'var(--text-muted)' }}>My Locked Tasks</span>
                         <Circle size={12} fill="var(--success)" color="var(--success)" />
                     </div>
-                    <div style={{ fontSize: '2rem', fontWeight: 300 }}>2</div>
+                    <div style={{ fontSize: '2rem', fontWeight: 300 }}>{myLockedTasks}</div>
                 </div>
             </div>
 
@@ -41,7 +112,7 @@ const Dashboard = () => {
                 <table>
                     <thead>
                         <tr>
-                            <th>TICKET ID</th>
+                            <th>ID</th>
                             <th>TYPE</th>
                             <th>TARGET</th>
                             <th>SUBMITTED</th>
@@ -50,36 +121,34 @@ const Dashboard = () => {
                         </tr>
                     </thead>
                     <tbody>
-                        <tr>
-                            <td style={{ color: 'var(--text-muted)' }}>#REP-102</td>
-                            <td style={{ color: 'var(--text-muted)' }}>Fake Item</td>
-                            <td style={{ color: 'var(--text-muted)' }}>Listing: Wooden Chair</td>
-                            <td style={{ color: 'var(--text-muted)' }}>2 hrs ago</td>
-                            <td>
-                                <span style={{ padding: '4px 12px', background: '#f3f4f6', borderRadius: '12px', color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: 'bold' }}>
-                                    Open
-                                </span>
-                            </td>
-                            <td>
-                                <button className="btn" style={{ padding: '8px 16px', fontSize: '0.875rem' }}>Review</button>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td style={{ color: 'var(--text-muted)' }}>#DIS-88</td>
-                            <td style={{ color: 'var(--text-muted)' }}>Item not as described</td>
-                            <td style={{ color: 'var(--text-muted)' }}>Order #TRX-99</td>
-                            <td style={{ color: 'var(--text-muted)' }}>5 hrs ago</td>
-                            <td>
-                                <span style={{ padding: '4px 12px', background: '#eff6ff', borderRadius: '12px', color: '#1d4ed8', fontSize: '0.75rem', fontWeight: 'bold' }}>
-                                    Locked (Alex)
-                                </span>
-                            </td>
-                            <td>
-                                <button className="btn" style={{ padding: '8px 16px', fontSize: '0.875rem', background: '#e5e7eb', color: '#4b5563' }} disabled>
-                                    Review
-                                </button>
-                            </td>
-                        </tr>
+                        {tasks.map(task => (
+                            <tr key={task.id}>
+                                <td style={{ color: 'var(--text-muted)' }}>{task.id}</td>
+                                <td style={{ color: 'var(--text-muted)' }}>{task.type}</td>
+                                <td style={{ color: 'var(--text-muted)' }}>{task.target}</td>
+                                <td style={{ color: 'var(--text-muted)' }}>{new Date(task.submittedAt).toLocaleDateString()}</td>
+                                <td>
+                                    <span style={{ 
+                                        padding: '4px 12px', 
+                                        background: task.lockedBy ? '#eff6ff' : '#f3f4f6', 
+                                        borderRadius: '12px', 
+                                        color: task.lockedBy ? '#1d4ed8' : 'var(--text-muted)', 
+                                        fontSize: '0.75rem', 
+                                        fontWeight: 'bold' 
+                                    }}>
+                                        {task.lockedBy ? `Locked` : task.status}
+                                    </span>
+                                </td>
+                                <td>
+                                    <button className="btn" style={{ padding: '8px 16px', fontSize: '0.875rem' }}>View</button>
+                                </td>
+                            </tr>
+                        ))}
+                        {tasks.length === 0 && (
+                            <tr>
+                                <td colSpan="6" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>No recent tasks found.</td>
+                            </tr>
+                        )}
                     </tbody>
                 </table>
             </div>
