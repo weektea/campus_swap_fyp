@@ -100,13 +100,15 @@ class ApiClient {
       return jsonDecode(response.body);
     } else {
       String errorMessage = 'API Error: ${response.statusCode}';
+      Map<String, dynamic>? errorData;
       try {
         final errorBody = jsonDecode(response.body);
+        errorData = errorBody;
         if (errorBody['error'] != null) {
           errorMessage = errorBody['error'];
         }
       } catch (_) {}
-      throw ApiException(errorMessage);
+      throw ApiException(errorMessage, responseData: errorData);
     }
   }
 
@@ -122,7 +124,8 @@ class ApiClient {
 
 class ApiException implements Exception {
   final String message;
-  ApiException(this.message);
+  final Map<String, dynamic>? responseData;
+  ApiException(this.message, {this.responseData});
 
   @override
   String toString() => message;

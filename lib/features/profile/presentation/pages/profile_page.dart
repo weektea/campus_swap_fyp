@@ -6,7 +6,7 @@ import 'package:campus_swap/features/profile/presentation/pages/my_listings_page
 import 'package:campus_swap/features/profile/presentation/pages/my_purchases_page.dart';
 import 'package:campus_swap/features/profile/presentation/pages/saved_items_page.dart';
 import 'package:campus_swap/features/profile/presentation/pages/settings_page.dart';
-import 'package:campus_swap/features/profile/presentation/pages/help_page.dart';
+import 'package:campus_swap/features/profile/presentation/pages/help_center_page.dart';
 import 'package:campus_swap/features/profile/presentation/pages/sustainability_dashboard_page.dart';
 // import 'dart:io';
 import 'package:image_picker/image_picker.dart';
@@ -273,14 +273,14 @@ class _ProfilePageState extends State<ProfilePage> {
             _buildMenuItem(context, Icons.inventory_2_outlined, 'My Inventory', () {
                Navigator.push(context, MaterialPageRoute(builder: (_) => const MyListingsPage()));
             }),
-            _buildMenuItem(context, Icons.shopping_bag_outlined, 'My Transactions', () {
+            _buildMenuItem(context, Icons.shopping_bag_outlined, 'My Orders', () {
                Navigator.push(context, MaterialPageRoute(builder: (_) => const MyTransactionsPage()));
             }),
             _buildMenuItem(context, Icons.bookmark_outline, 'Saved Items', () {
                Navigator.push(context, MaterialPageRoute(builder: (_) => const SavedItemsPage()));
             }), // "Save favorite items"
-            _buildMenuItem(context, Icons.help_outline, 'Help & Support', () {
-               Navigator.push(context, MaterialPageRoute(builder: (_) => const HelpPage()));
+            _buildMenuItem(context, Icons.help_outline, 'Help & Support (Resolution Center)', () {
+               Navigator.push(context, MaterialPageRoute(builder: (_) => const HelpCenterPage()));
             }), // "Provide user support"
             _buildMenuItem(context, Icons.settings_outlined, 'Settings', () {
                Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsPage()));

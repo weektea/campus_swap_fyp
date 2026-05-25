@@ -52,6 +52,7 @@ import Category from './Category.js';
 import SubCategory from './SubCategory.js';
 import Report from './Report.js';
 import SupportTicket from './SupportTicket.js';
+import TicketMessage from './TicketMessage.js';
 
 // Category Relationships
 Category.hasMany(SubCategory, { foreignKey: 'category_id', as: 'subcategories' });
@@ -81,8 +82,18 @@ Dispute.belongsTo(User, { foreignKey: 'handled_by', as: 'handler' });
 Transaction.hasMany(Dispute, { foreignKey: 'transaction_id', as: 'disputes' });
 Dispute.belongsTo(Transaction, { foreignKey: 'transaction_id', as: 'transaction' });
 
+// Moderation: Ticket Messages
+User.hasMany(TicketMessage, { foreignKey: 'sender_id', as: 'ticket_messages' });
+TicketMessage.belongsTo(User, { foreignKey: 'sender_id', as: 'sender' });
+
+Dispute.hasMany(TicketMessage, { foreignKey: 'reference_id', constraints: false, scope: { reference_type: 'Dispute' }, as: 'messages' });
+TicketMessage.belongsTo(Dispute, { foreignKey: 'reference_id', constraints: false, as: 'dispute' });
+
+SupportTicket.hasMany(TicketMessage, { foreignKey: 'reference_id', constraints: false, scope: { reference_type: 'SupportTicket' }, as: 'messages' });
+TicketMessage.belongsTo(SupportTicket, { foreignKey: 'reference_id', constraints: false, as: 'support_ticket' });
+
 export { 
     User, Product, Transaction, SavedItem, Message, Review, 
     Notification, UserInteraction, Category, SubCategory, 
-    Report, SupportTicket, Dispute, SafeMeetupZone, BackupLog
+    Report, SupportTicket, Dispute, SafeMeetupZone, BackupLog, TicketMessage
 };

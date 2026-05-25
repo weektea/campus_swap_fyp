@@ -1,8 +1,43 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:campus_swap/core/api/api_client.dart';
 
-class SystemMetricsPage extends StatelessWidget {
+class SystemMetricsPage extends StatefulWidget {
   const SystemMetricsPage({super.key});
+
+  @override
+  State<SystemMetricsPage> createState() => _SystemMetricsPageState();
+}
+
+class _SystemMetricsPageState extends State<SystemMetricsPage> {
+  bool _isLoading = true;
+  int _totalUsers = 0;
+  int _activeDisputes = 0;
+  int _totalTransactions = 0;
+  double _co2Saved = 0.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchMetrics();
+  }
+
+  Future<void> _fetchMetrics() async {
+    try {
+      final res = await ApiClient().get('/moderator/metrics');
+      if (mounted) {
+        setState(() {
+          _totalUsers = res['total_users'] ?? 0;
+          _activeDisputes = res['active_disputes'] ?? 0;
+          _totalTransactions = res['total_transactions'] ?? 0;
+          _co2Saved = (res['co2_saved_kg'] ?? 0).toDouble();
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -66,17 +101,19 @@ class SystemMetricsPage extends StatelessWidget {
           ),
           const SizedBox(height: 32),
           // Metric Cards Row
-          Row(
-            children: [
-              Expanded(child: _buildMetricCard('Total Volume', 'RM 45,200', null)),
-              const SizedBox(width: 24),
-              Expanded(child: _buildMetricCard('Active Users', '3,421', null)),
-              const SizedBox(width: 24),
-              Expanded(child: _buildMetricCard('Platform CO2 Saved', '1,250 kg', Colors.green)),
-              const SizedBox(width: 24),
-              Expanded(child: _buildMetricCard('Open Disputes', '14', Colors.red)),
-            ],
-          ),
+          _isLoading 
+            ? const Center(child: CircularProgressIndicator())
+            : Row(
+                children: [
+                  Expanded(child: _buildMetricCard('Total Transactions', '$_totalTransactions', null)),
+                  const SizedBox(width: 24),
+                  Expanded(child: _buildMetricCard('Total Users', '$_totalUsers', null)),
+                  const SizedBox(width: 24),
+                  Expanded(child: _buildMetricCard('Platform CO2 Saved', '$_co2Saved kg', Colors.green)),
+                  const SizedBox(width: 24),
+                  Expanded(child: _buildMetricCard('Open Disputes', '$_activeDisputes', Colors.red)),
+                ],
+              ),
           const SizedBox(height: 32),
           // Charts Row
           Row(
@@ -143,7 +180,7 @@ class SystemMetricsPage extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text('Listings by Category', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold)),
-                      const Expanded(
+                      Expanded(
                         child: Center(
                            // Placeholder for donut chart
                            child: Stack(
@@ -175,7 +212,7 @@ class SystemMetricsPage extends StatelessWidget {
                                ),
                                Container(
                                  width: 100, height: 100,
-                                 decoration: const BoxDecoration(
+                                 decoration: BoxDecoration(
                                    color: Colors.white,
                                    shape: BoxShape.circle,
                                  ),
@@ -205,9 +242,9 @@ class SystemMetricsPage extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: highlightColor?.withOpacity(0.05) ?? Colors.white,
+        color: highlightColor?.withValues(alpha: 0.05) ?? Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: highlightColor?.withOpacity(0.3) ?? Colors.grey[200]!),
+        border: Border.all(color: highlightColor?.withValues(alpha: 0.3) ?? Colors.grey[200]!),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

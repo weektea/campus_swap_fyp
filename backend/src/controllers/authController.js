@@ -117,7 +117,11 @@ export const login = async (req, res) => {
 
         // Security check: Is user banned?
         if (user.is_active === false) {
-            return res.status(403).json({ error: 'Account suspended. Please contact support.' });
+            return res.status(403).json({ 
+                error: 'Account Suspended', 
+                reason: user.deactivation_reason || 'Violation of community guidelines',
+                unban_date: user.deactivated_until 
+            });
         }
 
         // 2. Check Password
@@ -189,12 +193,25 @@ export const updateProfile = async (req, res) => {
 export const getUserProfile = async (req, res) => {
     try {
         const { id } = req.params;
+        const requesterId = req.user.id;
+        const requesterRole = req.user.role;
+
         const user = await User.findByPk(id, {
-            attributes: ['id', 'email', 'full_name', 'profile_image_url', 'phone_number', 'role', 'total_carbon_saved', 'carbon_saved_buyer', 'carbon_saved_seller', 'items_reused', 'reputation_score', 'total_reviews', 'createdAt']
+            attributes: ['id', 'email', 'full_name', 'profile_image_url', 'phone_number', 'role', 'total_carbon_saved', 'carbon_saved_buyer', 'carbon_saved_seller', 'items_reused', 'reputation_score', 'total_reviews', 'privacy_setting', 'createdAt']
         });
         
         if (!user) {
             return res.status(404).json({ error: 'User not found' });
+        }
+
+        // Privacy Redaction Logic (UC02, UC04)
+        // Redact contact info if setting is Private or Friends Only, UNLESS requester is the owner or an admin
+        const isOwner = requesterId === user.id;
+        const isAdminOrMod = requesterRole === 'admin' || requesterRole === 'moderator';
+        
+        if (!isOwner && !isAdminOrMod && user.privacy_setting !== 'Public') {
+            user.email = null;
+            user.phone_number = null;
         }
         
         res.json({ user });

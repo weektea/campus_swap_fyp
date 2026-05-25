@@ -44,6 +44,7 @@ import { startCronJobs } from './scripts/cronJobs.js';
 import categoryRoutes from './routes/categoryRoutes.js';
 import disputeRoutes from './routes/disputeRoutes.js';
 import sustainabilityRoutes from './routes/sustainabilityRoutes.js';
+import ticketRoutes from './routes/ticketRoutes.js';
 
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productRoutes);
@@ -57,9 +58,12 @@ app.use('/api/recommendations', recommendationRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/disputes', disputeRoutes);
 app.use('/api/sustainability', sustainabilityRoutes);
+app.use('/api/tickets', ticketRoutes);
 
 import adminRoutes from './routes/adminRoutes.js';
+import moderatorRoutes from './routes/moderatorRoutes.js';
 app.use('/api/admin', adminRoutes);
+app.use('/api/moderator', moderatorRoutes);
 
 app.use('/admin', express.static('src/public/admin')); // Serve Admin UI
 app.use('/web', express.static('src/public/web')); // Serve Student Web UI

@@ -3,6 +3,8 @@ import 'package:campus_swap/core/api/api_client.dart';
 import 'package:campus_swap/core/session/user_session.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:campus_swap/features/profile/presentation/pages/transaction_detail_page.dart';
+import 'package:campus_swap/features/profile/presentation/pages/ticket_chat_page.dart';
+import 'package:campus_swap/features/profile/presentation/pages/help_center_page.dart';
 
 class NotificationsPage extends StatefulWidget {
   const NotificationsPage({super.key});
@@ -88,8 +90,24 @@ class _NotificationsPageState extends State<NotificationsPage> {
                                 onTap: () {
                                     if (!isRead) _markAsRead(note['id']);
                                     // Navigate to details based on type
-                                    if (note['type'] == 'Transaction' || note['type'] == 'System') {
+                                    final title = note['title']?.toString() ?? '';
+                                    if (title.contains('Dispute') || title.contains('Support Ticket')) {
                                         if (note['related_id'] != null) {
+                                            Navigator.push(context, MaterialPageRoute(
+                                                builder: (_) => TicketChatPage(
+                                                    referenceId: note['related_id'],
+                                                    referenceType: title.contains('Dispute') ? 'Dispute' : 'SupportTicket',
+                                                    title: title,
+                                                    status: 'Check Thread',
+                                                )
+                                            ));
+                                        }
+                                    } else if (title.contains('Report')) {
+                                        Navigator.push(context, MaterialPageRoute(
+                                            builder: (_) => const HelpCenterPage()
+                                        ));
+                                    } else if (note['type'] == 'Transaction' || note['type'] == 'System') {
+                                        if (note['related_id'] != null && !title.contains('Cancelled')) {
                                             Navigator.push(context, MaterialPageRoute(
                                                 builder: (_) => TransactionDetailPage(transactionId: note['related_id'])
                                             ));

@@ -7,6 +7,9 @@ import 'package:campus_swap/features/home/domain/entities/product.dart';
 import 'package:campus_swap/features/product/presentation/pages/product_details_page.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:campus_swap/features/location/domain/entities/safe_zone.dart';
+import 'package:campus_swap/features/location/presentation/pages/safe_zone_map_page.dart';
 
 class ChatDetailPage extends StatefulWidget {
   final String sellerName;
@@ -129,28 +132,14 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     } catch (_) { return ''; }
   }
 
-  void _showSafeMeetupDialog() {
-      final List<String> campusLocations = ['Library', 'Student Center', 'Cafeteria A', 'Main Hall', 'Sports Complex', 'Hostel Block B'];
-      showModalBottomSheet(context: context, builder: (context) {
-          return Container(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                      const Text('Select a Safe Meetup Zone', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 16),
-                      ...campusLocations.map((loc) => ListTile(
-                          leading: Icon(Icons.location_on, color: Theme.of(context).colorScheme.primary),
-                          title: Text(loc),
-                          onTap: () {
-                              _controller.text = "📍 Let's meet at $loc\nMAP:$loc";
-                              Navigator.pop(context);
-                          },
-                      )),
-                  ]
-              )
-          );
-      });
+  void _showSafeMeetupDialog() async {
+      final SafeZone? result = await Navigator.push<SafeZone>(
+          context,
+          MaterialPageRoute(builder: (_) => const SafeZoneMapPage()),
+      );
+      if (result != null) {
+          _controller.text = "📍 Let's meet at ${result.name}\nMAP:${result.id}";
+      }
   }
 
   @override
@@ -283,16 +272,22 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                 final String contentStr = msg['content'] ?? '';
                 final bool isMap = contentStr.contains('MAP:');
                 String textContent = contentStr;
-                String? mapLocation;
+                SafeZone? targetZone;
                 
                 if (isMap) {
                     final parts = contentStr.split('\nMAP:');
                     textContent = parts[0];
-                    if (parts.length > 1) mapLocation = parts[1];
+                    if (parts.length > 1) {
+                       final mapKey = parts[1].trim();
+                       targetZone = SafeZone.predefinedZones.cast<SafeZone?>().firstWhere(
+                         (z) => z!.id == mapKey || z.name == mapKey, 
+                         orElse: () => null
+                       );
+                    }
                 }
 
                 Widget messageContent;
-                if (isMap && mapLocation != null) {
+                if (isMap && targetZone != null) {
                    messageContent = Column(
                       crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                       children: [
@@ -302,26 +297,39 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                             height: 120,
                             width: 200,
                             decoration: BoxDecoration(
-                               color: Colors.grey[300],
+                               color: Colors.grey[200],
                                borderRadius: BorderRadius.circular(12),
-                               image: const DecorationImage(
-                                  // Mock Static OpenStreetMap Image focused on TARUMT bounds
-                                  image: NetworkImage('https://static-maps.yandex.ru/1.x/?lang=en_US&ll=100.281,5.461&z=15&l=map&size=400,240'),
-                                  fit: BoxFit.cover,
-                               )
                             ),
-                            child: Center(
-                               child: Container(
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: const BoxDecoration(color: Colors.white70, shape: BoxShape.circle),
-                                  child: const Icon(Icons.location_on, color: Colors.red, size: 32)
-                               )
-                            ),
+                            clipBehavior: Clip.antiAlias,
+                            child: FlutterMap(
+                               options: MapOptions(
+                                  initialCenter: targetZone.coordinates,
+                                  initialZoom: 17.5,
+                                  interactionOptions: const InteractionOptions(flags: InteractiveFlag.none),
+                               ),
+                               children: [
+                                  TileLayer(
+                                     urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                                     userAgentPackageName: 'com.campusswap.app',
+                                  ),
+                                  MarkerLayer(
+                                     markers: [
+                                        Marker(
+                                           point: targetZone.coordinates,
+                                           width: 40, height: 40,
+                                           child: const Icon(Icons.location_on, color: Colors.red, size: 32),
+                                        )
+                                     ]
+                                  )
+                               ]
+                            )
                          ),
                          const SizedBox(height: 8),
                          ElevatedButton.icon(
                              onPressed: () async {
-                                 final url = Uri.parse('https://www.openstreetmap.org/search?query=${Uri.encodeComponent('$mapLocation, TARUMT Penang')}');
+                                 final lat = targetZone?.coordinates.latitude ?? 0.0;
+                                 final lng = targetZone?.coordinates.longitude ?? 0.0;
+                                 final url = Uri.parse('https://www.openstreetmap.org/?mlat=$lat&mlon=$lng#map=18/$lat/$lng');
                                  if (await canLaunchUrl(url)) {
                                      await launchUrl(url);
                                  }

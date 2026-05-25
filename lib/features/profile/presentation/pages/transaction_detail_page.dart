@@ -3,6 +3,7 @@ import 'package:campus_swap/core/api/api_client.dart';
 import 'package:campus_swap/core/session/user_session.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:campus_swap/features/chat/presentation/pages/chat_detail_page.dart';
+import 'package:campus_swap/features/profile/presentation/pages/open_dispute_page.dart';
 
 class TransactionDetailPage extends StatefulWidget {
   final String transactionId;
@@ -224,6 +225,24 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
             Text('Actions Required', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
             _buildActionPanel(status, isBuying),
+            const SizedBox(height: 24),
+            if (status != 'Cancelled' && status != 'Disputed')
+              Center(
+                child: TextButton.icon(
+                  onPressed: () async {
+                    final result = await Navigator.push(context, MaterialPageRoute(
+                      builder: (_) => OpenDisputePage(
+                        transaction: _transaction
+                      )
+                    ));
+                    if (result == true) {
+                      _fetchTransactionDetails(); // refresh if dispute opened
+                    }
+                  },
+                  icon: const Icon(Icons.warning_amber_rounded, color: Colors.red),
+                  label: Text('Report Issue / Open Dispute', style: GoogleFonts.outfit(color: Colors.red, fontWeight: FontWeight.bold)),
+                ),
+              ),
           ],
         ),
       ),
@@ -241,9 +260,9 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
             width: double.infinity,
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primary.withOpacity(0.05),
+                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.05),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Theme.of(context).colorScheme.primary.withOpacity(0.2))
+                border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2))
             ),
             child: Text('Order completed! Go to My Transactions to rate your experience.', style: GoogleFonts.outfit())
           );
@@ -257,9 +276,9 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.blue.withOpacity(0.08),
+                  color: Colors.blue.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.blue.withOpacity(0.2)),
+                  border: Border.all(color: Colors.blue.withValues(alpha: 0.2)),
                 ),
                 child: Text(
                   'Please upload payment proof to proceed to the next step.',
@@ -274,9 +293,9 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
                 width: double.infinity,
                 height: 120,
                 decoration: BoxDecoration(
-                  color: Colors.grey.withOpacity(0.05),
+                  color: Colors.grey.withValues(alpha: 0.05),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey.withOpacity(0.3), style: BorderStyle.none),
+                  border: Border.all(color: Colors.grey.withValues(alpha: 0.3), style: BorderStyle.none),
                 ),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -308,7 +327,7 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
                   onPressed: () => _updateStatus('Cancelled'),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: Colors.red,
-                    side: BorderSide(color: Colors.red.withOpacity(0.5)),
+                    side: BorderSide(color: Colors.red.withValues(alpha: 0.5)),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
                   ),
                   child: Text('Cancel Order', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 16)),

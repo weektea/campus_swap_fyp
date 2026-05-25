@@ -24,7 +24,7 @@ if os.path.exists(custom_model_path) and os.path.exists(classes_path):
     print("Loading Custom Fine-Tuned Model...")
     custom_model = tf.keras.models.load_model(custom_model_path)
     with open(classes_path, "r") as f:
-        custom_classes = [line.strip() for line in f.readlines()]
+        custom_classes = [line.strip() for line in f.readlines() if line.strip()]
 else:
     print("Custom model not found. Backing up to generic MobileNetV2.")
 

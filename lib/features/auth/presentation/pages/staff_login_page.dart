@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:campus_swap/features/admin/presentation/pages/staff_dashboard_page.dart';
+import 'package:campus_swap/core/api/api_client.dart';
+import 'package:campus_swap/core/session/user_session.dart';
 
 class StaffLoginPage extends StatefulWidget {
   const StaffLoginPage({super.key});
@@ -22,19 +24,32 @@ class _StaffLoginPageState extends State<StaffLoginPage> {
 
     setState(() => _isLoading = true);
     
-    // Simulate network delay for Mock Login
-    await Future.delayed(const Duration(seconds: 1));
-    
-    if (mounted) {
-       setState(() => _isLoading = false);
-       if (_staffIdController.text.toLowerCase() == 'admin' || _staffIdController.text.toLowerCase() == 'mod') {
+    try {
+      final res = await ApiClient().post('/auth/login', {
+        'email': _staffIdController.text.trim(),
+        'password': _passwordController.text.trim(),
+      });
+      
+      final role = res['user']['role'];
+      if (role == 'admin' || role == 'moderator') {
+        UserSession().login(res['user'], res['token']);
+        if (mounted) {
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (context) => const StaffDashboardPage()),
           );
-       } else {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Invalid Staff Credentials')));
-       }
+        }
+      } else {
+        if (mounted) {
+           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Access Denied. You do not have staff privileges.')));
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Login failed: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 

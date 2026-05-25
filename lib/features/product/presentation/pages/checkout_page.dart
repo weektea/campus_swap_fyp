@@ -5,6 +5,8 @@ import 'package:campus_swap/core/api/api_client.dart';
 import 'package:campus_swap/core/session/user_session.dart';
 import 'package:campus_swap/features/home/domain/entities/product.dart';
 import 'package:campus_swap/features/profile/presentation/pages/transaction_detail_page.dart';
+import 'package:campus_swap/features/location/domain/entities/safe_zone.dart';
+import 'package:campus_swap/features/location/presentation/pages/safe_zone_map_page.dart';
 
 class CheckoutPage extends StatefulWidget {
   final Product product;
@@ -16,16 +18,7 @@ class CheckoutPage extends StatefulWidget {
 }
 
 class _CheckoutPageState extends State<CheckoutPage> {
-  final List<String> _campusLocations = [
-    'Library',
-    'Student Center',
-    'Cafeteria A',
-    'Main Hall',
-    'Sports Complex',
-    'Hostel Block B',
-  ];
-
-  String _selectedLocation = 'Library';
+  SafeZone _selectedZone = SafeZone.predefinedZones.first;
   DateTime? _rentStartDate;
   DateTime? _rentEndDate;
   bool _isSubmitting = false;
@@ -91,6 +84,34 @@ class _CheckoutPageState extends State<CheckoutPage> {
       return;
     }
 
+    final bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(_isRent ? 'Confirm Rental?' : 'Confirm Order?', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+        content: Text(
+          'You are committing to ${_isRent ? 'rent' : 'purchase'} this item for RM ${_totalPrice.toStringAsFixed(2)} and meet up at ${_selectedZone.name}. Proceed?',
+          style: GoogleFonts.outfit(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Cancel', style: GoogleFonts.outfit(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.primary),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('Confirm', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      _submitOrder();
+    }
+  }
+
+  Future<void> _submitOrder() async {
     setState(() => _isSubmitting = true);
     try {
       final apiClient = ApiClient();
@@ -99,7 +120,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
         'seller_id': widget.product.sellerId,
         'product_id': widget.product.id,
         'amount': _totalPrice,
-        'meetup_location': _selectedLocation,
+        'meetup_location': _selectedZone.name,
       };
 
       if (_isRent && _rentStartDate != null && _rentEndDate != null) {
@@ -246,26 +267,38 @@ class _CheckoutPageState extends State<CheckoutPage> {
               label: 'Select Safe Meetup Zone',
             ),
             const SizedBox(height: 10),
-            _SectionCard(
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  value: _selectedLocation,
-                  isExpanded: true,
-                  icon: Icon(Icons.keyboard_arrow_down_rounded, color: primary),
-                  style: GoogleFonts.outfit(color: Colors.black87, fontSize: 15),
-                  items: _campusLocations.map((loc) => DropdownMenuItem(
-                    value: loc,
-                    child: Row(
-                      children: [
-                        Icon(Icons.pin_drop_outlined, size: 18, color: Colors.grey[500]),
-                        const SizedBox(width: 10),
-                        Text(loc, style: GoogleFonts.outfit()),
-                      ],
+            InkWell(
+              onTap: () async {
+                final result = await Navigator.push<SafeZone>(
+                  context,
+                  MaterialPageRoute(builder: (_) => SafeZoneMapPage(initialZone: _selectedZone)),
+                );
+                if (result != null) {
+                  setState(() => _selectedZone = result);
+                }
+              },
+              borderRadius: BorderRadius.circular(14),
+              child: _SectionCard(
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(color: primary.withValues(alpha: 0.1), shape: BoxShape.circle),
+                      child: Icon(Icons.security_rounded, color: primary, size: 20),
                     ),
-                  )).toList(),
-                  onChanged: (val) {
-                    if (val != null) setState(() => _selectedLocation = val);
-                  },
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(_selectedZone.name, style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 15)),
+                          const SizedBox(height: 2),
+                          Text('Tap to change on map', style: GoogleFonts.outfit(color: Colors.grey[500], fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                    Icon(Icons.map_rounded, color: Colors.grey[400]),
+                  ],
                 ),
               ),
             ),

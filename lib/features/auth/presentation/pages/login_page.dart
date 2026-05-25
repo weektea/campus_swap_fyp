@@ -97,14 +97,118 @@ class _LoginPageState extends State<LoginPage> {
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Login Failed: ${e.toString()}')),
-          );
+          if (e is ApiException && e.message == 'Account Suspended') {
+            _showSuspendedBottomSheet(e.responseData);
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Login Failed: ${e.toString()}')),
+            );
+          }
         }
       } finally {
         if (mounted) setState(() => _isLoading = false);
       }
     }
+  }
+
+  void _showSuspendedBottomSheet(Map<String, dynamic>? data) {
+    final reason = data?['reason'] ?? 'Violation of community guidelines';
+    String unbanDate = 'Permanent';
+    if (data?['unban_date'] != null) {
+      try {
+        final date = DateTime.parse(data!['unban_date']);
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        unbanDate = '${months[date.month - 1]} ${date.day}, ${date.year}';
+      } catch (_) {}
+    }
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.red.withValues(alpha: 0.3), width: 2),
+                ),
+                child: const Icon(Icons.warning_amber_rounded, color: Colors.red, size: 32),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Account Suspended',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.red),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Your account has been restricted due to a violation of our community guidelines.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 14, color: Colors.black87),
+              ),
+              const SizedBox(height: 24),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Reason:', style: TextStyle(color: Colors.grey[600])),
+                        Text(reason, style: const TextStyle(fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Unban Date:', style: TextStyle(color: Colors.grey[600])),
+                        Text(unbanDate, style: const TextStyle(fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0D503C), // Dark green
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: () {
+                    Navigator.pop(context); // Close sheet
+                    // Add external url launch if needed, or snackbar for MVP
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Redirecting to support...')));
+                  },
+                  child: const Text('Contact Support', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text('Dismiss', style: TextStyle(color: Colors.grey[700], fontSize: 16)),
+              ),
+              const SizedBox(height: 16), // Padding for bottom notch
+            ],
+          ),
+        );
+      },
+    );
   }
 
   @override

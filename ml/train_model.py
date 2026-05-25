@@ -45,21 +45,42 @@ def main():
     train_dataset = train_dataset.map(preprocess).prefetch(buffer_size=tf.data.AUTOTUNE)
     validation_dataset = validation_dataset.map(preprocess).prefetch(buffer_size=tf.data.AUTOTUNE)
 
+    # Data Augmentation
+    data_augmentation = tf.keras.Sequential([
+        tf.keras.layers.RandomFlip("horizontal"),
+        tf.keras.layers.RandomRotation(0.2),
+        tf.keras.layers.RandomZoom(0.2),
+    ], name="data_augmentation")
+
     # Base Model
     base_model = MobileNetV2(input_shape=(224, 224, 3), include_top=False, weights='imagenet')
     base_model.trainable = False  # Freeze base model
 
-    x = base_model.output
+    inputs = tf.keras.Input(shape=(224, 224, 3))
+    x = data_augmentation(inputs)
+    x = base_model(x, training=False)
     x = GlobalAveragePooling2D()(x)
+    x = tf.keras.layers.Dropout(0.2)(x)
     x = Dense(128, activation='relu')(x)
+    x = tf.keras.layers.Dropout(0.2)(x)
     predictions = Dense(len(class_names), activation='softmax')(x)
 
-    model = Model(inputs=base_model.input, outputs=predictions)
+    model = Model(inputs=inputs, outputs=predictions)
 
     model.compile(optimizer=Adam(learning_rate=0.001), loss='categorical_crossentropy', metrics=['accuracy'])
 
-    print("Training model... (This will take a minute or two)")
-    model.fit(train_dataset, validation_data=validation_dataset, epochs=3)
+    print("Training top layers...")
+    model.fit(train_dataset, validation_data=validation_dataset, epochs=10)
+
+    print("Unfreezing some base model layers for fine-tuning...")
+    base_model.trainable = True
+    for layer in base_model.layers[:-20]:
+        layer.trainable = False
+
+    model.compile(optimizer=Adam(learning_rate=1e-5), loss='categorical_crossentropy', metrics=['accuracy'])
+    
+    print("Fine-tuning model...")
+    model.fit(train_dataset, validation_data=validation_dataset, epochs=10)
 
     print(f"Saving model to {model_save_path}")
     model.save(model_save_path)
