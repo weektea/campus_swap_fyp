@@ -1,9 +1,12 @@
 import { Product, User, Report } from '../models/index.js';
 import { Op } from 'sequelize';
+import fs from 'fs';
+import FormData from 'form-data';
+import axios from 'axios';
 
 export const createProduct = async (req, res) => {
     try {
-        const { title, description, price, category, condition, seller_id, image_urls, video_url, type, rental_price_per_day, max_rental_duration, rental_deposit } = req.body;
+        const { title, description, price, category, sub_category_id, condition, seller_id, image_urls, video_url, type, rental_price_per_day, max_rental_duration, rental_deposit } = req.body;
 
         // Basic validation
         if (!title || !seller_id || (price === undefined && !rental_price_per_day)) {
@@ -16,6 +19,7 @@ export const createProduct = async (req, res) => {
             description,
             price: price || 0, // 0 if rental only
             category,
+            sub_category_id,
             condition,
             seller_id,
             image_urls: image_urls || [],
@@ -26,6 +30,30 @@ export const createProduct = async (req, res) => {
             max_rental_duration,
             rental_deposit
         });
+
+        // Background task for ML Continuous Learning
+        if (image_urls && image_urls.length > 0) {
+            try {
+                // Map frontend URL to backend local file path
+                // e.g. "/uploads/image-123.jpg" -> "uploads/image-123.jpg"
+                const localImagePath = image_urls[0].replace(/^\//, ''); 
+                
+                if (fs.existsSync(localImagePath)) {
+                    const formData = new FormData();
+                    formData.append('file', fs.createReadStream(localImagePath));
+                    
+                    // Format correctly for ML: Category___SubCategory
+                    const mlCategory = sub_category_id ? `${category}___${sub_category_id}` : `${category}___Others`;
+                    formData.append('correct_category', mlCategory);
+
+                    axios.post('http://127.0.0.1:5000/feedback/image', formData, {
+                        headers: formData.getHeaders(),
+                    }).catch(err => console.error("ML Feedback Background Task Failed:", err.message));
+                }
+            } catch(e) {
+                console.error("Failed to prepare ML feedback:", e);
+            }
+        }
 
         res.status(201).json(newProduct);
     } catch (error) {
@@ -235,31 +263,33 @@ export const reportProduct = async (req, res) => {
 
 export const classifyImage = async (req, res) => {
     try {
-        // In a real system, this would forward req.file to the Python Flask ML API.
-        // For the presentation demo, we return a high-confidence prediction.
-        
-        // Simulating latency
-        await new Promise(resolve => setTimeout(resolve, 1500)); 
+        if (!req.file) {
+            return res.status(400).json({ error: 'No image uploaded' });
+        }
 
-        const categories = {
-            'Electronics': ['Smartphones', 'Laptops', 'Audio'],
-            'Books': ['Textbooks', 'Novels', 'Reference'],
-            'Fashion': ['Clothing', 'Shoes'],
-            'Furniture': ['Chairs', 'Tables'],
-        };
-        
-        const catKeys = Object.keys(categories);
-        const randCat = catKeys[Math.floor(Math.random() * catKeys.length)];
-        const randSubCat = categories[randCat][Math.floor(Math.random() * categories[randCat].length)];
-        const confidence = 0.85 + (Math.random() * 0.14); // 85% to 99%
+        const formData = new FormData();
+        formData.append('file', fs.createReadStream(req.file.path), req.file.originalname);
 
-        res.json({
-            category: randCat,
-            sub_category: randSubCat,
-            confidence: confidence
+        const response = await axios.post('http://127.0.0.1:5000/predict/image', formData, {
+            headers: formData.getHeaders(),
         });
+
+        // Clean up the uploaded file
+        fs.unlinkSync(req.file.path);
+
+        res.json(response.data);
     } catch (error) {
-        res.status(500).json({ error: 'ML Classification Failed' });
+        console.error('ML Classification Failed:', error.message);
+        if (req.file && fs.existsSync(req.file.path)) {
+            fs.unlinkSync(req.file.path);
+        }
+        
+        // Fallback to Others if ML server is down
+        res.json({
+            category: 'Others',
+            sub_category: 'Others',
+            confidence: 0.0
+        });
     }
 };
 

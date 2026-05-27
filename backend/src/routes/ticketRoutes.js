@@ -1,5 +1,5 @@
 import express from 'express';
-import { verifyToken } from '../middleware/authMiddleware.js';
+import { authenticateToken as verifyToken } from '../middleware/authMiddleware.js';
 import { Report, Dispute, SupportTicket, TicketMessage, Product, User, Transaction } from '../models/index.js';
 import Notification from '../models/Notification.js';
 

@@ -35,22 +35,31 @@ docker-compose up -d
    npm run dev
 
 # ML - another terminal local(2)
-1. cd ml 
-python main.py
+1. cd ml xxx
+python main.py xxx
+
+1. 进入新的 ML 文件夹
+cd ml_service
+2. 激活 Python 虚拟环境 (这是最重要的一步，确保环境正确)
+..\.venv\Scripts\activate
+3. 启动 FastAPI 深度学习微服务 (我们换到了 5000 端口)
+uvicorn main:app --host 0.0.0.0 --port 5000 --reload
 
 # Admin & Moderator - Panel
 1. cd admin_panel
 2. npm install (if not yet install)
 3. npm run dev
 
-# Email: admin@campus-swap.edu.my
-# Password: password123
+# Email: 
+admin@campus-swap.edu.my
+# Password: 
+password123
 
 # Test Register
-Test Student2
-24PMR12346
-016-1234567
-student1@student.tarc.edu.my
+Test Student6
+24PMR01666
+016-1122666
+stu6@tarc.edu.my
 Test1234@
 
 # Test environment setup

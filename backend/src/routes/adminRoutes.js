@@ -53,6 +53,7 @@ router.get('/metrics', authenticateToken, isAdmin, adminController.getSystemMetr
 
 // Full User Administration (Promoting, Banning)
 router.get('/users', authenticateToken, isAdmin, adminController.getAllUsers);
+router.get('/users/:id', authenticateToken, isAdmin, adminController.getUserDetails);
 router.post('/users', authenticateToken, isAdmin, adminController.createUser);
 router.put('/users/:id', authenticateToken, isAdmin, adminController.manageUserRoleOrBan);
 router.delete('/users/:id', authenticateToken, isAdmin, adminController.deleteUser);

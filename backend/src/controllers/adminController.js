@@ -350,6 +350,23 @@ export const getAllUsers = async (req, res) => {
     }
 };
 
+export const getUserDetails = async (req, res) => {
+    try {
+        const user = await User.findByPk(req.params.id);
+        if (!user) return res.status(404).json({ error: 'User not found' });
+        
+        // Also fetch active listings for this user
+        const activeListings = await Product.findAll({
+            where: { seller_id: user.id, status: 'Available' },
+            attributes: ['id', 'title', 'price', 'image_urls', 'createdAt']
+        });
+
+        res.json({ user, activeListings });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+};
+
 export const manageUserRoleOrBan = async (req, res) => {
     try {
         const { is_active, deactivated_until, deactivation_reason, role } = req.body;

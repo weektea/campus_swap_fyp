@@ -318,7 +318,7 @@ class _LoginPageState extends State<LoginPage> {
                                     });
                                   },
                                 ),
-                                const Text('Remember Me'),
+                                const Flexible(child: Text('Remember Me', overflow: TextOverflow.ellipsis)),
                               ],
                             ),
                             Align(
@@ -347,8 +347,9 @@ class _LoginPageState extends State<LoginPage> {
                             ),
                       ),
                       const SizedBox(height: 16),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
+                      Wrap(
+                        alignment: WrapAlignment.center,
+                        crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
                           Text(
                             'New to Campus Swap?',

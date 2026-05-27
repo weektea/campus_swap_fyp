@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Edit, UserPlus, Trash2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 
 const Users = () => {
+    const navigate = useNavigate();
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [filterStatus, setFilterStatus] = useState('All');
     
-    // Auth context
     const [currentUser, setCurrentUser] = useState(null);
 
     // Modal state for Edit
@@ -61,7 +62,7 @@ const Users = () => {
                 is_active: editIsActive
             });
             setIsEditModalOpen(false);
-            fetchUsers(); // Refresh
+            fetchUsers();
         } catch (err) {
             alert(err.response?.data?.error || 'Failed to update user');
         }
@@ -162,7 +163,13 @@ const Users = () => {
                             <tr key={user.id}>
                                 <td style={{ color: 'var(--text-muted)' }}>{user.id.substring(0,8)}</td>
                                 <td>
-                                    <div>{user.full_name || 'No Name'}</div>
+                                    <div 
+                                        style={{ color: 'var(--primary)', fontWeight: 'bold', cursor: 'pointer', textDecoration: 'underline' }}
+                                        onClick={() => navigate(`/users/${user.id}`)}
+                                        title="View User Details"
+                                    >
+                                        {user.full_name || 'No Name'}
+                                    </div>
                                     <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{user.email}</div>
                                 </td>
                                 <td>
@@ -215,7 +222,8 @@ const Users = () => {
                     <div className="card" style={{ width: '400px', background: 'white' }}>
                         <h2 style={{ marginTop: 0 }}>Manage User</h2>
                         <div style={{ marginBottom: '16px' }}>
-                            <strong>{selectedUser.email}</strong>
+                            <div style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>{selectedUser.full_name || 'No Name'}</div>
+                            <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>Email: {selectedUser.email}</div>
                         </div>
                         
                         {currentUser?.role === 'admin' ? (
@@ -256,7 +264,7 @@ const Users = () => {
 
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             {currentUser?.role === 'admin' && selectedUser.role !== 'admin' ? (
-                                <button className="btn" style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5' }} onClick={handleDeleteUser}>
+                                <button className="btn" style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5', display: 'flex', alignItems: 'center', gap: '8px' }} onClick={handleDeleteUser}>
                                     <Trash2 size={16} /> Delete
                                 </button>
                             ) : <div></div>}

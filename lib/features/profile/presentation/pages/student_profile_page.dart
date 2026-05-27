@@ -1,0 +1,206 @@
+import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:campus_swap/core/api/api_client.dart';
+import 'package:campus_swap/core/session/user_session.dart';
+import 'package:campus_swap/features/profile/presentation/pages/edit_profile_page.dart';
+
+class StudentProfilePage extends StatefulWidget {
+  const StudentProfilePage({super.key});
+
+  @override
+  State<StudentProfilePage> createState() => _StudentProfilePageState();
+}
+
+class _StudentProfilePageState extends State<StudentProfilePage> {
+  Map<String, dynamic>? _userData;
+  int _activeListingsCount = 0;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchProfileData();
+  }
+
+  Future<void> _fetchProfileData() async {
+    final session = UserSession();
+    if (!session.isLoggedIn) return;
+    
+    setState(() => _isLoading = true);
+    
+    try {
+      final apiClient = ApiClient();
+      
+      // 1. Fetch User Data
+      final resData = await apiClient.get('/auth/user/${session.userId}');
+      if (resData != null && resData['user'] != null) {
+        _userData = resData['user'];
+      }
+
+      // 2. Fetch Active Listings Count (Assuming /products/seller/:id exists or similar)
+      // If we don't have a direct endpoint, we can use the search endpoint:
+      try {
+        final listingsRes = await apiClient.get('/products/search?seller_id=${session.userId}');
+        if (listingsRes is List) {
+          _activeListingsCount = listingsRes.where((p) => p['status'] == 'Available').length;
+        }
+      } catch (e) {
+        debugPrint('Error fetching listings count: $e');
+      }
+
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching profile: $e');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Widget _buildSectionHeader(String title, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16.0),
+      child: Row(
+        children: [
+          Icon(icon, color: Colors.teal),
+          const SizedBox(width: 8),
+          Text(
+            title,
+            style: GoogleFonts.outfit(
+              fontSize: 18, 
+              fontWeight: FontWeight.bold,
+              color: Colors.teal.shade800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDataRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            flex: 2,
+            child: Text(
+              label,
+              style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+            ),
+          ),
+          Expanded(
+            flex: 3,
+            child: Text(
+              value,
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final session = UserSession();
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Student Profile', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.edit),
+            onPressed: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const EditProfilePage()),
+              );
+              // Refresh data when coming back
+              _fetchProfileData();
+            },
+          )
+        ],
+      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator(color: Colors.teal))
+          : _userData == null 
+              ? const Center(child: Text('Failed to load profile data.'))
+              : SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // 1. Basic User Information
+                      Center(
+                        child: Column(
+                          children: [
+                            CircleAvatar(
+                              radius: 50,
+                              backgroundColor: Colors.teal.shade100,
+                              backgroundImage: _userData!['profile_image_url'] != null 
+                                  ? NetworkImage('${ApiClient.baseUrl.replaceAll('/api', '')}${_userData!['profile_image_url']}') 
+                                  : null,
+                              child: _userData!['profile_image_url'] == null 
+                                  ? const Icon(Icons.person, size: 50, color: Colors.teal) 
+                                  : null,
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              _userData!['full_name'] ?? 'No Name',
+                              style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 4),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.green.shade50,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.green.shade200),
+                              ),
+                              child: Text(
+                                _userData!['role']?.toString().toUpperCase() ?? 'STUDENT',
+                                style: TextStyle(color: Colors.green.shade700, fontWeight: FontWeight.bold, fontSize: 12),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      
+                      const Divider(),
+                      _buildSectionHeader('Basic Information', Icons.badge_outlined),
+                      _buildDataRow('Email', _userData!['email'] ?? 'N/A'),
+                      _buildDataRow('Phone Number', _userData!['phone_number'] ?? 'Not provided'),
+
+                      const Divider(),
+                      _buildSectionHeader('Academic Identity', Icons.school_outlined),
+                      _buildDataRow('Student ID', _userData!['university_id'] ?? 'Not provided'),
+                      _buildDataRow('Faculty', _userData!['faculty'] ?? 'Not provided'),
+                      _buildDataRow('Year of Study', _userData!['year_of_study']?.toString() ?? 'Not provided'),
+
+                      const Divider(),
+                      _buildSectionHeader('Personalization & Privacy', Icons.privacy_tip_outlined),
+                      _buildDataRow('Bio', _userData!['bio'] ?? 'No bio available.'),
+                      _buildDataRow('Privacy Setting', _userData!['privacy_setting'] ?? 'Public'),
+
+                      const Divider(),
+                      _buildSectionHeader('Trading & Platform Metrics', Icons.analytics_outlined),
+                      _buildDataRow('Reputation Score', '${_userData!['reputation_score'] ?? '5.0'} / 5.0 (${_userData!['total_reviews'] ?? 0} reviews)'),
+                      _buildDataRow('Active Listings', '$_activeListingsCount items'),
+                      _buildDataRow('Total Carbon Saved', '${_userData!['total_carbon_saved'] ?? '0.0'} kg CO2'),
+                      
+                      const SizedBox(height: 40),
+                    ],
+                  ),
+                ),
+    );
+  }
+}

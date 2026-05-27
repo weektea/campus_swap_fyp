@@ -8,6 +8,7 @@ import 'package:campus_swap/features/profile/presentation/pages/saved_items_page
 import 'package:campus_swap/features/profile/presentation/pages/settings_page.dart';
 import 'package:campus_swap/features/profile/presentation/pages/help_center_page.dart';
 import 'package:campus_swap/features/profile/presentation/pages/sustainability_dashboard_page.dart';
+import 'package:campus_swap/features/profile/presentation/pages/student_profile_page.dart';
 // import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 
@@ -186,6 +187,22 @@ class _ProfilePageState extends State<ProfilePage> {
               session.email ?? 'Not Logged In',
               style: const TextStyle(fontSize: 16, color: Colors.grey),
             ),
+            if (session.isLoggedIn) ...[
+              const SizedBox(height: 12),
+              OutlinedButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const StudentProfilePage()),
+                  );
+                },
+                style: OutlinedButton.styleFrom(
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  side: BorderSide(color: Colors.teal.shade300),
+                ),
+                child: Text('View Profile', style: TextStyle(color: Colors.teal.shade700)),
+              ),
+            ],
             if (session.isLoggedIn) ...[
               const SizedBox(height: 8),
               Row(

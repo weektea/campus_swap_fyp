@@ -8,6 +8,7 @@ import Tickets from './pages/Tickets';
 import Backup from './pages/Backup';
 import History from './pages/History';
 import Users from './pages/Users';
+import UserDetail from './pages/UserDetail';
 import Dispute from './pages/Dispute';
 import Listings from './pages/Listings';
 import Analytics from './pages/Analytics';
@@ -75,6 +76,14 @@ function App() {
           <PrivateRoute>
             <Layout>
               <Users />
+            </Layout>
+          </PrivateRoute>
+        } />
+
+        <Route path="/users/:id" element={
+          <PrivateRoute>
+            <Layout>
+              <UserDetail />
             </Layout>
           </PrivateRoute>
         } />

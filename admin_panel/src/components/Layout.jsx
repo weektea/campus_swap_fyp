@@ -84,10 +84,12 @@ const Layout = ({ children }) => {
                                 <LayoutDashboard size={20} />
                                 <span>Dashboard</span>
                             </NavLink>
-                            <NavLink to="/analytics" className={({isActive}) => `nav-link ${isActive ? 'active' : ''}`}>
-                                <BarChart3 size={20} />
-                                <span>Analytics Data</span>
-                            </NavLink>
+                            {user?.role === 'admin' && (
+                                <NavLink to="/analytics" className={({isActive}) => `nav-link ${isActive ? 'active' : ''}`}>
+                                    <BarChart3 size={20} />
+                                    <span>Analytics Data</span>
+                                </NavLink>
+                            )}
                         </nav>
                     </div>
 

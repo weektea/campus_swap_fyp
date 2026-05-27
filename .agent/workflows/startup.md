@@ -19,9 +19,9 @@ npm run dev
 ### ML Service (Python)
 Open a separate terminal and run:
 ```powershell
-cd ml
-pip install -r requirements.txt
-python main.py
+cd ml_service
+..\.venv\Scripts\activate
+uvicorn main:app --host 0.0.0.0 --port 5000 --reload
 ```
 
 ## 2. Start the Frontend (Flutter)

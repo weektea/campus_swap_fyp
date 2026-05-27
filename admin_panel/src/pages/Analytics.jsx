@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Download } from 'lucide-react';
+import { Calendar, Download, BrainCircuit } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import api from '../services/api';
 
 const Analytics = () => {
     const [metrics, setMetrics] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [isRetraining, setIsRetraining] = useState(false);
+    const [retrainMsg, setRetrainMsg] = useState("");
 
     useEffect(() => {
         const fetchMetrics = async () => {
@@ -31,6 +33,32 @@ const Analytics = () => {
             <div className="flex justify-between items-center mb-8">
                 <h1 style={{ fontSize: '1.5rem', margin: 0 }}>System Analytics</h1>
                 <div className="flex gap-4">
+                    <button 
+                        className="btn btn-secondary" 
+                        style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+                        onClick={async () => {
+                            if (!window.confirm("Are you sure you want to retrain the ML model with the newly collected datasets? This may take some time.")) return;
+                            setIsRetraining(true);
+                            setRetrainMsg("Triggering model training...");
+                            try {
+                                const res = await fetch('http://localhost:5000/train/image-model', { method: 'POST' });
+                                if(res.ok) {
+                                    setRetrainMsg("Training started in background successfully!");
+                                    setTimeout(() => setRetrainMsg(""), 5000);
+                                } else {
+                                    setRetrainMsg("Failed to start training. Is ML service running?");
+                                }
+                            } catch (e) {
+                                setRetrainMsg("Error connecting to ML service.");
+                            } finally {
+                                setIsRetraining(false);
+                            }
+                        }}
+                        disabled={isRetraining}
+                    >
+                        <BrainCircuit size={18} />
+                        {isRetraining ? "Triggering..." : "Retrain ML Model"}
+                    </button>
                     <div style={{ 
                         display: 'flex', alignItems: 'center', 
                         background: 'white', 
@@ -43,6 +71,12 @@ const Analytics = () => {
                     </div>
                 </div>
             </div>
+
+            {retrainMsg && (
+                <div style={{ padding: '12px', background: '#dbeafe', color: '#1e40af', borderRadius: '8px', marginBottom: '24px' }}>
+                    {retrainMsg}
+                </div>
+            )}
 
             {/* Metric Cards Row */}
             <div className="flex gap-6 mb-8">
