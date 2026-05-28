@@ -88,6 +88,49 @@ async def train_model():
     
     return {"message": "Model training started in the background."}
 
+@app.get("/admin/ml-metrics")
+async def get_ml_metrics():
+    import json
+    metrics_file = os.path.join(DATASET_DIR, "metrics_history.json")
+    
+    # Calculate current pending images
+    current_images = 0
+    for root, dirs, files in os.walk(DATASET_DIR):
+        for f in files:
+            if f.lower().endswith(('.png', '.jpg', '.jpeg', '.webp')):
+                current_images += 1
+                
+    history = []
+    if os.path.exists(metrics_file):
+        try:
+            with open(metrics_file, 'r') as f:
+                history = json.load(f)
+        except Exception as e:
+            print("Error reading metrics:", e)
+            
+    # Default if no history exists yet
+    if not history:
+        history = [
+            {
+                "version": "v1.0.0",
+                "accuracy": "0.0%",
+                "precision": "0.0%",
+                "recall": "0.0%",
+                "latency": "0ms",
+                "dataset_size": 0,
+                "classes": "Waiting for training"
+            }
+        ]
+        
+    latest = history[-1]
+    pending = max(0, current_images - latest.get('dataset_size', 0))
+    
+    return {
+        "history": history,
+        "pending_samples": pending,
+        "current_total_samples": current_images
+    }
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=5000)

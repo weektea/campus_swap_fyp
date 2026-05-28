@@ -110,8 +110,6 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
 
   @override
   Widget build(BuildContext context) {
-    final session = UserSession();
-
     return Scaffold(
       appBar: AppBar(
         title: Text('Student Profile', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),

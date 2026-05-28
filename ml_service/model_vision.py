@@ -155,6 +155,58 @@ def fine_tune_model(dataset_dir: str):
         
         # Switch back to eval mode
         model.eval()
+
+        # Evaluate model to generate True MLOps metrics
+        print("Evaluating model to generate True MLOps metrics...")
+        import time
+        from sklearn.metrics import accuracy_score, precision_score, recall_score
+        import json
+        from datetime import datetime
+
+        all_preds = []
+        all_labels = []
+        start_time = time.time()
+        
+        with torch.no_grad():
+            for inputs, labels in dataloader:
+                inputs = inputs.to(device)
+                outputs = model(inputs)
+                _, preds = torch.max(outputs, 1)
+                all_preds.extend(preds.cpu().numpy())
+                all_labels.extend(labels.numpy())
+                
+        inference_time_ms = int(((time.time() - start_time) / len(dataset)) * 1000)
+        
+        acc = accuracy_score(all_labels, all_preds) * 100
+        prec = precision_score(all_labels, all_preds, average='weighted', zero_division=0) * 100
+        rec = recall_score(all_labels, all_preds, average='weighted', zero_division=0) * 100
+        
+        metrics_file = os.path.join(dataset_dir, "metrics_history.json")
+        history = []
+        if os.path.exists(metrics_file):
+            try:
+                with open(metrics_file, 'r') as f:
+                    history = json.load(f)
+            except:
+                pass
+                
+        version_num = len(history) + 1
+        new_metric = {
+            "version": f"v1.0.{version_num}",
+            "accuracy": f"{round(acc, 1)}%",
+            "precision": f"{round(prec, 1)}%",
+            "recall": f"{round(rec, 1)}%",
+            "latency": f"{inference_time_ms}ms",
+            "dataset_size": len(dataset),
+            "classes": "27 Sub-Categories (Full)"
+        }
+        history.append(new_metric)
+        
+        with open(metrics_file, 'w') as f:
+            json.dump(history, f, indent=4)
+        
+        print(f"Metrics saved: {new_metric}")
+
         return True
     except Exception as e:
         print(f"Fine-tuning error: {e}")

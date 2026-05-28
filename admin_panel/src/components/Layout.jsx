@@ -14,7 +14,8 @@ import {
     ShoppingCart,
     Tags,
     MessageSquareWarning,
-    Bell
+    Bell,
+    BrainCircuit
 } from 'lucide-react';
 import api from '../services/api';
 
@@ -143,6 +144,10 @@ const Layout = ({ children }) => {
                                 <NavLink to="/users" className={({isActive}) => `nav-link ${isActive ? 'active' : ''}`}>
                                     <Users size={20} />
                                     <span>User Management</span>
+                                </NavLink>
+                                <NavLink to="/ml-models" className={({isActive}) => `nav-link ${isActive ? 'active' : ''}`}>
+                                    <BrainCircuit size={20} />
+                                    <span>ML Models</span>
                                 </NavLink>
                                 <NavLink to="/backup" className={({isActive}) => `nav-link ${isActive ? 'active' : ''}`}>
                                     <DatabaseBackup size={20} />

@@ -725,6 +725,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please login to report')));
       return;
     }
+    final outerContext = context;
     showDialog(
       context: context,
       builder: (context) {
@@ -787,8 +788,8 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                         // Ignore mock error
                     }
 
-                    if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Listing reported successfully. Moderators will review.')));
+                    if (outerContext.mounted) {
+                        ScaffoldMessenger.of(outerContext).showSnackBar(const SnackBar(content: Text('Listing reported successfully. Moderators will review.')));
                     }
                   },
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
@@ -892,7 +893,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                        if (picked != null) {
                          int selectedDays = picked.end.difference(picked.start).inDays + 1;
                          if (selectedDays > widget.product.maxRentalDuration) {
-                              if (mounted) {
+                              if (context.mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                                       content: Text('Maximum rental duration is ${widget.product.maxRentalDuration} days!'),
                                       backgroundColor: Colors.red,

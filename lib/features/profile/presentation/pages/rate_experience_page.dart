@@ -95,7 +95,7 @@ class _RateExperiencePageState extends State<RateExperiencePage> {
             // User Avatar & Title
             CircleAvatar(
               radius: 40,
-              backgroundColor: primary.withOpacity(0.1),
+              backgroundColor: primary.withValues(alpha: 0.1),
               child: Text(
                   widget.revieweeName.isNotEmpty ? widget.revieweeName[0].toUpperCase() : '?',
                   style: GoogleFonts.outfit(fontSize: 32, fontWeight: FontWeight.bold, color: primary),
@@ -202,7 +202,7 @@ class _RateExperiencePageState extends State<RateExperiencePage> {
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.grey.withOpacity(0.3)),
+                border: Border.all(color: Colors.grey.withValues(alpha: 0.3)),
               ),
               child: TextField(
                 controller: _commentController,

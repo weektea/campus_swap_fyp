@@ -55,16 +55,6 @@ class _MyTransactionsPageState extends State<MyTransactionsPage> with SingleTick
     }
   }
 
-  Future<void> _updateStatus(String id, String newStatus) async {
-      try {
-          final apiClient = ApiClient();
-          await apiClient.patch('/transactions/$id/status', {'status': newStatus});
-          _fetchAllTransactions(); // Refresh
-          if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Status updated to $newStatus')));
-      } catch (e) {
-          if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
-      }
-  }
 
   @override
   Widget build(BuildContext context) {

@@ -15,6 +15,7 @@ import Analytics from './pages/Analytics';
 import Transactions from './pages/Transactions';
 import Categories from './pages/Categories';
 import Reviews from './pages/Reviews';
+import MLModels from './pages/MLModels';
 import PrivateRoute from './components/PrivateRoute';
 
 function App() {
@@ -100,6 +101,14 @@ function App() {
           <PrivateRoute>
             <Layout>
               <Analytics />
+            </Layout>
+          </PrivateRoute>
+        } />
+
+        <Route path="/ml-models" element={
+          <PrivateRoute>
+            <Layout>
+              <MLModels />
             </Layout>
           </PrivateRoute>
         } />

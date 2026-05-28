@@ -200,9 +200,9 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                      color: Colors.white,
                      borderRadius: BorderRadius.circular(12),
                      boxShadow: [
-                        BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2))
+                        BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8, offset: const Offset(0, 2))
                      ],
-                     border: Border.all(color: Colors.grey.withOpacity(0.1)),
+                     border: Border.all(color: Colors.grey.withValues(alpha: 0.1)),
                   ),
                   child: Row(
                      children: [
