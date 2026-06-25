@@ -69,7 +69,15 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-        appBar: AppBar(title: Text(widget.userName, style: GoogleFonts.outfit())),
+        appBar: AppBar(
+            title: Text(widget.userName, style: GoogleFonts.outfit()),
+            actions: [
+                IconButton(
+                    icon: const Icon(Icons.report_gmailerrorred_rounded, color: Colors.red),
+                    onPressed: () => _showReportUserDialog(context),
+                )
+            ],
+        ),
         body: _isLoading 
             ? const Center(child: CircularProgressIndicator())
             : SingleChildScrollView(
@@ -127,7 +135,13 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
                                 itemBuilder: (context, index) {
                                     final product = _listings[index];
                                     return GestureDetector(
-                                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailsPage(product: product))),
+                                        onTap: () => Navigator.push(context, MaterialPageRoute(
+                                             builder: (_) => ProductDetailsPage(product: product)
+                                         )).then((result) {
+                                             if (result == 'reported') {
+                                                 _fetchData();
+                                             }
+                                         }),
                                         child: Container(
                                             padding: const EdgeInsets.all(12),
                                             decoration: BoxDecoration(
@@ -176,5 +190,103 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
                 ),
             )
     );
+  }
+
+  void _showReportUserDialog(BuildContext context) {
+      showDialog(
+          context: context,
+          builder: (context) {
+              String description = '';
+              String violationType = 'Harassment';
+              bool isSubmitting = false;
+              return StatefulBuilder(
+                  builder: (context, setState) {
+                      return AlertDialog(
+                          title: Text('Report @${widget.userName}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                          content: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                  DropdownButtonFormField<String>(
+                                      value: violationType,
+                                      decoration: const InputDecoration(
+                                          labelText: 'Reason for Report',
+                                          border: OutlineInputBorder(),
+                                      ),
+                                      items: const [
+                                          DropdownMenuItem(value: 'Harassment', child: Text('Offline Harassment')),
+                                          DropdownMenuItem(value: 'No-show', child: Text('No-show / Flaked')),
+                                          DropdownMenuItem(value: 'Scam', child: Text('Scam / Fraud')),
+                                          DropdownMenuItem(value: 'Spam', child: Text('Spamming')),
+                                          DropdownMenuItem(value: 'Other', child: Text('Other Misbehavior')),
+                                      ],
+                                      onChanged: (val) {
+                                          if (val != null) {
+                                              setState(() => violationType = val);
+                                          }
+                                      },
+                                  ),
+                                  const SizedBox(height: 12),
+                                  TextField(
+                                      onChanged: (val) => description = val,
+                                      maxLines: 3,
+                                      decoration: const InputDecoration(
+                                          labelText: 'Details of Misconduct',
+                                          hintText: 'Explain the issue or behavior...',
+                                          border: OutlineInputBorder(),
+                                      ),
+                                  ),
+                              ],
+                          ),
+                          actions: [
+                              TextButton(
+                                  onPressed: isSubmitting ? null : () => Navigator.pop(context),
+                                  child: const Text('Cancel'),
+                              ),
+                              ElevatedButton(
+                                  onPressed: isSubmitting
+                                      ? null
+                                      : () async {
+                                          if (description.trim().isEmpty) {
+                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                  const SnackBar(content: Text('Please provide details of misconduct')),
+                                              );
+                                              return;
+                                          }
+                                          setState(() => isSubmitting = true);
+                                          try {
+                                              final apiClient = ApiClient();
+                                              await apiClient.post('/auth/user/${widget.userId}/report', {
+                                                  'violation_type': violationType,
+                                                  'description': description.trim(),
+                                              });
+                                              if (context.mounted) {
+                                                  ScaffoldMessenger.of(context).showSnackBar(
+                                                      const SnackBar(content: Text('User reported successfully.'), backgroundColor: Colors.green),
+                                                  );
+                                                  Navigator.pop(context);
+                                              }
+                                          } catch (e) {
+                                              if (context.mounted) {
+                                                  ScaffoldMessenger.of(context).showSnackBar(
+                                                      SnackBar(content: Text('Failed to submit report: $e'), backgroundColor: Colors.red),
+                                                  );
+                                              }
+                                          } finally {
+                                              if (context.mounted) {
+                                                  setState(() => isSubmitting = false);
+                                              }
+                                          }
+                                      },
+                                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF006940)),
+                                  child: isSubmitting
+                                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                                      : const Text('Submit', style: TextStyle(color: Colors.white)),
+                              ),
+                          ],
+                      );
+                  },
+              );
+          },
+      );
   }
 }

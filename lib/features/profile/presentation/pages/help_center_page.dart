@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:campus_swap/core/api/api_client.dart';
 import 'package:campus_swap/features/profile/presentation/pages/ticket_chat_page.dart';
-import 'package:campus_swap/features/profile/presentation/pages/my_purchases_page.dart';
-import 'package:campus_swap/features/profile/presentation/pages/settings_page.dart';
 import 'package:campus_swap/features/profile/presentation/pages/submit_ticket_page.dart';
+import 'package:campus_swap/features/profile/presentation/pages/help_category_detail_page.dart';
 
 class HelpCenterPage extends StatefulWidget {
   const HelpCenterPage({super.key});
@@ -20,6 +19,62 @@ class _HelpCenterPageState extends State<HelpCenterPage> with SingleTickerProvid
   List<dynamic> _disputes = [];
   List<dynamic> _tickets = [];
   bool _isLoading = true;
+  String _currentFilter = 'All'; // 'All', 'Pending', 'Resolved'
+
+  int get _pendingCount {
+    int count = 0;
+    for (var t in _tickets) {
+      if (t['status'] != 'Resolved') count++;
+    }
+    for (var d in _disputes) {
+      if (d['status'] != 'Resolved') count++;
+    }
+    for (var r in _reports) {
+      if (['Pending', 'In-Progress', 'Escalated', 'Awaiting Reply'].contains(r['status'])) count++;
+    }
+    return count;
+  }
+
+  int get _resolvedCount {
+    int count = 0;
+    for (var t in _tickets) {
+      if (t['status'] == 'Resolved') count++;
+    }
+    for (var d in _disputes) {
+      if (d['status'] == 'Resolved') count++;
+    }
+    for (var r in _reports) {
+      if (['Uphold', 'Dismissed'].contains(r['status'])) count++;
+    }
+    return count;
+  }
+
+  List<dynamic> get _filteredReports {
+    if (_currentFilter == 'Pending') {
+      return _reports.where((r) => ['Pending', 'In-Progress', 'Escalated', 'Awaiting Reply'].contains(r['status'])).toList();
+    } else if (_currentFilter == 'Resolved') {
+      return _reports.where((r) => ['Uphold', 'Dismissed'].contains(r['status'])).toList();
+    }
+    return _reports;
+  }
+
+  List<dynamic> get _filteredDisputes {
+    if (_currentFilter == 'Pending') {
+      return _disputes.where((d) => d['status'] != 'Resolved').toList();
+    } else if (_currentFilter == 'Resolved') {
+      return _disputes.where((d) => d['status'] == 'Resolved').toList();
+    }
+    return _disputes;
+  }
+
+  List<dynamic> get _filteredTickets {
+    if (_currentFilter == 'Pending') {
+      return _tickets.where((t) => t['status'] != 'Resolved').toList();
+    } else if (_currentFilter == 'Resolved') {
+      return _tickets.where((t) => t['status'] == 'Resolved').toList();
+    }
+    return _tickets;
+  }
 
   @override
   void initState() {
@@ -67,6 +122,8 @@ class _HelpCenterPageState extends State<HelpCenterPage> with SingleTickerProvid
       case 'investigating':
       case 'escalated':
         return const Color(0xFF2196F3); // Blue
+      case 'awaiting reply':
+        return const Color(0xFFFF5722); // Orange for awaiting reply
       case 'dismissed':
       case 'cancelled':
         return const Color(0xFFF44336); // Red
@@ -100,21 +157,161 @@ class _HelpCenterPageState extends State<HelpCenterPage> with SingleTickerProvid
           borderRadius: BorderRadius.circular(12),
           onTap: () {
             if (label == 'Orders') {
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const MyTransactionsPage()));
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => HelpCategoryDetailPage(
+                    categoryName: 'Orders',
+                    introduction: 'Find answers about purchasing, selling, renting, payments, and disputes.',
+                    faqs: [
+                      HelpFaqItem(
+                        question: 'How do I purchase an item?',
+                        answer: 'Click "Buy Now" on any available listing. You can negotiate details with the seller via chat. Payments are held in escrow for your security.',
+                      ),
+                      HelpFaqItem(
+                        question: 'How does renting work?',
+                        answer: 'Rental listings require a daily rate and a security deposit. Once the rental duration ends, return the item and confirm with the seller to get your deposit back.',
+                      ),
+                      HelpFaqItem(
+                        question: 'What is the escrow payment system?',
+                        answer: 'When you pay for an item, the funds are held securely by the Campus Swap system. They are only released to the seller after you confirm receipt.',
+                      ),
+                      HelpFaqItem(
+                        question: 'How do I cancel my order?',
+                        answer: 'You can request order cancellation before the seller has scheduled a meetup. Go to your orders and click "Cancel".',
+                      ),
+                      HelpFaqItem(
+                        question: 'How do I open a dispute?',
+                        answer: 'If an item is not received, damaged, or fraudulent, you can open a dispute from the Order details screen to request admin mediation.',
+                      ),
+                      HelpFaqItem(
+                        question: 'Where should I meet the seller?',
+                        answer: 'We recommend using designated Safe Meetup Zones on campus. These are public, well-lit, and monitored areas.',
+                      ),
+                    ],
+                  ),
+                ),
+              );
             } else if (label == 'App Issues') {
               Navigator.push(context, MaterialPageRoute(builder: (_) => const SubmitTicketPage()));
             } else if (label == 'Account') {
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsPage()));
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => HelpCategoryDetailPage(
+                    categoryName: 'Account',
+                    introduction: 'Manage your profile, student verification, notifications, and security.',
+                    faqs: [
+                      HelpFaqItem(
+                        question: 'How do I update my profile details?',
+                        answer: 'Go to Profile -> Edit Profile to change your display name, bio, and contact preferences.',
+                      ),
+                      HelpFaqItem(
+                        question: 'What is the Academic Identity / Student ID?',
+                        answer: 'Your Student ID is verified during registration to ensure all campus swap users are active students. It cannot be edited after verification.',
+                      ),
+                      HelpFaqItem(
+                        question: 'How is my sustainability rating calculated?',
+                        answer: 'Your green score increases with every successful transaction. Reusing items on campus directly prevents carbon emissions.',
+                      ),
+                      HelpFaqItem(
+                        question: 'What happens if I receive a warning or ban?',
+                        answer: 'To maintain a safe campus environment, users who violate community guidelines may receive warnings, temporary suspensions, or permanent bans.',
+                      ),
+                      HelpFaqItem(
+                        question: 'Can I change my registered email?',
+                        answer: 'Your email is tied to your verified university domain and cannot be changed. If you need to update it, contact support.',
+                      ),
+                    ],
+                  ),
+                ),
+              );
             } else if (label == 'Report User') {
               showDialog(
                 context: context,
-                builder: (_) => AlertDialog(
-                  title: const Text('Report User', style: TextStyle(fontWeight: FontWeight.bold)),
-                  content: const Text('To report a user for misconduct or fraud, please navigate to their public profile and click the "Report" icon in the top right corner.'),
-                  actions: [
-                    TextButton(onPressed: () => Navigator.pop(context), child: const Text('Got it'))
-                  ]
-                )
+                builder: (context) {
+                  String targetUsername = '';
+                  String description = '';
+                  bool isSubmitting = false;
+                  return StatefulBuilder(
+                    builder: (context, setState) {
+                      return AlertDialog(
+                        title: const Text('Report User', style: TextStyle(fontWeight: FontWeight.bold)),
+                        content: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            TextField(
+                              onChanged: (val) => targetUsername = val,
+                              decoration: const InputDecoration(
+                                labelText: 'Target Username (Optional)',
+                                hintText: 'Enter username to report...',
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            TextField(
+                              onChanged: (val) => description = val,
+                              maxLines: 3,
+                              decoration: const InputDecoration(
+                                labelText: 'Details of Misconduct',
+                                hintText: 'Explain the issue or harassment...',
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                          ],
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: isSubmitting ? null : () => Navigator.pop(context),
+                            child: const Text('Cancel'),
+                          ),
+                          ElevatedButton(
+                            onPressed: isSubmitting
+                                ? null
+                                : () async {
+                                    if (description.trim().isEmpty) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(content: Text('Please provide details of misconduct')),
+                                      );
+                                      return;
+                                    }
+                                    setState(() => isSubmitting = true);
+                                    try {
+                                      final apiClient = ApiClient();
+                                      await apiClient.post('/tickets', {
+                                        'category': 'Harassment',
+                                        'subject': targetUsername.trim().isNotEmpty
+                                            ? 'Reporting User: ${targetUsername.trim()}'
+                                            : 'Reporting User',
+                                        'description': description.trim(),
+                                      });
+                                      if (context.mounted) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(content: Text('Report submitted successfully as a support ticket.')),
+                                        );
+                                        Navigator.pop(context);
+                                        _fetchData();
+                                      }
+                                    } catch (e) {
+                                      if (context.mounted) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(content: Text('Failed to submit report: $e'), backgroundColor: Colors.red),
+                                        );
+                                      }
+                                    } finally {
+                                      setState(() => isSubmitting = false);
+                                    }
+                                  },
+                            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF006940)),
+                            child: isSubmitting
+                                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                                : const Text('Submit', style: TextStyle(color: Colors.white)),
+                          ),
+                        ],
+                      );
+                    },
+                  );
+                },
               );
             }
           },
@@ -308,6 +505,94 @@ class _HelpCenterPageState extends State<HelpCenterPage> with SingleTickerProvid
                 const SizedBox(height: 32),
                 
                 const Text('My Support Tickets', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _currentFilter = _currentFilter == 'Pending' ? 'All' : 'Pending';
+                          });
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: _currentFilter == 'Pending' ? primaryGreen.withValues(alpha: 0.1) : (isDark ? Colors.grey[850] : Colors.white),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: _currentFilter == 'Pending' ? primaryGreen : Colors.grey.withValues(alpha: 0.2),
+                              width: 2,
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '$_pendingCount Pending',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: _currentFilter == 'Pending' ? primaryGreen : (isDark ? Colors.white : Colors.black87),
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Active Tickets',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _currentFilter = _currentFilter == 'Resolved' ? 'All' : 'Resolved';
+                          });
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: _currentFilter == 'Resolved' ? Colors.green.withValues(alpha: 0.1) : (isDark ? Colors.grey[850] : Colors.white),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: _currentFilter == 'Resolved' ? Colors.green : Colors.grey.withValues(alpha: 0.2),
+                              width: 2,
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '$_resolvedCount Resolved',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: _currentFilter == 'Resolved' ? Colors.green : (isDark ? Colors.white : Colors.black87),
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'History',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
@@ -335,22 +620,22 @@ class _HelpCenterPageState extends State<HelpCenterPage> with SingleTickerProvid
                   // Reports Tab
                   ListView.builder(
                     padding: const EdgeInsets.all(16),
-                    itemCount: _reports.length,
-                    itemBuilder: (context, index) => _buildTicketCard(_reports[index], 'Report'),
+                    itemCount: _filteredReports.length,
+                    itemBuilder: (context, index) => _buildTicketCard(_filteredReports[index], 'Report'),
                   ),
                   
                   // Disputes Tab
                   ListView.builder(
                     padding: const EdgeInsets.all(16),
-                    itemCount: _disputes.length,
-                    itemBuilder: (context, index) => _buildTicketCard(_disputes[index], 'Dispute'),
+                    itemCount: _filteredDisputes.length,
+                    itemBuilder: (context, index) => _buildTicketCard(_filteredDisputes[index], 'Dispute'),
                   ),
                   
                   // Tickets Tab
                   ListView.builder(
                     padding: const EdgeInsets.all(16),
-                    itemCount: _tickets.length,
-                    itemBuilder: (context, index) => _buildTicketCard(_tickets[index], 'SupportTicket'),
+                    itemCount: _filteredTickets.length,
+                    itemBuilder: (context, index) => _buildTicketCard(_filteredTickets[index], 'SupportTicket'),
                   ),
                 ],
               ),

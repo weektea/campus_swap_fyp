@@ -28,6 +28,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   List<dynamic> _messages = [];
   bool _isLoading = true;
   Timer? _timer;
+  List<SafeZone> _allZones = [];
 
   @override
   void dispose() {
@@ -43,7 +44,27 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         _controller.text = widget.initialMessage!;
     }
     _fetchMessages();
+    _fetchZones();
     _timer = Timer.periodic(const Duration(seconds: 3), (_) => _fetchMessages(silent: true));
+  }
+
+  Future<void> _fetchZones() async {
+    try {
+      final apiClient = ApiClient();
+      final response = await apiClient.get('/zones');
+      if (response is List) {
+        final loadedZones = response
+            .map((item) => SafeZone.fromJson(item as Map<String, dynamic>))
+            .toList();
+        if (mounted) {
+          setState(() {
+            _allZones = loadedZones;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Error fetching zones in chat: $e');
+    }
   }
 
   Future<void> _fetchMessages({bool silent = false}) async {
@@ -167,6 +188,16 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
               ],
             ),
         ),
+        actions: [
+            IconButton(
+                icon: const Icon(Icons.report_gmailerrorred_rounded, color: Colors.red),
+                onPressed: () {
+                    if (widget.otherUserId != null) {
+                        _showReportUserDialog(context, widget.otherUserId!, widget.sellerName);
+                    }
+                },
+            )
+        ],
       ),
       body: Column(
         children: [
@@ -279,10 +310,17 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                     textContent = parts[0];
                     if (parts.length > 1) {
                        final mapKey = parts[1].trim();
-                       targetZone = SafeZone.predefinedZones.cast<SafeZone?>().firstWhere(
-                         (z) => z!.id == mapKey || z.name == mapKey, 
-                         orElse: () => null
-                       );
+                       try {
+                          targetZone = _allZones.firstWhere(
+                            (z) => z.id == mapKey || z.name == mapKey
+                          );
+                       } catch (_) {
+                          try {
+                             targetZone = SafeZone.predefinedZones.firstWhere(
+                               (z) => z.id == mapKey || z.name == mapKey
+                             );
+                          } catch (_) {}
+                       }
                     }
                 }
 
@@ -423,5 +461,103 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         ],
       ),
     );
+  }
+
+  void _showReportUserDialog(BuildContext context, String targetUserId, String targetUserName) {
+      showDialog(
+          context: context,
+          builder: (context) {
+              String description = '';
+              String violationType = 'Harassment';
+              bool isSubmitting = false;
+              return StatefulBuilder(
+                  builder: (context, setState) {
+                      return AlertDialog(
+                          title: Text('Report @$targetUserName', style: const TextStyle(fontWeight: FontWeight.bold)),
+                          content: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                  DropdownButtonFormField<String>(
+                                      value: violationType,
+                                      decoration: const InputDecoration(
+                                          labelText: 'Reason for Report',
+                                          border: OutlineInputBorder(),
+                                      ),
+                                      items: const [
+                                          DropdownMenuItem(value: 'Harassment', child: Text('Offline Harassment')),
+                                          DropdownMenuItem(value: 'No-show', child: Text('No-show / Flaked')),
+                                          DropdownMenuItem(value: 'Scam', child: Text('Scam / Fraud')),
+                                          DropdownMenuItem(value: 'Spam', child: Text('Spamming')),
+                                          DropdownMenuItem(value: 'Other', child: Text('Other Misbehavior')),
+                                      ],
+                                      onChanged: (val) {
+                                          if (val != null) {
+                                              setState(() => violationType = val);
+                                          }
+                                      },
+                                  ),
+                                  const SizedBox(height: 12),
+                                  TextField(
+                                      onChanged: (val) => description = val,
+                                      maxLines: 3,
+                                      decoration: const InputDecoration(
+                                          labelText: 'Details of Misconduct',
+                                          hintText: 'Explain the issue or behavior...',
+                                          border: OutlineInputBorder(),
+                                      ),
+                                  ),
+                              ],
+                          ),
+                          actions: [
+                              TextButton(
+                                  onPressed: isSubmitting ? null : () => Navigator.pop(context),
+                                  child: const Text('Cancel'),
+                              ),
+                              ElevatedButton(
+                                  onPressed: isSubmitting
+                                      ? null
+                                      : () async {
+                                          if (description.trim().isEmpty) {
+                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                  const SnackBar(content: Text('Please provide details of misconduct')),
+                                              );
+                                              return;
+                                          }
+                                          setState(() => isSubmitting = true);
+                                          try {
+                                              final apiClient = ApiClient();
+                                              await apiClient.post('/auth/user/$targetUserId/report', {
+                                                  'violation_type': violationType,
+                                                  'description': description.trim(),
+                                              });
+                                              if (context.mounted) {
+                                                  ScaffoldMessenger.of(context).showSnackBar(
+                                                      const SnackBar(content: Text('User reported successfully.'), backgroundColor: Colors.green),
+                                                  );
+                                                  Navigator.pop(context);
+                                              }
+                                          } catch (e) {
+                                              if (context.mounted) {
+                                                  ScaffoldMessenger.of(context).showSnackBar(
+                                                      SnackBar(content: Text('Failed to submit report: $e'), backgroundColor: Colors.red),
+                                                  );
+                                              }
+                                          } finally {
+                                              if (context.mounted) {
+                                                  setState(() => isSubmitting = false);
+                                              }
+                                          }
+                                      },
+                                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF006940)),
+                                  child: isSubmitting
+                                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                                      : const Text('Submit', style: TextStyle(color: Colors.white)),
+                              ),
+                          ],
+                      );
+                  },
+              );
+          },
+      );
   }
 }

@@ -28,7 +28,7 @@ const Dispute = sequelize.define('Dispute', {
         defaultValue: [],
     },
     status: {
-        type: DataTypes.ENUM('New', 'Investigating', 'Escalated', 'Resolved'),
+        type: DataTypes.STRING,
         defaultValue: 'New',
     },
     handled_by: {

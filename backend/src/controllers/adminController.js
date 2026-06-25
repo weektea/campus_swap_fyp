@@ -1,13 +1,20 @@
-import { User, Product, Transaction, Report, SupportTicket, Category, SubCategory, Dispute, BackupLog, Review, SafeMeetupZone } from '../models/index.js';
+import { User, Product, Transaction, Report, SupportTicket, Category, SubCategory, Dispute, BackupLog, Review, SafeMeetupZone, Notification, TicketMessage } from '../models/index.js';
 import { Op } from 'sequelize';
 import { exec } from 'child_process';
 import path from 'path';
+import { getCarbonValue } from './transactionController.js';
 
 // ======================= MODERATOR & ADMIN SHARED =======================
 
 export const getListings = async (req, res) => {
     try {
-        const products = await Product.findAll({ include: [{ model: User, as: 'seller', attributes: ['full_name', 'email'] }] });
+        const products = await Product.findAll({ 
+            include: [{ 
+                model: User, 
+                as: 'seller', 
+                attributes: ['full_name', 'email', 'reputation_score', 'is_active', 'is_verified'] 
+            }] 
+        });
         res.json(products);
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -36,7 +43,7 @@ export const suspendListing = async (req, res) => {
 
 export const getReports = async (req, res) => {
     try {
-        const reports = await Report.findAll({ include: ['reporter', 'product'] });
+        const reports = await Report.findAll({ include: ['reporter', 'product', 'handler', 'reported_user'] });
         res.json(reports);
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -45,7 +52,21 @@ export const getReports = async (req, res) => {
 
 export const getDisputes = async (req, res) => {
     try {
-        const disputes = await Dispute.findAll({ include: ['transaction', 'complainant'] });
+        const disputes = await Dispute.findAll({
+            include: [
+                {
+                    model: Transaction,
+                    as: 'transaction',
+                    include: [
+                        { model: Product, as: 'product' },
+                        { model: User, as: 'buyer', attributes: ['id', 'email', 'full_name'] },
+                        { model: User, as: 'seller', attributes: ['id', 'email', 'full_name'] }
+                    ]
+                },
+                'complainant',
+                'handler'
+            ]
+        });
         res.json(disputes);
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -60,6 +81,7 @@ export const triageDispute = async (req, res) => {
         
         dispute.status = action === 'Escalated' ? 'Escalated to Admin' : action;
         if (mod_notes) dispute.admin_notes = mod_notes;
+        dispute.handled_by = req.user.id;
         await dispute.save();
         res.json({ message: 'Dispute triaged successfully', dispute });
     } catch (e) {
@@ -75,6 +97,7 @@ export const arbitrateDispute = async (req, res) => {
         
         dispute.status = 'Resolved';
         dispute.admin_notes = `[Admin Arbitration]: ${decision}. Reason: ${reason}`;
+        dispute.handled_by = req.user.id;
         await dispute.save();
         res.json({ message: 'Dispute arbitrated successfully', dispute });
     } catch (e) {
@@ -90,6 +113,7 @@ export const resolveReport = async (req, res) => {
         
         report.status = status; // e.g. Uphold, Dismissed, Escalated
         if (admin_notes) report.admin_notes = admin_notes;
+        report.handled_by = req.user.id;
         await report.save();
 
         // If Upheld, Suspend the product and Cascade Cancel orders
@@ -99,11 +123,45 @@ export const resolveReport = async (req, res) => {
                 product.status = 'Suspended';
                 await product.save();
 
-                // Cascade: Cancel any active order holding this product
-                await Transaction.update(
-                    { status: 'Cancelled' },
-                    { where: { product_id: product.id, status: ['Pending', 'Scheduled', 'To Confirm'] } }
-                );
+                // Find active transactions for this product to cancel and notify buyer
+                const activeTransactions = await Transaction.findAll({
+                    where: {
+                        product_id: product.id,
+                        status: ['Pending', 'Scheduled', 'To Confirm']
+                    }
+                });
+
+                for (const tx of activeTransactions) {
+                    tx.status = 'Cancelled';
+                    await tx.save();
+
+                    // Notify the buyer
+                    await Notification.create({
+                        user_id: tx.buyer_id,
+                        title: 'Order Cancelled - Item Suspended',
+                        message: `The item "${product.title}" in your order #${tx.id.toString().substring(0, 8).toUpperCase()} has been suspended due to platform policy violations. The order has been automatically cancelled.`,
+                        type: 'System',
+                        related_id: tx.id
+                    });
+                }
+            }
+        }
+
+        // If Upheld and it is a User report -> Warn the user (reduce reputation by 1.0)
+        if (status === 'Uphold' && report.reported_user_id) {
+            const user = await User.findByPk(report.reported_user_id);
+            if (user) {
+                user.reputation_score = Math.max(1.0, user.reputation_score - 1.0);
+                await user.save();
+
+                // Notify the reported user
+                await Notification.create({
+                    user_id: user.id,
+                    title: 'Account Warning Issued',
+                    message: `A formal warning has been issued to your account following report #${report.id.toString().substring(0, 8).toUpperCase()}. Your reputation score was decreased.`,
+                    type: 'System',
+                    related_id: report.id
+                });
             }
         }
 
@@ -115,7 +173,7 @@ export const resolveReport = async (req, res) => {
 
 export const getTickets = async (req, res) => {
     try {
-        const tickets = await SupportTicket.findAll({ include: ['student'] });
+        const tickets = await SupportTicket.findAll({ include: ['student', 'handler'] });
         res.json(tickets);
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -169,8 +227,28 @@ export const replyTicket = async (req, res) => {
         // Release the lock
         ticket.lockedByModeratorId = null;
         ticket.lockedAt = null;
+        
+        ticket.handled_by = req.user.id;
 
         await ticket.save();
+
+        // Create the reply message in the ticket thread
+        await TicketMessage.create({
+            reference_id: ticket.id,
+            reference_type: 'SupportTicket',
+            sender_id: req.user.id,
+            content: reply_content
+        });
+
+        // Notify the student
+        await Notification.create({
+            user_id: ticket.user_id,
+            title: 'Support Ticket Reply',
+            message: `Your ticket regarding "${ticket.subject}" has been updated. Reply: ${reply_content}`,
+            type: 'System',
+            related_id: ticket.id
+        });
+
         res.json({ message: 'Ticket replied and lock released', ticket });
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -182,17 +260,48 @@ export const replyTicket = async (req, res) => {
 
 export const getSystemMetrics = async (req, res) => {
     try {
+        const { range } = req.query; // 'last30', 'quarter', 'semester', 'all'
+        
+        let startDate = null;
+        const now = new Date();
+        if (range === 'quarter') {
+            startDate = new Date();
+            startDate.setDate(now.getDate() - 90);
+        } else if (range === 'semester') {
+            startDate = new Date();
+            startDate.setDate(now.getDate() - 180);
+        } else if (range === 'all') {
+            startDate = null; // No date restriction
+        } else {
+            // default to last30
+            startDate = new Date();
+            startDate.setDate(now.getDate() - 30);
+        }
+
         const usersCount = await User.count();
         const activeUsers = await User.count({ where: { is_active: true } });
         const suspendedUsers = await User.count({ where: { is_active: false } });
         const productsCount = await Product.count();
+
+        // New registrations in range (using campus email authentication)
+        const userRegWhere = {};
+        if (startDate) {
+            userRegWhere.createdAt = { [Op.gte]: startDate };
+        }
+        const newRegistrations = await User.count({ where: userRegWhere });
         
+        // Active disputes (strictly 'New' or 'Investigating' states)
         const activeDisputes = await Dispute.count({
             where: { status: ['New', 'Investigating'] }
         });
 
+        // Transactions completed in range
+        const txWhere = { status: 'Completed' };
+        if (startDate) {
+            txWhere.completed_at = { [Op.gte]: startDate };
+        }
         const transactions = await Transaction.findAll({ 
-            where: { status: 'Completed' },
+            where: txWhere,
             include: [{
                 model: Product,
                 as: 'product',
@@ -200,7 +309,8 @@ export const getSystemMetrics = async (req, res) => {
                     { model: Category, as: 'categoryModel' },
                     { model: SubCategory, as: 'subcategoryModel' }
                 ]
-            }]
+            }],
+            order: [['completed_at', 'ASC']]
         });
         
         // Calculate metrics
@@ -208,10 +318,11 @@ export const getSystemMetrics = async (req, res) => {
         let gmv = 0.0;
         let categoryCarbonMap = {};
         
-        // Prepare mock time-series for the last 30 days based on transactions
-        const last30Days = Array.from({ length: 30 }, (_, i) => {
+        // Prepare dynamic chart days based on the duration of selected range
+        const daysToFetch = range === 'quarter' ? 90 : (range === 'semester' ? 180 : (range === 'all' ? 365 : 30));
+        const chartDays = Array.from({ length: daysToFetch }, (_, i) => {
             const d = new Date();
-            d.setDate(d.getDate() - (29 - i));
+            d.setDate(d.getDate() - (daysToFetch - 1 - i));
             return {
                 date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
                 sales: 0
@@ -223,19 +334,16 @@ export const getSystemMetrics = async (req, res) => {
             const amt = parseFloat(t.amount || 0);
             gmv += amt;
 
-            // Map transaction to a day (simple mapping for demonstration)
-            // If the transaction is too old, it might not fit in last30Days.
-            // For true logic, you'd parse t.createdAt. For demo, we just randomly distribute if no actual data fits, 
-            // but let's actually try to fit it into the last 30 days based on createdAt:
-            const tDate = new Date(t.createdAt);
+            // Map transaction to daily sales chart
+            const tDate = new Date(t.completed_at || t.createdAt);
             const tDateStr = tDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-            const dayEntry = last30Days.find(d => d.date === tDateStr);
+            const dayEntry = chartDays.find(d => d.date === tDateStr);
             if (dayEntry) {
                 dayEntry.sales += amt;
             }
 
             // Carbon (Prioritize SubCategory first)
-            let itemCarbon = 5.0; // Fallback
+            let itemCarbon = 2.5; // Fallback
             let catName = 'Other';
 
             if (t.product && t.product.subcategoryModel && t.product.subcategoryModel.carbon_conversion_factor > 0) {
@@ -254,11 +362,11 @@ export const getSystemMetrics = async (req, res) => {
             categoryCarbonMap[catName] += itemCarbon;
         });
         
-        // If no transactions in last 30 days, fill with some random realistic mock data so the chart isn't empty
-        let hasSalesData = last30Days.some(d => d.sales > 0);
+        // If no transactions in the range, populate small mock points for chart visibility
+        let hasSalesData = chartDays.some(d => d.sales > 0);
         if (!hasSalesData) {
-            last30Days.forEach(d => {
-                d.sales = Math.floor(Math.random() * 500) + 100;
+            chartDays.forEach(d => {
+                d.sales = Math.floor(Math.random() * 50) + 10;
             });
         }
 
@@ -277,11 +385,19 @@ export const getSystemMetrics = async (req, res) => {
         // Mock pie chart data if empty
         if (categoryData.length === 0) {
             categoryData = [
-                { name: 'Electronics', value: 400 },
-                { name: 'Books', value: 300 },
-                { name: 'Furniture', value: 300 }
+                { name: 'Electronics & Gadgets', value: 120 },
+                { name: 'Books & Study Materials', value: 80 },
+                { name: 'Furniture & Appliances', value: 60 }
             ];
-            topEcoCategory = 'Electronics';
+            topEcoCategory = 'Electronics & Gadgets';
+            maxCarbon = 120;
+        }
+
+        // Calculate contribution percentage of top category
+        let topEcoCategoryPercentage = 0;
+        const totalCatCarbon = categoryData.reduce((sum, item) => sum + item.value, 0);
+        if (totalCatCarbon > 0 && maxCarbon > 0) {
+            topEcoCategoryPercentage = Math.round((maxCarbon / totalCatCarbon) * 100);
         }
 
         res.json({
@@ -294,7 +410,9 @@ export const getSystemMetrics = async (req, res) => {
             gmv: gmv.toFixed(2),
             carbon_saved_kg: estimatedCarbonSaved,
             top_eco_category: topEcoCategory,
-            daily_sales: last30Days,
+            top_eco_category_percentage: topEcoCategoryPercentage,
+            new_registrations: newRegistrations,
+            daily_sales: chartDays,
             category_distribution: categoryData
         });
     } catch (e) {
@@ -663,8 +781,8 @@ export const getAlerts = async (req, res) => {
             if (tickets > 0) alerts.push({ type: 'ticket', count: tickets, message: `${tickets} support tickets escalated to Admin`, link: '/tickets' });
         } else {
             // Moderator
-            const reports = await Report.count({ where: { status: ['New', 'Pending'] } });
-            if (reports > 0) alerts.push({ type: 'report', count: reports, message: `${reports} new/pending reports`, link: '/reports' });
+            const reports = await Report.count({ where: { status: ['Pending', 'In-Progress'] } });
+            if (reports > 0) alerts.push({ type: 'report', count: reports, message: `${reports} pending/in-progress reports`, link: '/reports' });
 
             const disputes = await Dispute.count({ where: { status: ['New', 'Investigating'] } });
             if (disputes > 0) alerts.push({ type: 'dispute', count: disputes, message: `${disputes} new/investigating disputes`, link: '/disputes' });

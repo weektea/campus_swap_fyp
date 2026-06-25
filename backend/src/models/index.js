@@ -69,10 +69,16 @@ User.hasMany(Report, { foreignKey: 'reporter_id', as: 'filed_reports' });
 Report.belongsTo(User, { foreignKey: 'reporter_id', as: 'reporter' });
 Product.hasMany(Report, { foreignKey: 'product_id', as: 'reports' });
 Report.belongsTo(Product, { foreignKey: 'product_id', as: 'product' });
+User.hasMany(Report, { foreignKey: 'reported_user_id', as: 'received_reports' });
+Report.belongsTo(User, { foreignKey: 'reported_user_id', as: 'reported_user' });
+User.hasMany(Report, { foreignKey: 'handled_by', as: 'handled_reports' });
+Report.belongsTo(User, { foreignKey: 'handled_by', as: 'handler' });
 
 // Moderation: Support Tickets
 User.hasMany(SupportTicket, { foreignKey: 'user_id', as: 'support_tickets' });
 SupportTicket.belongsTo(User, { foreignKey: 'user_id', as: 'student' });
+User.hasMany(SupportTicket, { foreignKey: 'handled_by', as: 'handled_tickets' });
+SupportTicket.belongsTo(User, { foreignKey: 'handled_by', as: 'handler' });
 
 // Moderation: Disputes
 User.hasMany(Dispute, { foreignKey: 'complainant_id', as: 'filed_disputes' });

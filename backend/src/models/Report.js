@@ -13,10 +13,14 @@ const Report = sequelize.define('Report', {
     },
     product_id: {
         type: DataTypes.UUID,
-        allowNull: false,
+        allowNull: true,
+    },
+    reported_user_id: {
+        type: DataTypes.UUID,
+        allowNull: true,
     },
     violation_type: {
-        type: DataTypes.ENUM('Spam', 'Scam', 'Fake', 'Prohibited'),
+        type: DataTypes.STRING,
         allowNull: false,
     },
     description: {
@@ -27,8 +31,16 @@ const Report = sequelize.define('Report', {
         type: DataTypes.ENUM('Pending', 'In-Progress', 'Uphold', 'Dismissed', 'Escalated'),
         defaultValue: 'Pending',
     },
+    evidence_urls: {
+        type: DataTypes.JSON,
+        defaultValue: [],
+    },
     admin_notes: {
         type: DataTypes.TEXT,
+        allowNull: true,
+    },
+    handled_by: {
+        type: DataTypes.UUID,
         allowNull: true,
     }
 }, {

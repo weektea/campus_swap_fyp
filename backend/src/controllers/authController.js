@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { User, Transaction, Dispute } from '../models/index.js';
+import { User, Transaction, Dispute, Report } from '../models/index.js';
 import { Op } from 'sequelize';
 
 export const register = async (req, res) => {
@@ -165,10 +165,13 @@ export const updateProfile = async (req, res) => {
         }
 
         // Whitelist allowed updates
-        if (updates.profile_picture) user.profile_image_url = updates.profile_picture;
-        if (updates.full_name) user.full_name = updates.full_name;
-        if (updates.phone_number) user.phone_number = updates.phone_number;
-        // Add more fields if needed
+        if (updates.profile_picture !== undefined) user.profile_image_url = updates.profile_picture;
+        if (updates.full_name !== undefined) user.full_name = updates.full_name;
+        if (updates.phone_number !== undefined) user.phone_number = updates.phone_number;
+        if (updates.bio !== undefined) user.bio = updates.bio;
+        if (updates.faculty !== undefined) user.faculty = updates.faculty;
+        if (updates.year_of_study !== undefined) user.year_of_study = updates.year_of_study;
+        if (updates.privacy_setting !== undefined) user.privacy_setting = updates.privacy_setting;
 
         await user.save();
 
@@ -180,6 +183,10 @@ export const updateProfile = async (req, res) => {
                 full_name: user.full_name,
                 profile_picture: user.profile_image_url,
                 phone: user.phone_number,
+                bio: user.bio,
+                faculty: user.faculty,
+                year_of_study: user.year_of_study,
+                privacy_setting: user.privacy_setting,
                 role: user.role
             }
         });
@@ -197,7 +204,12 @@ export const getUserProfile = async (req, res) => {
         const requesterRole = req.user.role;
 
         const user = await User.findByPk(id, {
-            attributes: ['id', 'email', 'full_name', 'profile_image_url', 'phone_number', 'role', 'total_carbon_saved', 'carbon_saved_buyer', 'carbon_saved_seller', 'items_reused', 'reputation_score', 'total_reviews', 'privacy_setting', 'createdAt']
+            attributes: [
+                'id', 'email', 'full_name', 'profile_image_url', 'phone_number', 
+                'role', 'total_carbon_saved', 'carbon_saved_buyer', 'carbon_saved_seller', 
+                'items_reused', 'reputation_score', 'total_reviews', 'privacy_setting', 
+                'bio', 'faculty', 'year_of_study', 'createdAt'
+            ]
         });
         
         if (!user) {
@@ -307,5 +319,49 @@ export const forgotPassword = async (req, res) => {
     } catch (e) {
         console.error("Forgot Password Error:", e);
         res.status(500).json({ error: "Request failed" });
+    }
+};
+
+export const reportUser = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { violation_type, description, evidence_urls } = req.body;
+        const reporter_id = req.user.id;
+
+        const targetUser = await User.findByPk(id);
+        if (!targetUser) return res.status(404).json({ error: 'User not found' });
+
+        // Intercept self-report
+        if (targetUser.id === reporter_id) {
+            return res.status(400).json({ error: 'You cannot report yourself' });
+        }
+
+        // UC11 Constraint: Max 3 reports per 10 mins spam limit
+        const tenMinsAgo = new Date(Date.now() - 10 * 60 * 1000);
+        const recentReports = await Report.count({
+            where: {
+                reporter_id,
+                createdAt: { [Op.gte]: tenMinsAgo }
+            }
+        });
+
+        if (recentReports >= 3) {
+            return res.status(429).json({ error: 'You are submitting reports too quickly' });
+        }
+
+        const newReport = await Report.create({
+            reporter_id,
+            reported_user_id: targetUser.id,
+            product_id: null,
+            violation_type: violation_type || 'Other',
+            description,
+            evidence_urls: evidence_urls || [],
+            status: 'Pending'
+        });
+
+        res.status(201).json({ message: 'User reported successfully.', report: newReport });
+    } catch (error) {
+        console.error('Report User Error:', error);
+        res.status(500).json({ error: 'Failed to report user' });
     }
 };

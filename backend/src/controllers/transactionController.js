@@ -1,4 +1,4 @@
-import { Transaction, Product, User, Review } from '../models/index.js';
+import { Transaction, Product, User, Review, Category, SubCategory } from '../models/index.js';
 import { createNotification } from './notificationController.js';
 
 export const createTransaction = async (req, res) => {
@@ -93,7 +93,7 @@ export const getUserTransactions = async (req, res) => {
                 {
                     model: User,
                     as: type === 'selling' ? 'buyer' : 'seller',
-                    attributes: ['full_name', 'email']
+                    attributes: ['id', 'full_name', 'email']
                 },
                 {
                     model: Review,
@@ -104,7 +104,21 @@ export const getUserTransactions = async (req, res) => {
             ],
             order: [['createdAt', 'DESC']]
         });
-        res.json(transactions);
+        const maskedTransactions = transactions.map(tx => {
+            const txObj = tx.toJSON();
+            if (txObj.review_status !== 'PUBLISHED') {
+                if (type === 'buying') {
+                    txObj.rating_from_seller = null;
+                    txObj.seller_comment = "Awaiting the other party to submit their review to unlock.";
+                } else if (type === 'selling') {
+                    txObj.rating_from_buyer = null;
+                    txObj.buyer_comment = "Awaiting the other party to submit their review to unlock.";
+                }
+            }
+            return txObj;
+        });
+
+        res.json(maskedTransactions);
     } catch (error) {
         console.error('Get Transactions Error:', error);
         res.status(500).json({ error: 'Failed to fetch transactions' });
@@ -131,7 +145,24 @@ export const getTransactionById = async (req, res) => {
              return res.status(403).json({ error: 'Not authorized to view this transaction' });
         }
 
-        res.json(transaction);
+        const txObj = transaction.toJSON();
+        if (txObj.review_status !== 'PUBLISHED') {
+            if (reqUserId === String(txObj.buyer_id)) {
+                txObj.rating_from_seller = null;
+                txObj.seller_comment = "Awaiting the other party to submit their review to unlock.";
+                if (txObj.reviews) {
+                    txObj.reviews = txObj.reviews.filter(r => String(r.reviewer_id) === reqUserId);
+                }
+            } else if (reqUserId === String(txObj.seller_id)) {
+                txObj.rating_from_buyer = null;
+                txObj.buyer_comment = "Awaiting the other party to submit their review to unlock.";
+                if (txObj.reviews) {
+                    txObj.reviews = txObj.reviews.filter(r => String(r.reviewer_id) === reqUserId);
+                }
+            }
+        }
+
+        res.json(txObj);
     } catch (error) {
         console.error('Get Transaction By ID Error:', error);
         res.status(500).json({ error: 'Failed to fetch transaction details' });
@@ -139,54 +170,102 @@ export const getTransactionById = async (req, res) => {
 };
 
 const CARBON_SAVINGS = {
-    'Textbooks': 5.0,
-    'Novels': 2.7,
-    'Comics': 3.0,
-    'Reference': 4.5,
-    'Books_Others': 3.0,
-    
-    'Laptops': 250.0,
-    'Smartphones': 75.0,
-    'Accessories': 8.0,
+    // 1. Electronics & Gadgets
     'Audio': 15.0,
+    'Laptops': 250.0,
+    'PC Accessories': 10.0,
+    'Smartphones': 65.0,
+    'Tablets': 110.0,
     'Electronics_Others': 50.0,
+    'Electronics & Gadgets': 55.5,
     
-    'Clothing': 8.0,
-    'Shoes': 14.0,
-    'Bags': 10.0,
-    'Fashion_Accessories': 2.5,
+    // 2. Fashion & Accessories
+    'Bags & Luggage': 20.0,
+    'Clothing': 15.0,
+    'Fashion Accessories': 5.0,
+    'Shoes': 15.0,
+    'Fashion & Accessories': 8.2,
     
+    // 3. Furniture & Appliances
+    'Appliances': 80.0,
     'Chairs': 35.0,
-    'Tables': 80.0,
-    'Storage': 60.0,
-    'Furniture_Others': 15.0,
+    'Sofas': 150.0,
+    'Storage': 50.0,
+    'Tables & Desks': 60.0,
+    'Furniture_Others': 40.0,
+    'Furniture & Appliances': 30.0,
     
-    'Writing': 0.5,
-    'Paper': 1.5,
+    // 4. Books & Study Materials
+    'Books': 2.5,
+    'Calculators': 8.0,
+    'Notes & Past Papers': 1.5,
+    'Books_Others': 2.0,
+    'Books & Study Materials': 3.5,
+    
+    // 5. Sports
+    'Apparel': 10.0,
+    'Bicycles': 120.0,
+    'Equipment': 20.0,
+    'Sports_Others': 15.0,
+    'Sports': 15.0,
+    
+    // 6. Stationery
     'Art Supplies': 3.0,
+    'Paper': 5.0,
+    'Writing': 0.5,
     'Stationery_Others': 2.0,
+    'Stationery': 2.0,
     
-    'Equipment': 15.0,
-    'Apparel': 6.0,
-    'Bicycles': 150.0,
-    'Sports_Others': 10.0,
-    
-    'Miscellaneous': 10.0
+    // 7. Others
+    'Cosmetics & Beauty': 2.0,
+    'Drinkware': 5.0,
+    'Miscellaneous': 5.0,
+    'Others': 10.0
 };
 
-export const getCarbonValue = (category, subCategory) => {
-    if (CARBON_SAVINGS[subCategory]) return CARBON_SAVINGS[subCategory];
+export const getCarbonValue = (category, subCategory, product = null) => {
+    // Try database factors first
+    if (product) {
+        if (product.subcategoryModel && product.subcategoryModel.carbon_conversion_factor !== undefined && product.subcategoryModel.carbon_conversion_factor !== null) {
+            const factor = parseFloat(product.subcategoryModel.carbon_conversion_factor);
+            if (factor > 0) return factor;
+        }
+        if (product.categoryModel && product.categoryModel.carbon_conversion_factor !== undefined && product.categoryModel.carbon_conversion_factor !== null) {
+            const factor = parseFloat(product.categoryModel.carbon_conversion_factor);
+            if (factor > 0) return factor;
+        }
+    }
+
+    if (subCategory && CARBON_SAVINGS[subCategory] !== undefined) {
+        return CARBON_SAVINGS[subCategory];
+    }
     
-    // Fallback based on category
-    if (category === 'Books') return CARBON_SAVINGS['Books_Others'];
-    if (category === 'Electronics') return CARBON_SAVINGS['Electronics_Others'];
-    if (category === 'Fashion') return CARBON_SAVINGS['Fashion_Accessories'];
-    if (category === 'Furniture') return CARBON_SAVINGS['Furniture_Others'];
-    if (category === 'Stationery') return CARBON_SAVINGS['Stationery_Others'];
-    if (category === 'Sports') return CARBON_SAVINGS['Sports_Others'];
+    // Fallback based on category name
+    if (category && CARBON_SAVINGS[category] !== undefined) {
+        return CARBON_SAVINGS[category];
+    }
     
-    // Absolute Fallback (Code default to prevent crashes)
-    return 2.5;
+    // Legacy category maps
+    const categoryMapping = {
+        'Books': 'Books_Others',
+        'Electronics': 'Electronics_Others',
+        'Fashion': 'Fashion & Accessories',
+        'Furniture': 'Furniture_Others',
+        'Stationery': 'Stationery_Others',
+        'Sports': 'Sports_Others',
+        'Clothing & Fashion': 'Fashion & Accessories',
+        'Textbooks & Stationery': 'Books & Study Materials',
+        'Vehicles': 'Sports_Others'
+    };
+    
+    if (category && categoryMapping[category]) {
+        const mappedCat = categoryMapping[category];
+        if (CARBON_SAVINGS[mappedCat] !== undefined) {
+            return CARBON_SAVINGS[mappedCat];
+        }
+    }
+    
+    return 2.5; // Absolute Fallback
 };
 
 export const updateTransactionStatus = async (req, res) => {
@@ -215,8 +294,18 @@ export const updateTransactionStatus = async (req, res) => {
             return res.status(400).json({ error: `Invalid transition from ${oldStatus} to ${status}` });
         }
 
-        transaction.status = status;
-        await transaction.save();
+        // Atomic status update to prevent race conditions (double clicks)
+        const [affectedRows] = await Transaction.update(
+            { status: status },
+            { where: { id: id, status: oldStatus } }
+        );
+
+        if (affectedRows === 0) {
+            return res.status(409).json({ error: 'Transaction status has already been updated.' });
+        }
+
+        // Reload to sync the instance in memory for subsequent operations
+        await transaction.reload();
 
         const requesterId = req.user?.id;
         const otherPartyId = requesterId === transaction.buyer_id ? transaction.seller_id : transaction.buyer_id;
@@ -233,21 +322,36 @@ export const updateTransactionStatus = async (req, res) => {
             await transaction.save();
             
             // Calculate Carbon Savings
-            const product = await Product.findByPk(transaction.product_id);
+            const product = await Product.findByPk(transaction.product_id, {
+                include: [
+                    { model: Category, as: 'categoryModel' },
+                    { model: SubCategory, as: 'subcategoryModel' }
+                ]
+            });
             if (product) {
-                 const co2Saved = getCarbonValue(product.category, product.sub_category_id);
+                 const catName = product.categoryModel ? product.categoryModel.name : product.category;
+                 const subCatName = product.subcategoryModel ? product.subcategoryModel.name : null;
+                 const co2Saved = getCarbonValue(catName, subCatName, product);
                  
-                 // Update Buyer
-                 await User.increment(
-                     { items_reused: 1, total_carbon_saved: co2Saved, carbon_saved_buyer: co2Saved },
-                     { where: { id: transaction.buyer_id } }
-                 );
-                 
-                 // Update Seller
-                 await User.increment(
-                     { items_reused: 1, total_carbon_saved: co2Saved, carbon_saved_seller: co2Saved },
-                     { where: { id: transaction.seller_id } }
-                 );
+                 if (transaction.buyer_id === transaction.seller_id) {
+                     // Self-trade: only increment once to prevent double-counting
+                     await User.increment(
+                         { items_reused: 1, total_carbon_saved: co2Saved, carbon_saved_buyer: co2Saved, carbon_saved_seller: co2Saved },
+                         { where: { id: transaction.buyer_id } }
+                     );
+                 } else {
+                     // Update Buyer
+                     await User.increment(
+                         { items_reused: 1, total_carbon_saved: co2Saved, carbon_saved_buyer: co2Saved },
+                         { where: { id: transaction.buyer_id } }
+                     );
+                     
+                     // Update Seller
+                     await User.increment(
+                         { items_reused: 1, total_carbon_saved: co2Saved, carbon_saved_seller: co2Saved },
+                         { where: { id: transaction.seller_id } }
+                     );
+                 }
             }
 
             // Notify Buyer that Seller completed it

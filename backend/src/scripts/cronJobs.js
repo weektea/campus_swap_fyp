@@ -1,25 +1,31 @@
 import cron from 'node-cron';
 import { Op } from 'sequelize';
-import { Transaction, User } from '../models/index.js';
+import { Transaction, User, Review } from '../models/index.js';
 
 const updateReputation = async (userId) => {
-    const transactions = await Transaction.findAll({
-        where: { review_status: 'PUBLISHED' }
-    });
-    let totalScore = 0;
-    let count = 0;
-    for (const t of transactions) {
-        if (t.seller_id === userId && t.rating_from_buyer) {
-            totalScore += t.rating_from_buyer;
-            count++;
-        } else if (t.buyer_id === userId && t.rating_from_seller) {
-            totalScore += t.rating_from_seller;
-            count++;
+    try {
+        const reviews = await Review.findAll({
+            include: [{
+                model: Transaction,
+                as: 'transaction',
+                where: { review_status: 'PUBLISHED' }
+            }],
+            where: { reviewee_id: userId }
+        });
+
+        if (reviews.length > 0) {
+            const totalRating = reviews.reduce((sum, r) => sum + r.rating, 0);
+            const calculatedScore = totalRating / reviews.length;
+            
+            const user = await User.findByPk(userId);
+            if (user) {
+                user.reputation_score = parseFloat(calculatedScore.toFixed(1));
+                user.total_reviews = reviews.length;
+                await user.save();
+            }
         }
-    }
-    if (count > 0) {
-        const newScore = (totalScore / count).toFixed(2);
-        await User.update({ reputation_score: newScore }, { where: { id: userId } });
+    } catch (e) {
+        console.error(`Failed to update reputation for user ${userId}:`, e);
     }
 };
 

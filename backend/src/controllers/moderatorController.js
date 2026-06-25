@@ -12,6 +12,7 @@ export const updateReportStatus = async (req, res) => {
 
         report.status = status; // 'Uphold', 'Dismissed'
         if (admin_notes) report.admin_notes = admin_notes;
+        report.handled_by = req.user.id;
         await report.save();
 
         // Cascade Action if Uphold
@@ -38,6 +39,24 @@ export const updateReportStatus = async (req, res) => {
                         is_read: false
                     });
                 }
+            }
+        }
+
+        // If Upheld and it is a User report -> Warn the user (reduce reputation by 1.0)
+        if (status === 'Uphold' && report.reported_user_id) {
+            const user = await User.findByPk(report.reported_user_id);
+            if (user) {
+                user.reputation_score = Math.max(1.0, user.reputation_score - 1.0);
+                await user.save();
+
+                // Notify the reported user
+                await Notification.create({
+                    user_id: user.id,
+                    title: 'Account Warning Issued',
+                    message: `A formal warning has been issued to your account following report #${report.id.toString().substring(0, 8).toUpperCase()}. Your reputation score was decreased.`,
+                    type: 'System',
+                    related_id: report.id
+                });
             }
         }
 
@@ -75,12 +94,27 @@ export const triageDispute = async (req, res) => {
         } else if (action === 'Dismiss' || action === 'Mediation') {
             dispute.status = 'Resolved';
             
-            // If dismissed, unfreeze the order to 'To Confirm'
+            // If dismissed, unfreeze the order to its pre-dispute status
             if (action === 'Dismiss') {
                 const tx = await Transaction.findByPk(dispute.transaction_id);
                 if (tx && tx.status === 'Disputed') {
-                    tx.status = 'To Confirm';
+                    const restoredStatus = tx.pre_dispute_status || 'Completed';
+                    tx.status = restoredStatus;
+                    tx.pre_dispute_status = null;
                     await tx.save();
+
+                    // Align Product status
+                    if (restoredStatus === 'Completed') {
+                        await Product.update(
+                            { status: 'Sold' },
+                            { where: { id: tx.product_id } }
+                        );
+                    } else {
+                        await Product.update(
+                            { status: 'Reserved' },
+                            { where: { id: tx.product_id } }
+                        );
+                    }
                 }
             }
         } else {
@@ -124,6 +158,15 @@ export const claimTicket = async (req, res) => {
         ticket.status = 'In-Progress';
         await ticket.save();
 
+        // Notify user of claim
+        await Notification.create({
+            user_id: ticket.user_id,
+            title: 'Support Ticket In-Progress',
+            message: 'A moderator has claimed and is reviewing your support ticket.',
+            type: 'System',
+            related_id: ticket.id
+        });
+
         res.json({ message: 'Ticket locked successfully', ticket });
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -147,6 +190,7 @@ export const resolveTicket = async (req, res) => {
         ticket.status = 'Resolved';
         ticket.lockedByModeratorId = null;
         ticket.lockedAt = null;
+        ticket.handled_by = req.user.id;
         await ticket.save();
 
         // Notify user
@@ -169,7 +213,7 @@ export const getDashboardData = async (req, res) => {
     try {
         const reports = await Report.findAll({ 
             where: { status: 'Pending' },
-            include: ['reporter', 'product'] 
+            include: ['reporter', 'product', 'reported_user'] 
         });
         const disputes = await Dispute.findAll({ 
             where: { status: ['New', 'Investigating'] },
@@ -177,7 +221,7 @@ export const getDashboardData = async (req, res) => {
         });
         const tickets = await SupportTicket.findAll({ 
             where: { status: ['Open', 'In-Progress'] },
-            include: ['student'] 
+            include: ['student', 'handler'] 
         });
 
         res.json({ reports, disputes, tickets });

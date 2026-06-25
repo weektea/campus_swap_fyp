@@ -24,7 +24,7 @@ const SupportTicket = sequelize.define('SupportTicket', {
         allowNull: false,
     },
     status: {
-        type: DataTypes.ENUM('Open', 'In-Progress', 'Escalated', 'Resolved'),
+        type: DataTypes.STRING,
         defaultValue: 'Open',
     },
     reply_content: {
@@ -37,6 +37,10 @@ const SupportTicket = sequelize.define('SupportTicket', {
     },
     lockedAt: {
         type: DataTypes.DATE,
+        allowNull: true,
+    },
+    handled_by: {
+        type: DataTypes.UUID,
         allowNull: true,
     }
 }, {
