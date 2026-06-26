@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { User, Transaction, Dispute, Report } from '../models/index.js';
+import { User, Transaction, Dispute, Report, Product } from '../models/index.js';
 import { Op } from 'sequelize';
 
 export const register = async (req, res) => {
@@ -208,12 +208,12 @@ export const getUserProfile = async (req, res) => {
                 'id', 'email', 'full_name', 'profile_image_url', 'phone_number', 
                 'role', 'total_carbon_saved', 'carbon_saved_buyer', 'carbon_saved_seller', 
                 'items_reused', 'reputation_score', 'total_reviews', 'privacy_setting', 
-                'bio', 'faculty', 'year_of_study', 'createdAt'
+                'bio', 'faculty', 'year_of_study', 'createdAt', 'is_active'
             ]
         });
         
-        if (!user) {
-            return res.status(404).json({ error: 'User not found' });
+        if (!user || (user.is_active === false && requesterRole !== 'admin' && requesterRole !== 'moderator')) {
+            return res.status(404).json({ error: 'User not found or account is deactivated' });
         }
 
         // Privacy Redaction Logic (UC02, UC04)
@@ -224,6 +224,8 @@ export const getUserProfile = async (req, res) => {
         if (!isOwner && !isAdminOrMod && user.privacy_setting !== 'Public') {
             user.email = null;
             user.phone_number = null;
+            user.faculty = null;
+            user.year_of_study = null;
         }
         
         res.json({ user });
@@ -241,7 +243,7 @@ export const deleteAccount = async (req, res) => {
         // Ensure user is deleting their own account (or check this in middleware)
         // Here we just double check logic
         if (userId !== paramId) {
-            return res.status(403).json({ error: 'Cannot delete another user account.' });
+            return res.status(403).json({ error: 'Cannot deactivate another user account.' });
         }
 
         const user = await User.findByPk(userId);
@@ -268,11 +270,21 @@ export const deleteAccount = async (req, res) => {
             return res.status(403).json({ error: 'Cannot deactivate: You have active orders or disputes' });
         }
 
-        await user.destroy();
-        res.json({ message: 'Account deleted successfully' });
+        // Soft delete / Deactivate instead of hard destroy
+        user.is_active = false;
+        user.deactivation_reason = 'Deactivated by user';
+        await user.save();
+
+        // Cascade Updates: Suspend all active listings
+        await Product.update(
+            { status: 'Suspended' },
+            { where: { seller_id: userId, status: 'Available' } }
+        );
+
+        res.json({ message: 'Account deactivated successfully' });
     } catch (error) {
-        console.error('Delete Account Error:', error);
-        res.status(500).json({ error: 'Delete failed' });
+        console.error('Deactivate Account Error:', error);
+        res.status(500).json({ error: 'Deactivation failed' });
     }
 };
 

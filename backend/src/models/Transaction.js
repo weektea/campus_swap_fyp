@@ -73,6 +73,10 @@ const Transaction = sequelize.define('Transaction', {
         type: DataTypes.DATE,
         allowNull: true,
     },
+    pre_dispute_status: {
+        type: DataTypes.STRING,
+        allowNull: true,
+    },
 }, {
     timestamps: true,
 });

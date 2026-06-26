@@ -3,6 +3,7 @@ import 'package:campus_swap/core/api/api_client.dart';
 import 'package:campus_swap/core/session/user_session.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 class OpenDisputePage extends StatefulWidget {
   final Map<String, dynamic> transaction;
@@ -26,14 +27,14 @@ class _OpenDisputePageState extends State<OpenDisputePage> {
   
   bool _isLoading = false;
   
-  XFile? _selectedImage;
+  final List<XFile> _selectedImages = [];
   final ImagePicker _picker = ImagePicker();
 
   Future<void> _pickImage() async {
-    final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
-    if (image != null) {
+    final List<XFile> images = await _picker.pickMultiImage();
+    if (images.isNotEmpty) {
       setState(() {
-        _selectedImage = image;
+        _selectedImages.addAll(images);
       });
     }
   }
@@ -46,14 +47,26 @@ class _OpenDisputePageState extends State<OpenDisputePage> {
       return;
     }
 
+    if (_selectedImages.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please upload at least one image as evidence.'), backgroundColor: Colors.red),
+      );
+      return;
+    }
+
     setState(() => _isLoading = true);
     
     try {
       final session = UserSession();
-      String? evidenceUrl;
-      if (_selectedImage != null) {
-        final uploadRes = await ApiClient().postMultipart('/upload', _selectedImage!);
-        evidenceUrl = uploadRes['url'];
+      List<String> evidenceUrls = [];
+      if (_selectedImages.isNotEmpty) {
+        final uploadFutures = _selectedImages.map((img) => ApiClient().postMultipart('/upload', img));
+        final uploadResults = await Future.wait(uploadFutures);
+        for (final res in uploadResults) {
+          if (res != null && res['url'] != null) {
+            evidenceUrls.add(res['url']);
+          }
+        }
       }
 
       final body = {
@@ -61,7 +74,7 @@ class _OpenDisputePageState extends State<OpenDisputePage> {
         'complainant_id': session.userId,
         'reason': _selectedReason == 'Item not as described' ? 'Other' : _selectedReason,
         'description': _detailsController.text.trim(),
-        'evidence_urls': evidenceUrl != null ? [evidenceUrl] : [],
+        'evidence_urls': evidenceUrls,
       };
       
       await ApiClient().post('/disputes', body);
@@ -207,7 +220,7 @@ class _OpenDisputePageState extends State<OpenDisputePage> {
               onTap: _pickImage,
               child: Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(24),
+                padding: const EdgeInsets.symmetric(vertical: 20),
                 decoration: BoxDecoration(
                   color: isDark ? Colors.grey[850] : Colors.white,
                   borderRadius: BorderRadius.circular(12),
@@ -217,15 +230,29 @@ class _OpenDisputePageState extends State<OpenDisputePage> {
                     width: 1,
                   ),
                 ),
-                // Using standard border, for MVP dotted is complex without 3rd party package, standard solid is robust
                 child: Column(
                   children: [
-                    Icon(Icons.camera_alt_outlined, size: 40, color: primaryGreen),
-                    const SizedBox(height: 12),
-                    const Text('Tap to upload photos or screenshots of\nthe item/chat', textAlign: TextAlign.center),
-                    const SizedBox(height: 16),
-                    if (_selectedImage != null)
-                      Stack(
+                    Icon(Icons.camera_alt_outlined, size: 36, color: primaryGreen),
+                    const SizedBox(height: 8),
+                    const Text('Tap to upload photos or screenshots of the item/chat', textAlign: TextAlign.center, style: TextStyle(fontSize: 13)),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            if (_selectedImages.isNotEmpty) ...[
+              Text('Selected Evidence (${_selectedImages.length})', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 90,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _selectedImages.length,
+                  itemBuilder: (context, index) {
+                    final xfile = _selectedImages[index];
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 12.0),
+                      child: Stack(
                         clipBehavior: Clip.none,
                         children: [
                           Container(
@@ -236,31 +263,37 @@ class _OpenDisputePageState extends State<OpenDisputePage> {
                               borderRadius: BorderRadius.circular(8),
                               border: Border.all(color: primaryGreen),
                               image: DecorationImage(
-                                image: FileImage(File(_selectedImage!.path)),
+                                image: kIsWeb ? NetworkImage(xfile.path) : FileImage(File(xfile.path)) as ImageProvider,
                                 fit: BoxFit.cover,
                               )
                             ),
                           ),
                           Positioned(
-                            top: -8,
-                            right: -8,
+                            top: -6,
+                            right: -6,
                             child: GestureDetector(
-                              onTap: () => setState(() => _selectedImage = null),
+                              onTap: () {
+                                setState(() {
+                                  _selectedImages.removeAt(index);
+                                });
+                              },
                               child: Container(
+                                padding: const EdgeInsets.all(2),
                                 decoration: const BoxDecoration(
                                   color: Colors.red,
                                   shape: BoxShape.circle,
                                 ),
-                                child: const Icon(Icons.close, color: Colors.white, size: 20),
+                                child: const Icon(Icons.close, color: Colors.white, size: 16),
                               ),
                             ),
                           ),
                         ],
                       ),
-                  ],
+                    );
+                  },
                 ),
               ),
-            ),
+            ],
             const SizedBox(height: 40),
             
             // Submit Button

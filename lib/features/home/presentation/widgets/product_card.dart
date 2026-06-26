@@ -140,7 +140,7 @@ class ProductCard extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 10.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  mainAxisAlignment: MainAxisAlignment.start,
                   children: [
                     // Title
                     Text(
@@ -154,7 +154,7 @@ class ProductCard extends StatelessWidget {
                       ),
                     ),
                     
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 4),
                     
                     // Price and Condition Row
                     Row(
@@ -205,7 +205,7 @@ class ProductCard extends StatelessWidget {
                       ],
                     ),
                     
-                    const SizedBox(height: 8),
+                    const Spacer(),
                     Divider(color: Colors.grey[200], height: 1),
                     const SizedBox(height: 8),
                     

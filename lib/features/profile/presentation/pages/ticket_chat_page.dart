@@ -30,16 +30,32 @@ class _TicketChatPageState extends State<TicketChatPage> {
   bool _isLoading = true;
   bool _isSending = false;
   final ImagePicker _picker = ImagePicker();
+  String _currentStatus = '';
 
   @override
   void initState() {
     super.initState();
+    _currentStatus = widget.status;
     _fetchMessages();
+  }
+
+  Future<void> _fetchStatus() async {
+    try {
+      final res = await _apiClient.get('/tickets/thread/${widget.referenceId}/status');
+      if (mounted && res is Map && res.containsKey('status')) {
+        setState(() {
+          _currentStatus = res['status'] ?? '';
+        });
+      }
+    } catch (e) {
+      // ignore
+    }
   }
 
   Future<void> _fetchMessages() async {
     try {
       final res = await _apiClient.get('/tickets/thread/${widget.referenceId}');
+      _fetchStatus();
       if (mounted) {
         setState(() {
           _messages = res is List ? res : [];
@@ -141,7 +157,7 @@ class _TicketChatPageState extends State<TicketChatPage> {
           children: [
             if (!isMe) ...[
               Text(
-                isMod ? 'Moderator Support' : (sender['username'] ?? 'User'),
+                isMod ? 'Moderator Support' : (sender['full_name'] ?? sender['email'] ?? 'User'),
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 12,
@@ -182,7 +198,7 @@ class _TicketChatPageState extends State<TicketChatPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(widget.title, style: const TextStyle(fontSize: 16)),
-            Text(widget.status, style: const TextStyle(fontSize: 12)),
+            Text(_currentStatus, style: const TextStyle(fontSize: 12)),
           ],
         ),
       ),
@@ -199,52 +215,78 @@ class _TicketChatPageState extends State<TicketChatPage> {
                   ),
           ),
           // Input Area
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surface,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
-                  offset: const Offset(0, -2),
-                  blurRadius: 4,
+          () {
+            final isClosed = _currentStatus == 'Resolved' || _currentStatus == 'Closed' || _currentStatus == 'Dismissed' || _currentStatus == 'Uphold';
+            if (isClosed) {
+              return Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).brightness == Brightness.dark ? Colors.grey[900] : Colors.grey[100],
+                  border: Border(top: BorderSide(color: Colors.grey.withAlpha(50))),
                 ),
-              ],
-            ),
-            child: SafeArea(
-              child: Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.attach_file, color: Colors.grey),
-                    onPressed: _pickAndUploadImage,
-                  ),
-                  Expanded(
-                    child: TextField(
-                      controller: _msgController,
-                      decoration: InputDecoration(
-                        hintText: 'Type a message...',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(24),
-                          borderSide: BorderSide.none,
-                        ),
-                        fillColor: Colors.grey.withValues(alpha: 0.1),
-                        filled: true,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: SafeArea(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.lock_outline, color: Colors.grey[600], size: 20),
+                      const SizedBox(width: 8),
+                      Text(
+                        'This ${widget.referenceType == 'Dispute' ? 'dispute' : 'ticket'} is resolved and closed.',
+                        style: TextStyle(color: Colors.grey[600], fontWeight: FontWeight.bold, fontSize: 13),
                       ),
-                      maxLines: null,
-                    ),
+                    ],
                   ),
-                  const SizedBox(width: 8),
-                  _isSending 
-                    ? const Padding(padding: EdgeInsets.all(12), child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)))
-                    : IconButton(
-                        icon: const Icon(Icons.send, color: Color(0xFF006940)),
-                        onPressed: _sendMessage,
-                      ),
+                ),
+              );
+            }
+            return Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    offset: const Offset(0, -2),
+                    blurRadius: 4,
+                  ),
                 ],
               ),
-            ),
-          ),
+              child: SafeArea(
+                child: Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.attach_file, color: Colors.grey),
+                      onPressed: _pickAndUploadImage,
+                    ),
+                    Expanded(
+                      child: TextField(
+                        controller: _msgController,
+                        decoration: InputDecoration(
+                          hintText: 'Type a message...',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(24),
+                            borderSide: BorderSide.none,
+                          ),
+                          fillColor: Colors.grey.withValues(alpha: 0.1),
+                          filled: true,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        ),
+                        maxLines: null,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    _isSending 
+                      ? const Padding(padding: EdgeInsets.all(12), child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)))
+                      : IconButton(
+                          icon: const Icon(Icons.send, color: Color(0xFF006940)),
+                          onPressed: _sendMessage,
+                        ),
+                  ],
+                ),
+              ),
+            );
+          }(),
         ],
       ),
     );

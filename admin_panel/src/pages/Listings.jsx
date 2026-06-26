@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Search, Edit, Trash2 } from 'lucide-react';
 import api from '../services/api';
 
 const Listings = () => {
+    const location = useLocation();
     const [listings, setListings] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
@@ -22,13 +24,24 @@ const Listings = () => {
             setCurrentUser(JSON.parse(userStr));
         }
         fetchListings();
-    }, []);
+    }, [location]);
 
     const fetchListings = async () => {
         setLoading(true);
         try {
             const res = await api.get('/admin/listings');
             setListings(res.data);
+
+            // Pre-select if navigated from Reports or Dashboard
+            const targetId = location.state?.selectedId;
+            if (targetId) {
+                const found = res.data.find(item => item.id === targetId);
+                if (found) {
+                    setSelectedListing(found);
+                    setEditStatus(found.status);
+                    setIsEditModalOpen(true);
+                }
+            }
         } catch (err) {
             console.error('Failed to fetch listings', err);
         } finally {
@@ -208,40 +221,104 @@ const Listings = () => {
             {/* Edit Modal */}
             {isEditModalOpen && selectedListing && (
                 <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}>
-                    <div className="card" style={{ width: '400px', background: 'white' }}>
-                        <h2 style={{ marginTop: 0 }}>Manage Listing</h2>
-                        <div style={{ marginBottom: '16px' }}>
-                            <strong>{selectedListing.title}</strong>
-                            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-                                Seller: {selectedListing.seller?.email}
+                    <div className="card" style={{ width: '600px', background: 'white', padding: '2rem', maxHeight: '90vh', overflowY: 'auto' }}>
+                        <h2 style={{ marginTop: 0, borderBottom: '1px solid var(--border)', paddingBottom: '0.75rem', marginBottom: '1.25rem' }}>Listing Details & Moderation</h2>
+                        
+                        {/* Listing Preview Row */}
+                        <div style={{ display: 'flex', gap: '1.25rem', marginBottom: '1.5rem', background: '#f8fafc', padding: '16px', borderRadius: '12px', border: '1px solid var(--border)' }}>
+                            <div style={{ width: '90px', height: '90px', background: '#e2e8f0', borderRadius: '8px', overflow: 'hidden', flexShrink: 0 }}>
+                                {selectedListing.image_urls && selectedListing.image_urls.length > 0 ? (
+                                    <img src={`http://localhost:3000${selectedListing.image_urls[0]}`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                ) : (
+                                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', fontSize: '0.8rem' }}>No Image</div>
+                                )}
+                            </div>
+                            <div style={{ flex: 1 }}>
+                                <h3 style={{ margin: '0 0 6px 0', fontSize: '1.1rem', fontWeight: 'bold' }}>{selectedListing.title}</h3>
+                                <div style={{ display: 'flex', gap: '12px', fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '8px' }}>
+                                    <span>Type: <strong style={{ color: 'var(--text)' }}>{selectedListing.type}</strong></span>
+                                    <span>Condition: <strong style={{ color: 'var(--text)' }}>{selectedListing.condition}</strong></span>
+                                    <span>Price: <strong style={{ color: 'var(--primary)' }}>RM {selectedListing.type === 'Rent' ? `${selectedListing.rental_price_per_day}/day` : selectedListing.price}</strong></span>
+                                </div>
+                                <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                                    <strong>Status:</strong> <span style={{ 
+                                        padding: '2px 8px', 
+                                        borderRadius: '8px', 
+                                        fontSize: '0.75rem', 
+                                        fontWeight: 'bold',
+                                        background: selectedListing.status === 'Available' ? '#dcfce7' : 
+                                                    selectedListing.status === 'Sold' ? '#f3f4f6' : 
+                                                    selectedListing.status === 'Reserved' ? '#fef3c7' : '#fee2e2',
+                                        color: selectedListing.status === 'Available' ? '#16a34a' : 
+                                               selectedListing.status === 'Sold' ? '#4b5563' : 
+                                               selectedListing.status === 'Reserved' ? '#d97706' : '#dc2626'
+                                    }}>{selectedListing.status}</span>
+                                </div>
                             </div>
                         </div>
-                        
-                        <div style={{ marginBottom: '24px' }}>
-                            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-muted)' }}>Listing Status</label>
-                            <select 
-                                className="input" 
-                                value={editStatus} 
-                                onChange={(e) => setEditStatus(e.target.value)}
-                                style={{ width: '100%' }}
-                            >
-                                <option value="Available">Available</option>
-                                <option value="Reserved">Reserved</option>
-                                <option value="Sold">Sold</option>
-                                <option value="Removed">Removed (Suspended)</option>
-                            </select>
+
+                        {/* Description Section */}
+                        <div style={{ marginBottom: '1.5rem' }}>
+                            <span style={{ fontWeight: 'bold', fontSize: '0.75rem', color: '#64748b', display: 'block', textTransform: 'uppercase', marginBottom: '6px' }}>Description</span>
+                            <div style={{ background: '#f8fafc', padding: '12px 16px', borderRadius: '8px', fontSize: '0.9rem', lineHeight: '1.5', border: '1px solid var(--border)', maxHeight: '120px', overflowY: 'auto' }}>
+                                {selectedListing.description || <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>No description provided.</span>}
+                            </div>
                         </div>
 
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '1.75rem' }}>
+                            {/* Seller / Student Details */}
+                            <div>
+                                <span style={{ fontWeight: 'bold', fontSize: '0.75rem', color: '#64748b', display: 'block', textTransform: 'uppercase', marginBottom: '8px' }}>Student Profile</span>
+                                <div style={{ fontSize: '0.9rem', display: 'flex', flexDirection: 'column', gap: '6px', padding: '12px', background: '#f8fafc', borderRadius: '8px', border: '1px solid var(--border)' }}>
+                                    <div><strong>Name:</strong> {selectedListing.seller?.full_name || 'N/A'}</div>
+                                    <div><strong>Email:</strong> {selectedListing.seller?.email || 'N/A'}</div>
+                                    <div><strong>Reputation:</strong> ⭐ {selectedListing.seller?.reputation_score !== undefined ? Number(selectedListing.seller.reputation_score).toFixed(1) : '5.0'}/5.0</div>
+                                    <div>
+                                        <strong>Status:</strong> <span style={{ fontWeight: 'bold', color: selectedListing.seller?.is_active ? '#16a34a' : '#dc2626' }}>
+                                            {selectedListing.seller?.is_active ? 'Active' : 'Banned / Suspended'}
+                                        </span>
+                                    </div>
+                                    <div>
+                                        <strong>Verified:</strong> <span style={{ fontWeight: 'bold', color: selectedListing.seller?.is_verified ? '#16a34a' : '#d97706' }}>
+                                            {selectedListing.seller?.is_verified ? 'Yes' : 'No'}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Status Change Section */}
+                            <div>
+                                <span style={{ fontWeight: 'bold', fontSize: '0.75rem', color: '#64748b', display: 'block', textTransform: 'uppercase', marginBottom: '8px' }}>Action & Status</span>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                    <div>
+                                        <label style={{ display: 'block', marginBottom: '6px', fontSize: '0.85rem' }}>Set Listing Status:</label>
+                                        <select 
+                                            className="input" 
+                                            value={editStatus} 
+                                            onChange={(e) => setEditStatus(e.target.value)}
+                                            style={{ width: '100%', marginBottom: 0 }}
+                                        >
+                                            <option value="Available">Available</option>
+                                            <option value="Reserved">Reserved</option>
+                                            <option value="Sold">Sold</option>
+                                            <option value="Removed">Removed (Suspended)</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Modal Footer Buttons */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border)', paddingTop: '1.25rem' }}>
                             {currentUser?.role === 'admin' ? (
                                 <button className="btn" style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5' }} onClick={handleDeleteListing}>
-                                    <Trash2 size={16} /> Delete
+                                    <Trash2 size={16} /> Permanent Delete
                                 </button>
                             ) : <div></div>}
 
                             <div style={{ display: 'flex', gap: '12px' }}>
-                                <button className="btn" style={{ background: '#e5e7eb', color: '#374151' }} onClick={() => setIsEditModalOpen(false)}>Cancel</button>
-                                <button className="btn" style={{ background: 'var(--primary)' }} onClick={handleUpdateStatus}>Save Changes</button>
+                                <button className="btn" style={{ background: '#e5e7eb', color: '#374151', border: 'none' }} onClick={() => setIsEditModalOpen(false)}>Cancel</button>
+                                <button className="btn" style={{ background: 'var(--primary)', color: 'white', border: 'none' }} onClick={handleUpdateStatus}>Save Changes</button>
                             </div>
                         </div>
                     </div>

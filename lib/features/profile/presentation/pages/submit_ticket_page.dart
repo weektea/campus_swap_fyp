@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:campus_swap/core/api/api_client.dart';
-import 'package:campus_swap/core/session/user_session.dart';
 
 class SubmitTicketPage extends StatefulWidget {
   const SubmitTicketPage({super.key});
@@ -26,12 +25,10 @@ class _SubmitTicketPageState extends State<SubmitTicketPage> {
     setState(() => _isSubmitting = true);
     try {
       final apiClient = ApiClient();
-      await apiClient.post('/support_tickets', {
-        'user_id': UserSession().userId,
+      await apiClient.post('/tickets', {
         'category': _selectedCategory,
         'subject': _subjectController.text,
         'description': _descController.text,
-        'status': 'Open'
       });
       if (mounted) {
          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Support ticket submitted successfully!')));

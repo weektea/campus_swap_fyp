@@ -1,4 +1,4 @@
-import { SavedItem, Product, User } from '../models/index.js';
+import { SavedItem, Product, User, Report } from '../models/index.js';
 
 // Toggle Save (Like/Unlike)
 export const toggleSave = async (req, res) => {
@@ -30,7 +30,13 @@ export const getSavedItems = async (req, res) => {
     try {
         const user_id = req.user.id; // Secure from token
 
-        // Simplification: In a real app we would join more data
+        // Get reported items to exclude
+        const reportedItems = await Report.findAll({
+            where: { reporter_id: user_id },
+            attributes: ['product_id']
+        });
+        const reportedIds = reportedItems.map(r => r.product_id);
+
         const savedItems = await SavedItem.findAll({
             where: { user_id },
             include: [{
@@ -40,7 +46,10 @@ export const getSavedItems = async (req, res) => {
             }]
         });
 
-        const products = savedItems.map(item => item.product);
+        const products = savedItems
+            .map(item => item.product)
+            .filter(product => product && !reportedIds.includes(product.id));
+
         res.json(products);
     } catch (error) {
         console.error('Get Saved Error:', error);

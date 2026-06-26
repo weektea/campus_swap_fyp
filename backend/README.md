@@ -45,6 +45,9 @@ cd ml_service
 3. 启动 FastAPI 深度学习微服务 (我们换到了 5000 端口)
 uvicorn main:app --host 0.0.0.0 --port 5000 --reload
 
+if in used:
+Stop-Process -Id (Get-NetTCPConnection -LocalPort 5000).OwningProcess -Force -ErrorAction SilentlyContinue
+
 # Admin & Moderator - Panel
 1. cd admin_panel
 2. npm install (if not yet install)
@@ -56,9 +59,9 @@ admin@campus-swap.edu.my
 password123
 
 # Test Register
-Test Student6
-24PMR01666
-016-1122666
+Test Student6     21/ 22/ 23/ 24/ 25/ 26/ 27/ 28 29
+24PMR01666        02111/  02888 02999
+016-1122666         2211222/   2211888 2211999
 stu6@tarc.edu.my
 Test1234@
 

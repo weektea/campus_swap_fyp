@@ -27,11 +27,44 @@ class _SustainabilityDashboardPageState extends State<SustainabilityDashboardPag
   bool _isLoadingCategories = true;
   bool _isLoadingLeaderboard = true;
 
+  // Dynamic user stats to keep them in sync with backend
+  int _itemsReused = 0;
+  double _co2Saved = 0.0;
+  double _co2Bought = 0.0;
+  double _co2Sold = 0.0;
+
   @override
   void initState() {
     super.initState();
+    _itemsReused = widget.itemsReused;
+    _co2Saved = widget.co2Saved;
+    _co2Bought = widget.co2Bought;
+    _co2Sold = widget.co2Sold;
+    _fetchUserStats();
     _fetchCategoryImpact();
     _fetchLeaderboard();
+  }
+
+  Future<void> _fetchUserStats() async {
+    try {
+      final session = UserSession();
+      if (!session.isLoggedIn) return;
+      final apiClient = ApiClient();
+      final resData = await apiClient.get('/auth/user/${session.userId}');
+      if (resData != null && resData['user'] != null) {
+          final userData = resData['user'];
+          if (mounted) {
+              setState(() {
+                  _co2Saved = double.tryParse(userData['total_carbon_saved'].toString()) ?? 0.0;
+                  _co2Bought = double.tryParse(userData['carbon_saved_buyer'].toString()) ?? 0.0;
+                  _co2Sold = double.tryParse(userData['carbon_saved_seller'].toString()) ?? 0.0;
+                  _itemsReused = int.tryParse(userData['items_reused'].toString()) ?? 0;
+              });
+          }
+      }
+    } catch (e) {
+      debugPrint('Error fetching user stats in dashboard: $e');
+    }
   }
 
   Future<void> _fetchCategoryImpact() async {
@@ -78,7 +111,7 @@ class _SustainabilityDashboardPageState extends State<SustainabilityDashboardPag
 
   @override
   Widget build(BuildContext context) {
-    final double treesPlanted = widget.co2Saved / 21.0; 
+    final double treesPlanted = _co2Saved / 21.0; 
     
     return Scaffold(
       appBar: AppBar(
@@ -99,14 +132,14 @@ class _SustainabilityDashboardPageState extends State<SustainabilityDashboardPag
               ),
               child: Column(
                 children: [
-                   _buildStatMetric("Total Impact", "${widget.co2Saved.toStringAsFixed(1)} kg", Icons.public),
+                   _buildStatMetric("Total Impact", "${_co2Saved.toStringAsFixed(1)} kg", Icons.public),
                    const SizedBox(height: 16),
                    Row(
                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                      children: [
-                        _buildStatMetric("Emissions Avoided\n(Bought)", "${widget.co2Bought.toStringAsFixed(1)} kg", Icons.shopping_bag_outlined, isSub: true),
+                        _buildStatMetric("Emissions Avoided\n(Bought)", "${_co2Bought.toStringAsFixed(1)} kg", Icons.shopping_bag_outlined, isSub: true),
                         Container(width: 1, height: 40, color: Colors.white30),
-                        _buildStatMetric("Waste Diverted\n(Sold)", "${widget.co2Sold.toStringAsFixed(1)} kg", Icons.sell_outlined, isSub: true),
+                        _buildStatMetric("Waste Diverted\n(Sold)", "${_co2Sold.toStringAsFixed(1)} kg", Icons.sell_outlined, isSub: true),
                      ],
                    ),
                    const SizedBox(height: 24),

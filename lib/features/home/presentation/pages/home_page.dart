@@ -18,10 +18,16 @@ class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
   @override
-  State<HomePage> createState() => _HomePageState();
+  State<HomePage> createState() => HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class HomePageState extends State<HomePage> {
+  void setSelectedIndex(int index) {
+    setState(() {
+      _selectedIndex = index;
+    });
+  }
+
   @override
   void dispose() {
     _searchController.dispose();
@@ -31,26 +37,30 @@ class _HomePageState extends State<HomePage> {
 
   int _selectedIndex = 0;
   int _selectedCategoryIndex = 0;
+  String? _selectedSubCategoryId;
   List<Product> _products = [];
   bool _isLoading = true;
   Set<String> _savedProductIds = {};
   final TextEditingController _searchController = TextEditingController();
 
-  final List<Map<String, dynamic>> _categories = [
-    {'label': 'All', 'icon': Icons.grid_view_rounded},
-    {'label': 'Books', 'icon': Icons.menu_book_rounded},
-    {'label': 'Electronics', 'icon': Icons.devices_other_rounded},
-    {'label': 'Fashion', 'icon': Icons.checkroom_rounded},
-    {'label': 'Furniture', 'icon': Icons.chair_rounded},
-    {'label': 'Sports', 'icon': Icons.sports_basketball_rounded},
+  List<Map<String, dynamic>> _categories = [
+    {'label': 'All', 'icon': Icons.grid_view_rounded, 'subcategories': []},
+    {'label': 'Books & Study Materials', 'icon': Icons.menu_book_rounded, 'subcategories': []},
+    {'label': 'Electronics & Gadgets', 'icon': Icons.devices_other_rounded, 'subcategories': []},
+    {'label': 'Fashion & Accessories', 'icon': Icons.checkroom_rounded, 'subcategories': []},
+    {'label': 'Furniture & Appliances', 'icon': Icons.chair_rounded, 'subcategories': []},
+    {'label': 'Sports', 'icon': Icons.sports_basketball_rounded, 'subcategories': []},
+    {'label': 'Stationery', 'icon': Icons.edit_rounded, 'subcategories': []},
   ];
 
   String _sortBy = 'newest'; // newest, price_asc, price_desc
-  RangeValues _priceRange = const RangeValues(0, 1000);
+  double? _minPrice;
+  double? _maxPrice;
   String? _selectedCondition;
   String _selectedListingType = 'All'; // 'All', 'Sale', 'Rent'
 
   List<Product> _recommendedProducts = [];
+  List<Product> _trendingProducts = [];
 
   final List<String> _tabs = ['For You', 'All Listings', 'Popular', 'Newest'];
   String _selectedTab = 'For You';
@@ -60,12 +70,24 @@ class _HomePageState extends State<HomePage> {
           return _recommendedProducts.isNotEmpty ? _recommendedProducts : _products;
       }
       if (_selectedTab == 'Popular') {
-          // Standard layout but slightly different to mock Popular
-          var list = List<Product>.from(_products);
-          list.sort((a,b) => b.price.compareTo(a.price)); 
-          return list;
+          return _trendingProducts.isNotEmpty ? _trendingProducts : _products;
       }
       return _products;
+  }
+
+  Future<void> _fetchTrending() async {
+    if (!UserSession().isLoggedIn) return;
+    try {
+       final apiClient = ApiClient();
+       final response = await apiClient.get('/recommendations/trending');
+       if (response is List && mounted) {
+          setState(() {
+             _trendingProducts = response.map((e) => Product.fromJson(e)).toList();
+          });
+       }
+    } catch(e) {
+       // Ignore
+    }
   }
 
   Future<void> _fetchRecommendations() async {
@@ -133,11 +155,64 @@ class _HomePageState extends State<HomePage> {
       }
   }
 
+  IconData _getCategoryIcon(String name) {
+    switch (name) {
+      case 'Books & Study Materials':
+        return Icons.menu_book_rounded;
+      case 'Electronics & Gadgets':
+        return Icons.devices_other_rounded;
+      case 'Fashion & Accessories':
+        return Icons.checkroom_rounded;
+      case 'Furniture & Appliances':
+        return Icons.chair_rounded;
+      case 'Sports':
+        return Icons.sports_basketball_rounded;
+      case 'Stationery':
+        return Icons.edit_rounded;
+      default:
+        return Icons.category_rounded;
+    }
+  }
+
+  Future<void> _fetchCategories() async {
+    try {
+      final apiClient = ApiClient();
+      final response = await apiClient.get('/categories');
+      if (response is List && mounted) {
+        final List<Map<String, dynamic>> loadedCategories = [
+          {'label': 'All', 'icon': Icons.grid_view_rounded, 'subcategories': []}
+        ];
+        for (var cat in response) {
+          loadedCategories.add({
+            'label': cat['name'] as String,
+            'icon': _getCategoryIcon(cat['name'] as String),
+            'id': cat['id'] as String,
+            'subcategories': cat['subcategories'] as List<dynamic>
+          });
+        }
+        setState(() {
+          _categories = loadedCategories;
+        });
+      }
+    } catch (e) {
+      // Keep using default initial categories
+    }
+  }
+
+  List<dynamic> get _currentSubcategories {
+    if (_selectedCategoryIndex < 0 || _selectedCategoryIndex >= _categories.length) {
+      return [];
+    }
+    return _categories[_selectedCategoryIndex]['subcategories'] ?? [];
+  }
+
   @override
   void initState() {
     super.initState();
+    _fetchCategories();
     _fetchProducts();
     _fetchRecommendations();
+    _fetchTrending();
     _fetchSavedItems();
     if (UserSession().isLoggedIn) {
       NotificationService().startPolling();
@@ -149,10 +224,11 @@ class _HomePageState extends State<HomePage> {
      super.didChangeDependencies();
      if (UserSession().isLoggedIn) {
         _fetchSavedItems(); // Reload saved items just in case it was toggled on another tab
+        _fetchTrending();
      }
   }
 
-  Future<void> _fetchProducts([String? query]) async {
+  Future<void> _fetchProducts() async {
     setState(() => _isLoading = true);
     try {
       final apiClient = ApiClient();
@@ -160,20 +236,28 @@ class _HomePageState extends State<HomePage> {
       
       // Build Params
       List<String> params = [];
-      if (query != null && query.isNotEmpty) {
-        params.add('search=$query');
+      final query = _searchController.text.trim();
+      if (query.isNotEmpty) {
+        params.add('search=${Uri.encodeComponent(query)}');
       }
       if (_selectedCategoryIndex != 0) {
         String cat = _categories[_selectedCategoryIndex]['label'];
-        params.add('category=$cat');
+        params.add('category=${Uri.encodeComponent(cat)}');
+      }
+      if (_selectedSubCategoryId != null) {
+        params.add('sub_category_id=$_selectedSubCategoryId');
       }
       
       // Sorting
       params.add('sort=$_sortBy');
 
       // Price Filter
-      params.add('min_price=${_priceRange.start}');
-      params.add('max_price=${_priceRange.end}');
+      if (_minPrice != null) {
+        params.add('min_price=$_minPrice');
+      }
+      if (_maxPrice != null) {
+        params.add('max_price=$_maxPrice');
+      }
 
       if (_selectedCondition != null) {
           params.add('condition=$_selectedCondition');
@@ -199,7 +283,6 @@ class _HomePageState extends State<HomePage> {
         });
       }
     } catch (e) {
-      // print('Error fetching products: $e');
       setState(() => _isLoading = false);
     }
   }
@@ -298,10 +381,8 @@ class _HomePageState extends State<HomePage> {
                         return GestureDetector(
                           onTap: () async {
                               await Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsPage()));
-                              // Refresh unread count after returning
-                              NotificationService().unreadCountNotifier.value = 0; // Optimistic reset if read all
-                              // Or force poll
-                          },
+                              NotificationService().checkForNotifications();
+                            },
                           child: Stack(
                             clipBehavior: Clip.none,
                             children: [
@@ -384,7 +465,7 @@ class _HomePageState extends State<HomePage> {
                       if (_selectedTab == 'For You') {
                         setState(() => _selectedTab = 'All Listings');
                       }
-                      _fetchProducts(value);
+                      _fetchProducts();
                     },
                     textInputAction: TextInputAction.search,
                   ),
@@ -410,6 +491,10 @@ class _HomePageState extends State<HomePage> {
                       onTap: () {
                         setState(() {
                           _selectedCategoryIndex = index;
+                          _selectedSubCategoryId = null; // Reset subcategory when category changes
+                          if (_selectedTab == 'For You') {
+                            _selectedTab = 'All Listings';
+                          }
                         });
                         _fetchProducts(); // Refresh with new category
                       },
@@ -418,6 +503,106 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
             ),
+
+            // Subcategories Row
+            if (_selectedCategoryIndex != 0 && _currentSubcategories.isNotEmpty) ...[
+              const SliverToBoxAdapter(child: SizedBox(height: 12)),
+              SliverToBoxAdapter(
+                child: SizedBox(
+                  height: 38,
+                  child: ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    scrollDirection: Axis.horizontal,
+                    itemCount: _currentSubcategories.length + 1, // +1 for "All" option
+                    itemBuilder: (context, index) {
+                      if (index == 0) {
+                        final isSelected = _selectedSubCategoryId == null;
+                        return GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _selectedSubCategoryId = null;
+                            });
+                            _fetchProducts();
+                          },
+                          child: Container(
+                            margin: const EdgeInsets.only(right: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: isSelected ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.15) : Colors.grey[50],
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: isSelected ? Theme.of(context).colorScheme.primary : Colors.grey[200]!,
+                                width: 1,
+                              ),
+                            ),
+                            child: Center(
+                              child: Text(
+                                'All',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 13,
+                                  color: isSelected ? Theme.of(context).colorScheme.primary : Colors.grey[600],
+                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      }
+                      
+                      final subcat = _currentSubcategories[index - 1];
+                      final subcatId = subcat['id'] as String;
+                      final subcatName = subcat['name'] as String;
+                      final productCount = subcat['product_count'] ?? 0;
+                      final isSelected = _selectedSubCategoryId == subcatId;
+                      
+                      return GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _selectedSubCategoryId = isSelected ? null : subcatId;
+                          });
+                          _fetchProducts();
+                        },
+                        child: Container(
+                          margin: const EdgeInsets.only(right: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: isSelected ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.15) : Colors.grey[50],
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: isSelected ? Theme.of(context).colorScheme.primary : Colors.grey[200]!,
+                              width: 1,
+                            ),
+                          ),
+                          child: Center(
+                            child: Row(
+                              children: [
+                                Text(
+                                  subcatName,
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 13,
+                                    color: isSelected ? Theme.of(context).colorScheme.primary : Colors.grey[800],
+                                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '($productCount)',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 11,
+                                    color: isSelected ? Theme.of(context).colorScheme.primary : Colors.grey[500],
+                                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ],
 
             const SliverToBoxAdapter(child: SizedBox(height: 24)),
 
@@ -506,10 +691,94 @@ class _HomePageState extends State<HomePage> {
               const SliverFillRemaining(
                 child: Center(child: CircularProgressIndicator()),
               )
-            else if (_gridProducts.isEmpty)
+            else if (_gridProducts.isEmpty) ...[
               SliverFillRemaining(
-                child: Center(child: Text('No items found. Be the first to sell!', style: GoogleFonts.outfit())),
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 32.0),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.search_off_rounded,
+                          size: 64,
+                          color: Colors.grey[400],
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          (_searchController.text.isNotEmpty ||
+                                  _selectedCategoryIndex != 0 ||
+                                  _selectedSubCategoryId != null ||
+                                  _minPrice != null ||
+                                  _maxPrice != null ||
+                                  _selectedCondition != null ||
+                                  _selectedListingType != 'All')
+                              ? 'No items match your criteria'
+                              : 'No items found',
+                          style: GoogleFonts.outfit(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.grey[800],
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          (_searchController.text.isNotEmpty ||
+                                  _selectedCategoryIndex != 0 ||
+                                  _selectedSubCategoryId != null ||
+                                  _minPrice != null ||
+                                  _maxPrice != null ||
+                                  _selectedCondition != null ||
+                                  _selectedListingType != 'All')
+                              ? 'Try adjusting your search query, price range, or category filter.'
+                              : 'Be the first to list an item for sale or rent!',
+                          style: GoogleFonts.outfit(
+                            fontSize: 14,
+                            color: Colors.grey[600],
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        if (_searchController.text.isNotEmpty ||
+                            _selectedCategoryIndex != 0 ||
+                            _selectedSubCategoryId != null ||
+                            _minPrice != null ||
+                            _maxPrice != null ||
+                            _selectedCondition != null ||
+                            _selectedListingType != 'All') ...[
+                          const SizedBox(height: 24),
+                          ElevatedButton.icon(
+                            onPressed: () {
+                              setState(() {
+                                _searchController.clear();
+                                _selectedCategoryIndex = 0;
+                                _selectedSubCategoryId = null;
+                                _minPrice = null;
+                                _maxPrice = null;
+                                _selectedCondition = null;
+                                _selectedListingType = 'All';
+                              });
+                              _fetchProducts();
+                            },
+                            icon: const Icon(Icons.clear_all_rounded, color: Colors.white),
+                            label: Text(
+                              'Clear Filters',
+                              style: GoogleFonts.outfit(fontWeight: FontWeight.bold),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Theme.of(context).colorScheme.primary,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
               )
+            ]
             else
               SliverPadding(
                 padding: const EdgeInsets.all(20),
@@ -529,8 +798,18 @@ class _HomePageState extends State<HomePage> {
                         onFavoriteToggle: () => _toggleFavorite(product.id),
                         onTap: () {
                           Navigator.push(context, MaterialPageRoute(
-                            builder: (_) => ProductDetailsPage(product: product)
-                          )).then((_) => _fetchSavedItems());
+                            builder: (_) => ProductDetailsPage(
+                              product: product,
+                              initialIsSaved: _savedProductIds.contains(product.id),
+                            )
+                          )).then((result) {
+                            _fetchSavedItems();
+                            _fetchTrending();
+                            if (result == 'reported') {
+                              _fetchProducts();
+                              _fetchRecommendations();
+                            }
+                          });
                         },
                       ).animate().fadeIn(duration: 500.ms, delay: (50 * index).ms).scale(begin: const Offset(0.9, 0.9));
                     },
@@ -583,19 +862,45 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _showFilterDialog() {
+      final minPriceController = TextEditingController(text: _minPrice != null ? _minPrice!.toStringAsFixed(0) : '');
+      final maxPriceController = TextEditingController(text: _maxPrice != null ? _maxPrice!.toStringAsFixed(0) : '');
+      
       showModalBottomSheet(
           context: context,
+          isScrollControlled: true,
+          shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
           builder: (context) {
               return StatefulBuilder(
                   builder: (context, setModalState) {
                       return Padding(
-                          padding: const EdgeInsets.all(24.0),
+                          padding: EdgeInsets.only(
+                              top: 24.0,
+                              left: 24.0,
+                              right: 24.0,
+                              bottom: MediaQuery.of(context).viewInsets.bottom + 24.0,
+                          ),
                           child: SingleChildScrollView(
                               child: Column(
                                   mainAxisSize: MainAxisSize.min,
                                   crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                  Text("Filter Items", style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.bold)),
+                                  Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                          Text("Filter Items", style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.bold)),
+                                          TextButton(
+                                              onPressed: () {
+                                                  setModalState(() {
+                                                      _selectedListingType = 'All';
+                                                      _selectedCondition = null;
+                                                      minPriceController.clear();
+                                                      maxPriceController.clear();
+                                                  });
+                                              },
+                                              child: Text("Reset", style: GoogleFonts.outfit(color: Colors.red, fontWeight: FontWeight.bold)),
+                                          ),
+                                      ],
+                                  ),
                                   const SizedBox(height: 16),
                                   Text("Listing Type", style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold)),
                                   const SizedBox(height: 8),
@@ -611,23 +916,36 @@ class _HomePageState extends State<HomePage> {
                                       },
                                   ),
                                   const SizedBox(height: 24),
-                                  Text("Price Range: RM ${_priceRange.start.round()} - RM ${_priceRange.end.round()}", style: GoogleFonts.outfit()),
-                                  RangeSlider(
-                                      values: _priceRange,
-                                      min: 0,
-                                      max: 1000,
-                                      divisions: 20,
-                                      labels: RangeLabels(
-                                          _priceRange.start.round().toString(), 
-                                          _priceRange.end.round().toString()
-                                      ),
-                                      onChanged: (values) {
-                                          setModalState(() {
-                                              _priceRange = values;
-                                          });
-                                      },
+                                  Text("Price Range (RM)", style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold)),
+                                  const SizedBox(height: 12),
+                                  Row(
+                                      children: [
+                                          Expanded(
+                                              child: TextFormField(
+                                                  controller: minPriceController,
+                                                  keyboardType: TextInputType.number,
+                                                  decoration: InputDecoration(
+                                                      labelText: 'Min Price',
+                                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                                                      prefixText: 'RM ',
+                                                  ),
+                                              ),
+                                          ),
+                                          const SizedBox(width: 16),
+                                          Expanded(
+                                              child: TextFormField(
+                                                  controller: maxPriceController,
+                                                  keyboardType: TextInputType.number,
+                                                  decoration: InputDecoration(
+                                                      labelText: 'Max Price',
+                                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                                                      prefixText: 'RM ',
+                                                  ),
+                                              ),
+                                          ),
+                                      ],
                                   ),
-                                  // const SizedBox(height: 24),
+                                  const SizedBox(height: 24),
                                   Text("Item Condition", style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold)),
                                   const SizedBox(height: 12),
                                   Wrap(
@@ -656,8 +974,10 @@ class _HomePageState extends State<HomePage> {
                                       child: ElevatedButton(
                                           onPressed: () {
                                               Navigator.pop(context);
-                                              // Ensure condition state is updated in parent
-                                              setState(() {}); 
+                                              setState(() {
+                                                  _minPrice = double.tryParse(minPriceController.text);
+                                                  _maxPrice = double.tryParse(maxPriceController.text);
+                                              }); 
                                               _fetchProducts(); // Apply filter with new condition
                                           },
                                           style: ElevatedButton.styleFrom(

@@ -49,7 +49,8 @@ router.put('/tickets/:id', authenticateToken, isAdminOrModerator, adminControlle
 
 // ======================= ADMINISTRATOR EXCLUSIVE ROUTES =======================
 // Platform Monitoring & Reporting
-router.get('/metrics', authenticateToken, isAdmin, adminController.getSystemMetrics);
+router.get('/metrics', authenticateToken, isAdminOrModerator, adminController.getSystemMetrics);
+router.get('/ml-dashboard', authenticateToken, isAdmin, adminController.getMLDashboardMetrics);
 
 // Full User Administration (Promoting, Banning)
 router.get('/users', authenticateToken, isAdmin, adminController.getAllUsers);

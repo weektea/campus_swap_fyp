@@ -3,6 +3,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:campus_swap/features/location/domain/entities/safe_zone.dart';
+import 'package:campus_swap/core/api/api_client.dart';
 
 class SafeZoneMapPage extends StatefulWidget {
   final SafeZone? initialZone;
@@ -16,14 +17,50 @@ class SafeZoneMapPage extends StatefulWidget {
 class _SafeZoneMapPageState extends State<SafeZoneMapPage> {
   final MapController _mapController = MapController();
   SafeZone? _selectedZone;
+  final ApiClient _apiClient = ApiClient();
+  List<SafeZone> _zones = [];
+  bool _isLoading = true;
 
-  // Center of TARUMT Penang
-  final LatLng _campusCenter = const LatLng(5.4614, 100.2818);
+  // Corrected Center of TARUMT Penang
+  final LatLng _campusCenter = const LatLng(5.4568, 100.2860);
 
   @override
   void initState() {
     super.initState();
     _selectedZone = widget.initialZone;
+    _fetchZones();
+  }
+
+  Future<void> _fetchZones() async {
+    try {
+      final response = await _apiClient.get('/zones');
+      if (response is List) {
+        final loadedZones = response
+            .map((item) => SafeZone.fromJson(item as Map<String, dynamic>))
+            .toList();
+        if (mounted) {
+          setState(() {
+            _zones = loadedZones;
+            _isLoading = false;
+            if (_selectedZone != null && loadedZones.isNotEmpty) {
+              try {
+                _selectedZone = loadedZones.firstWhere((z) => z.name == _selectedZone!.name);
+              } catch (_) {}
+            }
+          });
+        }
+      } else {
+        throw Exception('Invalid response format');
+      }
+    } catch (e) {
+      debugPrint('Error fetching zones: $e');
+      if (mounted) {
+        setState(() {
+          _zones = SafeZone.predefinedZones;
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   @override
@@ -51,7 +88,7 @@ class _SafeZoneMapPageState extends State<SafeZoneMapPage> {
                 userAgentPackageName: 'com.campusswap.app',
               ),
               MarkerLayer(
-                markers: SafeZone.predefinedZones.map((zone) {
+                markers: _zones.map((zone) {
                   final isSelected = _selectedZone?.id == zone.id;
                   return Marker(
                     point: zone.coordinates,
@@ -163,6 +200,10 @@ class _SafeZoneMapPageState extends State<SafeZoneMapPage> {
                   ],
                 ),
               ),
+            ),
+          if (_isLoading)
+            const Center(
+              child: CircularProgressIndicator(),
             ),
         ],
       ),

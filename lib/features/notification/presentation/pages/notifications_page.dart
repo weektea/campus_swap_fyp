@@ -5,6 +5,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:campus_swap/features/profile/presentation/pages/transaction_detail_page.dart';
 import 'package:campus_swap/features/profile/presentation/pages/ticket_chat_page.dart';
 import 'package:campus_swap/features/profile/presentation/pages/help_center_page.dart';
+import 'package:campus_swap/core/services/notification_service.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 
 class NotificationsPage extends StatefulWidget {
   const NotificationsPage({super.key});
@@ -35,6 +37,10 @@ class _NotificationsPageState extends State<NotificationsPage> {
             setState(() {
                 _notifications = res is List ? res : [];
                 _isLoading = false;
+                
+                // Recalculate unread badge status
+                final unreadCount = _notifications.where((n) => n['is_read'] == false).length;
+                NotificationService().unreadCountNotifier.value = unreadCount;
             });
         }
     } catch (e) {
@@ -51,6 +57,9 @@ class _NotificationsPageState extends State<NotificationsPage> {
                final index = _notifications.indexWhere((n) => n['id'] == id);
                if (index != -1) {
                    _notifications[index]['is_read'] = true;
+                   if (NotificationService().unreadCountNotifier.value > 0) {
+                       NotificationService().unreadCountNotifier.value--;
+                   }
                }
            });
        } catch (e) {
@@ -58,62 +67,257 @@ class _NotificationsPageState extends State<NotificationsPage> {
        }
   }
 
+  Future<void> _deleteNotification(String id, bool wasUnread) async {
+       try {
+           final apiClient = ApiClient();
+           await apiClient.delete('/notifications/$id');
+           if (wasUnread) {
+               if (NotificationService().unreadCountNotifier.value > 0) {
+                   NotificationService().unreadCountNotifier.value--;
+               }
+           }
+       } catch (e) {
+           // print('Error deleting notification: $e');
+       }
+  }
+
+  Future<void> _clearReadNotifications() async {
+       try {
+           final apiClient = ApiClient();
+           await apiClient.delete('/notifications/clear-read');
+           setState(() {
+               _notifications.removeWhere((n) => n['is_read'] == true);
+           });
+           if (mounted) {
+               ScaffoldMessenger.of(context).showSnackBar(
+                   SnackBar(
+                       content: Text('Cleared all read notifications', style: GoogleFonts.outfit()),
+                       behavior: SnackBarBehavior.floating,
+                   ),
+               );
+           }
+       } catch (e) {
+           if (mounted) {
+               ScaffoldMessenger.of(context).showSnackBar(
+                   SnackBar(
+                       content: Text('Failed to clear read notifications', style: GoogleFonts.outfit()),
+                       behavior: SnackBarBehavior.floating,
+                   ),
+               );
+           }
+       }
+  }
+
+  void _showClearConfirmation() {
+      showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+              title: Text('Clear Read Notifications', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+              content: Text('Are you sure you want to clear all read notifications? This action cannot be undone.', style: GoogleFonts.outfit()),
+              actions: [
+                  TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: Text('Cancel', style: GoogleFonts.outfit(color: Colors.grey)),
+                  ),
+                  ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.redAccent,
+                          foregroundColor: Colors.white,
+                      ),
+                      onPressed: () {
+                          Navigator.pop(context);
+                          _clearReadNotifications();
+                      },
+                      child: Text('Clear', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+                  ),
+              ],
+          ),
+      );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final hasReadNotifications = _notifications.any((n) => n['is_read'] == true);
+
     return Scaffold(
         appBar: AppBar(
             title: Text('Notifications', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+            actions: [
+                if (hasReadNotifications)
+                    IconButton(
+                        icon: const Icon(Icons.delete_sweep),
+                        tooltip: 'Clear read notifications',
+                        onPressed: _showClearConfirmation,
+                    ),
+            ],
         ),
         body: _isLoading 
             ? const Center(child: CircularProgressIndicator())
             : _notifications.isEmpty
-                ? Center(child: Text('No notifications yet', style: GoogleFonts.outfit()))
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24.0),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            height: 120,
+                            width: 120,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: LinearGradient(
+                                colors: [
+                                  Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
+                                  Theme.of(context).colorScheme.secondary.withValues(alpha: 0.05),
+                                ],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                            ),
+                            child: Icon(
+                              Icons.done_all_rounded,
+                              size: 60,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                          ).animate()
+                           .scale(duration: 500.ms, curve: Curves.easeOutBack)
+                           .fadeIn(duration: 400.ms),
+                          const SizedBox(height: 24),
+                          Text(
+                            "You're all caught up!",
+                            style: GoogleFonts.outfit(
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.grey[800],
+                            ),
+                          ).animate().fadeIn(delay: 200.ms, duration: 400.ms).slideY(begin: 0.2, end: 0),
+                          const SizedBox(height: 12),
+                          Text(
+                            "No new notifications.",
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.outfit(
+                              fontSize: 16,
+                              color: Colors.grey[500],
+                            ),
+                          ).animate().fadeIn(delay: 300.ms, duration: 400.ms).slideY(begin: 0.2, end: 0),
+                        ],
+                      ),
+                    ),
+                  )
                 : ListView.builder(
                     itemCount: _notifications.length,
                     itemBuilder: (context, index) {
                         final note = _notifications[index];
                         final isRead = note['is_read'] ?? false;
 
-                        return Container(
-                            color: isRead ? Colors.white : Colors.blue.withValues(alpha: 0.05),
-                            child: ListTile(
-                                leading: CircleAvatar(
-                                    backgroundColor: isRead ? Colors.grey[200] : Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
-                                    child: Icon(
-                                        note['type'] == 'Transaction' ? Icons.shopping_bag : Icons.notifications,
-                                        color: isRead ? Colors.grey : Theme.of(context).colorScheme.primary,
+                        return Dismissible(
+                            key: Key(note['id'].toString()),
+                            direction: DismissDirection.horizontal,
+                            background: Container(
+                                color: Colors.redAccent.withValues(alpha: 0.9),
+                                alignment: Alignment.centerLeft,
+                                padding: const EdgeInsets.only(left: 20.0),
+                                child: const Icon(Icons.delete_outline, color: Colors.white, size: 28),
+                            ),
+                            secondaryBackground: Container(
+                                color: Colors.redAccent.withValues(alpha: 0.9),
+                                alignment: Alignment.centerRight,
+                                padding: const EdgeInsets.only(right: 20.0),
+                                child: const Icon(Icons.delete_outline, color: Colors.white, size: 28),
+                            ),
+                            confirmDismiss: (direction) async {
+                                return await showDialog<bool>(
+                                    context: context,
+                                    builder: (context) => AlertDialog(
+                                        title: Text('Delete Notification', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+                                        content: Text('Are you sure you want to delete this notification?', style: GoogleFonts.outfit()),
+                                        actions: [
+                                            TextButton(
+                                                onPressed: () => Navigator.pop(context, false),
+                                                child: Text('Cancel', style: GoogleFonts.outfit(color: Colors.grey)),
+                                            ),
+                                            ElevatedButton(
+                                                style: ElevatedButton.styleFrom(
+                                                    backgroundColor: Colors.redAccent,
+                                                    foregroundColor: Colors.white,
+                                                ),
+                                                onPressed: () => Navigator.pop(context, true),
+                                                child: Text('Delete', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+                                            ),
+                                        ],
                                     ),
+                                ) ?? false;
+                            },
+                            onDismissed: (direction) {
+                                final noteId = note['id'].toString();
+                                final wasUnread = !isRead;
+
+                                // Optimistic UI update
+                                setState(() {
+                                    _notifications.removeAt(index);
+                                });
+
+                                // Call API and update sync in background
+                                _deleteNotification(noteId, wasUnread);
+
+                                // Show floating SnackBar for feedback
+                                ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                        content: Text('Notification removed', style: GoogleFonts.outfit()),
+                                        duration: const Duration(seconds: 2),
+                                        behavior: SnackBarBehavior.floating,
+                                        action: SnackBarAction(
+                                            label: 'Dismiss',
+                                            textColor: Colors.white,
+                                            onPressed: () {
+                                                ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                                            },
+                                        ),
+                                    ),
+                                );
+                            },
+                            child: Container(
+                                color: isRead ? Colors.white : Colors.blue.withValues(alpha: 0.05),
+                                child: ListTile(
+                                    leading: CircleAvatar(
+                                        backgroundColor: isRead ? Colors.grey[200] : Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
+                                        child: Icon(
+                                            note['type'] == 'Transaction' ? Icons.shopping_bag : Icons.notifications,
+                                            color: isRead ? Colors.grey : Theme.of(context).colorScheme.primary,
+                                        ),
+                                    ),
+                                    title: Text(note['title'], style: GoogleFonts.outfit(fontWeight: isRead ? FontWeight.normal : FontWeight.bold)),
+                                    subtitle: Text(note['message'], style: GoogleFonts.outfit()),
+                                    trailing: isRead ? null : const Icon(Icons.circle, color: Colors.blue, size: 10),
+                                    onTap: () {
+                                        if (!isRead) _markAsRead(note['id']);
+                                        // Navigate to details based on type
+                                        final title = note['title']?.toString() ?? '';
+                                        if (title.contains('Dispute') || title.contains('Support Ticket')) {
+                                            if (note['related_id'] != null) {
+                                                Navigator.push(context, MaterialPageRoute(
+                                                    builder: (_) => TicketChatPage(
+                                                        referenceId: note['related_id'],
+                                                        referenceType: title.contains('Dispute') ? 'Dispute' : 'SupportTicket',
+                                                        title: title,
+                                                        status: 'Check Thread',
+                                                    )
+                                                ));
+                                            }
+                                        } else if (title.contains('Report')) {
+                                            Navigator.push(context, MaterialPageRoute(
+                                                builder: (_) => const HelpCenterPage()
+                                            ));
+                                        } else if (note['type'] == 'Transaction' || note['type'] == 'System') {
+                                            if (note['related_id'] != null && !title.contains('Cancelled')) {
+                                                Navigator.push(context, MaterialPageRoute(
+                                                    builder: (_) => TransactionDetailPage(transactionId: note['related_id'])
+                                                ));
+                                            }
+                                        }
+                                    },
                                 ),
-                                title: Text(note['title'], style: GoogleFonts.outfit(fontWeight: isRead ? FontWeight.normal : FontWeight.bold)),
-                                subtitle: Text(note['message'], style: GoogleFonts.outfit()),
-                                trailing: isRead ? null : const Icon(Icons.circle, color: Colors.blue, size: 10),
-                                onTap: () {
-                                    if (!isRead) _markAsRead(note['id']);
-                                    // Navigate to details based on type
-                                    final title = note['title']?.toString() ?? '';
-                                    if (title.contains('Dispute') || title.contains('Support Ticket')) {
-                                        if (note['related_id'] != null) {
-                                            Navigator.push(context, MaterialPageRoute(
-                                                builder: (_) => TicketChatPage(
-                                                    referenceId: note['related_id'],
-                                                    referenceType: title.contains('Dispute') ? 'Dispute' : 'SupportTicket',
-                                                    title: title,
-                                                    status: 'Check Thread',
-                                                )
-                                            ));
-                                        }
-                                    } else if (title.contains('Report')) {
-                                        Navigator.push(context, MaterialPageRoute(
-                                            builder: (_) => const HelpCenterPage()
-                                        ));
-                                    } else if (note['type'] == 'Transaction' || note['type'] == 'System') {
-                                        if (note['related_id'] != null && !title.contains('Cancelled')) {
-                                            Navigator.push(context, MaterialPageRoute(
-                                                builder: (_) => TransactionDetailPage(transactionId: note['related_id'])
-                                            ));
-                                        }
-                                    }
-                                },
                             ),
                         );
                     },

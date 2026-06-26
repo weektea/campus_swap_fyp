@@ -32,6 +32,16 @@ class CampusSwapApp extends StatelessWidget {
           theme: AppTheme.lightTheme,
           darkTheme: AppTheme.darkTheme,
           themeMode: ThemeProvider.instance.themeMode,
+          builder: (context, child) {
+            final mediaQueryData = MediaQuery.of(context);
+            final scale = ThemeProvider.instance.isLargeText ? 1.25 : 1.0;
+            return MediaQuery(
+              data: mediaQueryData.copyWith(
+                textScaler: TextScaler.linear(scale),
+              ),
+              child: child!,
+            );
+          },
           home: const LoginPage(),
         );
       },

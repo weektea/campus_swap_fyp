@@ -123,6 +123,9 @@ class _MyListingsPageState extends State<MyListingsPage> with SingleTickerProvid
           ],
           bottom: TabBar(
               controller: _tabController,
+              labelColor: Colors.white,
+              unselectedLabelColor: Colors.white60,
+              indicatorColor: Colors.white,
               labelStyle: GoogleFonts.outfit(fontWeight: FontWeight.bold),
               unselectedLabelStyle: GoogleFonts.outfit(),
               tabs: [
@@ -139,25 +142,66 @@ class _MyListingsPageState extends State<MyListingsPage> with SingleTickerProvid
         : TabBarView(
             controller: _tabController,
             children: [
-                _buildList(active),
-                _buildList(reserved),
-                _buildList(sold),
-                _buildList(suspended),
+                _buildList(active, 'Active'),
+                _buildList(reserved, 'Reserved'),
+                _buildList(sold, 'Sold'),
+                _buildList(suspended, 'Suspended'),
             ],
         )
     );
   }
 
-  Widget _buildList(List<Product> list) {
+  Widget _buildList(List<Product> list, String tabName) {
       if (list.isEmpty) {
+          // Global Empty State: User has absolutely no products listed anywhere (Active, Reserved, Sold, or Suspended)
+          if (_products.isEmpty) {
+              return EmptyStateWidget(
+                  icon: Icons.storefront_outlined,
+                  title: 'Your Shop is Empty',
+                  message: 'Got textbooks or gadgets collecting dust? Turn them into cash or rent them out to other students!',
+                  buttonText: 'Open your shop',
+                  onActionPressed: () {
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const SellPage(isPushed: true))).then((_) => _fetchMyListings());
+                  },
+              );
+          }
+
+          // Tab-Specific Empty States
+          IconData icon;
+          String title;
+          String message;
+          String? buttonText;
+          VoidCallback? onActionPressed;
+
+          if (tabName == 'Active') {
+              icon = Icons.storefront_outlined;
+              title = 'No Active Listings';
+              message = 'You have no active items for sale right now.';
+              buttonText = 'Add New Item';
+              onActionPressed = () {
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const SellPage(isPushed: true))).then((_) => _fetchMyListings());
+              };
+          } else if (tabName == 'Reserved') {
+              icon = Icons.schedule_outlined;
+              title = 'No Reserved Items';
+              message = 'None of your items are currently reserved. Buyers are still browsing!';
+          } else if (tabName == 'Sold') {
+              icon = Icons.monetization_on_outlined;
+              title = 'No Sales Yet';
+              message = "You haven't completed any sales yet. Keep sharing your active items!";
+          } else {
+              // Suspended
+              icon = Icons.gpp_good_outlined;
+              title = 'All Good!';
+              message = 'Great job! None of your items are suspended for policy violations.';
+          }
+
           return EmptyStateWidget(
-              icon: Icons.storefront_outlined,
-              title: 'Your Shop is Empty',
-              message: 'Got textbooks or gadgets collecting dust? Turn them into cash or rent them out to other students!',
-              buttonText: 'Open your shop',
-              onActionPressed: () {
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => const SellPage())).then((_) => _fetchMyListings());
-              },
+              icon: icon,
+              title: title,
+              message: message,
+              buttonText: buttonText,
+              onActionPressed: onActionPressed,
           );
       }
       return ListView.builder(

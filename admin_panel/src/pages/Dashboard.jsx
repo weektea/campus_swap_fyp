@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { TrendingUp, Circle, Clock } from 'lucide-react';
 import api from '../services/api';
 
 const Dashboard = () => {
+    const navigate = useNavigate();
     const [metrics, setMetrics] = useState(null);
     const [tasks, setTasks] = useState([]);
     const [myLockedTasks, setMyLockedTasks] = useState(0);
@@ -140,13 +142,72 @@ const Dashboard = () => {
                                     </span>
                                 </td>
                                 <td>
-                                    <button className="btn" style={{ padding: '8px 16px', fontSize: '0.875rem' }}>View</button>
+                                    <button 
+                                        className="btn" 
+                                        style={{ padding: '8px 16px', fontSize: '0.875rem' }}
+                                        onClick={() => {
+                                            if (task.type === 'Support Ticket') {
+                                                navigate('/tickets', { state: { selectedId: task.raw.id } });
+                                            } else if (task.type === 'Report') {
+                                                navigate('/reports', { state: { selectedId: task.raw.id } });
+                                            }
+                                        }}
+                                    >
+                                        View
+                                    </button>
                                 </td>
                             </tr>
                         ))}
                         {tasks.length === 0 && (
                             <tr>
                                 <td colSpan="6" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>No recent tasks found.</td>
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+            {/* Popular Listings (Trending Calculations) */}
+            <div className="card" style={{ padding: 0, overflow: 'hidden', marginTop: '24px' }}>
+                <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <h2 style={{ margin: 0, fontSize: '1.25rem' }}>Popular Listings (Trending Calculations)</h2>
+                    <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Score = Saves × 5 + Views × 1</span>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>TITLE</th>
+                            <th>PRICE</th>
+                            <th>TYPE</th>
+                            <th>TOTAL VIEWS</th>
+                            <th>TOTAL SAVES</th>
+                            <th>POPULARITY SCORE</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {(metrics?.popular_listings || []).map(item => (
+                            <tr key={item.id}>
+                                <td style={{ fontWeight: '500' }}>{item.title}</td>
+                                <td>RM {parseFloat(item.price).toFixed(2)}</td>
+                                <td>
+                                    <span style={{ 
+                                        padding: '2px 8px', 
+                                        background: item.type === 'Rent' ? '#eff6ff' : '#f0fdf4', 
+                                        borderRadius: '8px', 
+                                        color: item.type === 'Rent' ? '#1d4ed8' : '#166534', 
+                                        fontSize: '0.75rem', 
+                                        fontWeight: '600' 
+                                    }}>
+                                        {item.type}
+                                    </span>
+                                </td>
+                                <td>{item.view_count}</td>
+                                <td>{item.save_count}</td>
+                                <td style={{ fontWeight: 'bold', color: 'var(--primary)' }}>{item.popularity_score}</td>
+                            </tr>
+                        ))}
+                        {(!metrics?.popular_listings || metrics.popular_listings.length === 0) && (
+                            <tr>
+                                <td colSpan="6" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>No trending data recorded yet.</td>
                             </tr>
                         )}
                     </tbody>

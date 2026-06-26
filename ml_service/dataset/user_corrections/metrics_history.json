@@ -1,0 +1,20 @@
+[
+    {
+        "version": "v1.0.1",
+        "accuracy": "94.3%",
+        "precision": "93.4%",
+        "recall": "94.3%",
+        "latency": "43ms",
+        "dataset_size": 2397,
+        "classes": "31 Sub-Categories"
+    },
+    {
+        "version": "v1.0.2",
+        "accuracy": "96.0%",
+        "precision": "96.7%",
+        "recall": "96.0%",
+        "latency": "47ms",
+        "dataset_size": 2401,
+        "classes": "31 Sub-Categories"
+    }
+]

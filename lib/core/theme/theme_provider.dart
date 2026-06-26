@@ -10,8 +10,10 @@ class ThemeProvider extends ChangeNotifier {
   ThemeProvider._internal();
 
   ThemeMode _themeMode = ThemeMode.system;
+  bool _isLargeText = false;
 
   ThemeMode get themeMode => _themeMode;
+  bool get isLargeText => _isLargeText;
 
   bool get isDarkMode {
     if (_themeMode == ThemeMode.system) {
@@ -30,6 +32,11 @@ class ThemeProvider extends ChangeNotifier {
 
   void toggleTheme(bool isDark) {
     _themeMode = isDark ? ThemeMode.dark : ThemeMode.light;
+    notifyListeners();
+  }
+
+  void toggleLargeText(bool isLarge) {
+    _isLargeText = isLarge;
     notifyListeners();
   }
 }

@@ -156,12 +156,12 @@ class _HelpCenterPageState extends State<HelpCenterPage> with SingleTickerProvid
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
           onTap: () {
-            if (label == 'Orders') {
+            if (label == 'Order FAQs') {
               Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (_) => HelpCategoryDetailPage(
-                    categoryName: 'Orders',
+                    categoryName: 'Order FAQs',
                     introduction: 'Find answers about purchasing, selling, renting, payments, and disputes.',
                     faqs: [
                       HelpFaqItem(
@@ -192,14 +192,14 @@ class _HelpCenterPageState extends State<HelpCenterPage> with SingleTickerProvid
                   ),
                 ),
               );
-            } else if (label == 'App Issues') {
+            } else if (label == 'Report App Issue') {
               Navigator.push(context, MaterialPageRoute(builder: (_) => const SubmitTicketPage()));
-            } else if (label == 'Account') {
+            } else if (label == 'Account FAQs') {
               Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (_) => HelpCategoryDetailPage(
-                    categoryName: 'Account',
+                    categoryName: 'Account FAQs',
                     introduction: 'Manage your profile, student verification, notifications, and security.',
                     faqs: [
                       HelpFaqItem(
@@ -496,10 +496,10 @@ class _HelpCenterPageState extends State<HelpCenterPage> with SingleTickerProvid
                   mainAxisSpacing: 16,
                   childAspectRatio: 2.0,
                   children: [
-                    _buildGridButton(Icons.receipt_long, 'Orders'),
-                    _buildGridButton(Icons.person_outline, 'Account'),
+                    _buildGridButton(Icons.receipt_long, 'Order FAQs'),
+                    _buildGridButton(Icons.person_outline, 'Account FAQs'),
                     _buildGridButton(Icons.flag_outlined, 'Report User'),
-                    _buildGridButton(Icons.error_outline, 'App Issues'),
+                    _buildGridButton(Icons.error_outline, 'Report App Issue'),
                   ],
                 ),
                 const SizedBox(height: 32),

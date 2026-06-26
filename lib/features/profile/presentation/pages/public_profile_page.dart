@@ -120,6 +120,57 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
                             ),
                         ),
                         const SizedBox(height: 32),
+                        
+                        if (_userProfile != null) ...[
+                          if (_userProfile!['bio'] != null && _userProfile!['bio'].toString().trim().isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Center(
+                              child: Text(
+                                '"${_userProfile!['bio']}"',
+                                style: GoogleFonts.outfit(fontStyle: FontStyle.italic, color: Colors.grey[700], fontSize: 15),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          ],
+                          const Divider(),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8.0),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.info_outline, color: Colors.teal),
+                                const SizedBox(width: 8),
+                                Text(
+                                  "About Student",
+                                  style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.teal.shade800),
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (_userProfile!['email'] != null)
+                            _buildInfoRow('Email', _userProfile!['email']),
+                          if (_userProfile!['phone_number'] != null)
+                            _buildInfoRow('Phone Number', _userProfile!['phone_number']),
+                          if (_userProfile!['faculty'] != null)
+                            _buildInfoRow('Faculty', _userProfile!['faculty']),
+                          if (_userProfile!['year_of_study'] != null)
+                            _buildInfoRow('Year of Study', 'Year ${_userProfile!['year_of_study']}'),
+                          
+                          if (_userProfile!['email'] == null && _userProfile!['phone_number'] == null && _userProfile!['faculty'] == null && _userProfile!['year_of_study'] == null)
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 8.0),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.lock_outline, size: 16, color: Colors.grey),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    "This profile is private.",
+                                    style: GoogleFonts.outfit(color: Colors.grey[600], fontStyle: FontStyle.italic),
+                                  ),
+                                ],
+                              ),
+                            ),
+                        ],
+                        
                         const Divider(),
                         const SizedBox(height: 16),
                         Text("Listings", style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.bold)),
@@ -288,5 +339,30 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
               );
           },
       );
+  }
+
+  Widget _buildInfoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            flex: 2,
+            child: Text(
+              label,
+              style: GoogleFonts.outfit(color: Colors.grey.shade600, fontSize: 14),
+            ),
+          ),
+          Expanded(
+            flex: 3,
+            child: Text(
+              value,
+              style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 14, color: Colors.black87),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

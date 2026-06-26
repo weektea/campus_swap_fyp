@@ -73,7 +73,9 @@ const Layout = ({ children }) => {
                     <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         <span style={{ color: 'white', fontWeight: 'bold', fontSize: '1.25rem' }}>C</span>
                     </div>
-                    <h1 style={{ fontSize: '1.25rem', fontWeight: 'bold', margin: 0, color: 'white' }}>Admin</h1>
+                    <h1 style={{ fontSize: '1.25rem', fontWeight: 'bold', margin: 0, color: 'white' }}>
+                        {user?.role === 'moderator' ? 'Moderator' : 'Admin'}
+                    </h1>
                 </div>
 
                 <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1.5rem', padding: '0 0.5rem' }}>

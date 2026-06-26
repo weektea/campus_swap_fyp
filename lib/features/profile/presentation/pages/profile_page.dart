@@ -9,6 +9,7 @@ import 'package:campus_swap/features/profile/presentation/pages/settings_page.da
 import 'package:campus_swap/features/profile/presentation/pages/help_center_page.dart';
 import 'package:campus_swap/features/profile/presentation/pages/sustainability_dashboard_page.dart';
 import 'package:campus_swap/features/profile/presentation/pages/student_profile_page.dart';
+import 'package:campus_swap/features/home/presentation/pages/home_page.dart';
 // import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 
@@ -230,9 +231,10 @@ class _ProfilePageState extends State<ProfilePage> {
             
             // Sustainability Impact Card (FYP Requirement)
             GestureDetector(
-              onTap: () {
+              onTap: () async {
                  if (!_loadingStats) {
-                     Navigator.push(context, MaterialPageRoute(builder: (_) => SustainabilityDashboardPage(itemsReused: _itemsReused, co2Saved: _co2Saved, co2Bought: _co2Bought, co2Sold: _co2Sold)));
+                     await Navigator.push(context, MaterialPageRoute(builder: (_) => SustainabilityDashboardPage(itemsReused: _itemsReused, co2Saved: _co2Saved, co2Bought: _co2Bought, co2Sold: _co2Sold)));
+                     _fetchUserProfile();
                  }
               },
               child: Container(
@@ -290,8 +292,14 @@ class _ProfilePageState extends State<ProfilePage> {
             _buildMenuItem(context, Icons.inventory_2_outlined, 'My Inventory', () {
                Navigator.push(context, MaterialPageRoute(builder: (_) => const MyListingsPage()));
             }),
-            _buildMenuItem(context, Icons.shopping_bag_outlined, 'My Orders', () {
-               Navigator.push(context, MaterialPageRoute(builder: (_) => const MyTransactionsPage()));
+            _buildMenuItem(context, Icons.shopping_bag_outlined, 'My Orders', () async {
+               final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => const MyTransactionsPage(isPushed: true)));
+               if (result == 'go_to_home' && context.mounted) {
+                   final homeState = context.findAncestorStateOfType<HomePageState>();
+                   if (homeState != null) {
+                       homeState.setSelectedIndex(0);
+                   }
+               }
             }),
             _buildMenuItem(context, Icons.bookmark_outline, 'Saved Items', () {
                Navigator.push(context, MaterialPageRoute(builder: (_) => const SavedItemsPage()));

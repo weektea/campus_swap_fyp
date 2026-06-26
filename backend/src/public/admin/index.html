@@ -4,174 +4,874 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Campus Swap Admin</title>
+    <title>🌿 Campus Swap Admin Dashboard</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --bg-color: #0b0f0c;
+            --panel-bg: #141a16;
+            --card-bg: #1b241e;
+            --border-color: #27332b;
+            --text-color: #e2e8e4;
+            --text-muted: #8ca396;
+            --primary-green: #00a86b;
+            --primary-dark: #006940;
+            --accent-green: #05cd83;
+        }
+
         body {
-            background-color: #f8f9fa;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Outfit', sans-serif;
+            min-height: 100vh;
         }
 
         .sidebar {
             height: 100vh;
-            background: #343a40;
-            color: white;
-            padding: 20px;
+            background: var(--panel-bg);
+            border-right: 1px solid var(--border-color);
+            padding: 24px;
+            position: fixed;
+            width: 250px;
+            overflow-y: auto;
+        }
+
+        .sidebar h3 {
+            color: var(--accent-green);
+            font-weight: 700;
+            margin-bottom: 24px;
+        }
+
+        .sidebar hr {
+            border-color: var(--border-color);
         }
 
         .sidebar a {
-            color: #adb5bd;
+            color: var(--text-muted);
             text-decoration: none;
-            display: block;
-            padding: 10px;
+            display: flex;
+            align-items: center;
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            font-weight: 600;
+            transition: all 0.2s ease-in-out;
         }
 
-        .sidebar a:hover {
+        .sidebar a:hover, .sidebar a.active {
             color: white;
-            background: #495057;
-            border-radius: 5px;
+            background: var(--primary-dark);
+        }
+
+        .sidebar a.active {
+            background: var(--primary-green);
+        }
+
+        .main-container {
+            margin-left: 250px;
+            padding: 32px;
         }
 
         .card {
-            margin-bottom: 20px;
+            background-color: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+            transition: transform 0.2s ease;
+        }
+
+        .card-stat {
+            background: linear-gradient(135deg, var(--panel-bg), var(--card-bg));
+            border-left: 4px solid var(--primary-green);
+        }
+
+        .table {
+            color: var(--text-color);
+            border-color: var(--border-color);
+            vertical-align: middle;
+        }
+
+        .table th {
+            background-color: var(--card-bg) !important;
+            color: var(--text-muted);
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        .table td {
+            background-color: var(--panel-bg) !important;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .badge-status {
+            font-weight: 600;
+            border-radius: 20px;
+            padding: 6px 12px;
+        }
+
+        .login-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(11, 15, 12, 0.95);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+
+        .login-card {
+            width: 100%;
+            max-width: 420px;
+            padding: 32px;
+        }
+
+        .form-control {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            color: white;
+            border-radius: 8px;
+            padding: 12px;
+        }
+
+        .form-control:focus {
+            background-color: var(--card-bg);
+            border-color: var(--primary-green);
+            color: white;
+            box-shadow: 0 0 0 0.25rem rgba(0, 168, 107, 0.25);
+        }
+
+        .btn-primary {
+            background-color: var(--primary-green);
             border: none;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            font-weight: 600;
+            padding: 12px;
+            border-radius: 8px;
+        }
+
+        .btn-primary:hover {
+            background-color: var(--accent-green);
+        }
+
+        .btn-secondary {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+        }
+
+        .btn-secondary:hover {
+            background-color: var(--border-color);
+        }
+
+        .chat-container {
+            height: 350px;
+            overflow-y: auto;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 16px;
+            background-color: var(--card-bg);
+            margin-bottom: 16px;
+        }
+
+        .chat-bubble {
+            margin-bottom: 12px;
+            padding: 10px 14px;
+            border-radius: 12px;
+            max-width: 75%;
+            word-wrap: break-word;
+        }
+
+        .chat-bubble.sent {
+            background-color: var(--primary-dark);
+            color: white;
+            margin-left: auto;
+        }
+
+        .chat-bubble.received {
+            background-color: var(--panel-bg);
+            color: var(--text-color);
+            margin-right: auto;
+            border: 1px solid var(--border-color);
+        }
+
+        .chat-meta {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 4px;
         }
     </style>
 </head>
 
 <body>
 
-    <div class="d-flex">
-        <div class="sidebar col-md-2">
-            <h3>Admin Panel</h3>
-            <hr>
-            <a href="#" onclick="loadDashboard()">Dashboard</a>
-            <a href="#" onclick="loadUsers()">Users</a>
-            <a href="#" onclick="loadProducts()">Products</a>
-            <a href="#" onclick="loadTransactions()">Transactions</a>
+    <!-- Login Overlay -->
+    <div id="login-overlay" class="login-overlay">
+        <div class="card login-card">
+            <h3 class="text-center mb-4">🌿 Campus Swap</h3>
+            <h5 class="text-center text-muted mb-4">Admin & Moderator Portal</h5>
+            <form onsubmit="handleLogin(event)">
+                <div class="mb-3">
+                    <label class="form-label">Email address</label>
+                    <input type="email" id="login-email" class="form-control" placeholder="admin@campus-swap.edu.my" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Password</label>
+                    <input type="password" id="login-password" class="form-control" placeholder="••••••••" required>
+                </div>
+                <button type="submit" class="btn btn-primary w-100 mt-2">Sign In</button>
+            </form>
         </div>
-        <div class="content col-md-10 p-4">
-            <h2 id="page-title">Dashboard</h2>
-            <div id="main-content">
-                <!-- Dynamic Content -->
+    </div>
+
+    <!-- Main Application UI -->
+    <div class="sidebar">
+        <h3>🌿 Campus Swap</h3>
+        <span id="user-display" class="badge bg-secondary mb-3 w-100 py-2">Not Logged In</span>
+        <hr>
+        <a href="#" id="menu-dashboard" class="active" onclick="switchTab('dashboard')">📊 Dashboard</a>
+        <a href="#" id="menu-users" onclick="switchTab('users')">👥 Users</a>
+        <a href="#" id="menu-products" onclick="switchTab('products')">🛍️ Products</a>
+        <a href="#" id="menu-transactions" onclick="switchTab('transactions')">💸 Transactions</a>
+        <a href="#" id="menu-reports" onclick="switchTab('reports')">🚩 Reports</a>
+        <a href="#" id="menu-disputes" onclick="switchTab('disputes')">⚖️ Disputes</a>
+        <a href="#" id="menu-tickets" onclick="switchTab('tickets')">✉️ Support Tickets</a>
+        <hr>
+        <a href="#" class="text-danger" onclick="handleLogout()">🚪 Logout</a>
+    </div>
+
+    <div class="main-container">
+        <h2 id="page-title" class="mb-4">Dashboard</h2>
+        <div id="main-content">
+            <!-- Content will be dynamically inserted here -->
+        </div>
+    </div>
+
+    <!-- Ticket/Dispute Detail Modal -->
+    <div class="modal fade" id="threadModal" tabindex="-1" aria-hidden="true" style="color: black;">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content" style="background-color: var(--panel-bg); color: var(--text-color); border: 1px solid var(--border-color);">
+                <div class="modal-header border-bottom border-secondary">
+                    <h5 class="modal-title" id="threadModalTitle">Thread</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="threadInfo" class="mb-3 p-3 rounded" style="background-color: var(--card-bg); border: 1px solid var(--border-color);"></div>
+                    <div id="chatContainer" class="chat-container"></div>
+                    <div class="input-group">
+                        <input type="text" id="replyInput" class="form-control" placeholder="Type your reply here...">
+                        <button class="btn btn-primary" onclick="sendThreadReply()">Send</button>
+                    </div>
+                </div>
+                <div class="modal-footer border-top border-secondary" id="threadModalFooter">
+                    <!-- Actions will load dynamically -->
+                </div>
             </div>
         </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        const API_URL = 'http://localhost:3000/api';
+        const API_URL = '/api';
+        let currentTab = 'dashboard';
+        let currentUser = null;
+        let threadModalObj = null;
+        let activeThreadId = null;
+        let activeThreadType = null; // 'Dispute' or 'SupportTicket'
 
-        async function loadDashboard() {
-            document.getElementById('page-title').innerText = 'Dashboard Overview';
-            document.getElementById('main-content').innerHTML = `
-            <div class="row">
-                <div class="col-md-4"><div class="card p-4 text-center"><h3>Total Users</h3><h1 id="count-users">Loading...</h1></div></div>
-                <div class="col-md-4"><div class="card p-4 text-center"><h3>Active Products</h3><h1 id="count-products">Loading...</h1></div></div>
-                <div class="col-md-4"><div class="card p-4 text-center"><h3>Transactions</h3><h1 id="count-trans">Loading...</h1></div></div>
-            </div>
-        `;
+        // Check if already logged in
+        document.addEventListener("DOMContentLoaded", () => {
+            threadModalObj = new bootstrap.Modal(document.getElementById('threadModal'));
+            
+            const token = localStorage.getItem('admin_token');
+            const userStr = localStorage.getItem('admin_user');
+            if (token && userStr) {
+                currentUser = JSON.parse(userStr);
+                document.getElementById('login-overlay').style.display = 'none';
+                document.getElementById('user-display').innerText = `${currentUser.full_name} (${currentUser.role})`;
+                loadDashboard();
+            }
+        });
+
+        // Authentication calls
+        async function handleLogin(e) {
+            e.preventDefault();
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
 
             try {
-                const stats = await fetch(API_URL + '/admin/stats').then(r => r.json());
+                const res = await fetch(API_URL + '/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+                const data = await res.json();
+                
+                if (res.ok) {
+                    if (data.user.role !== 'admin' && data.user.role !== 'moderator') {
+                        alert("Access Denied: Only Admins or Moderators are allowed.");
+                        return;
+                    }
+                    localStorage.setItem('admin_token', data.token);
+                    localStorage.setItem('admin_user', JSON.stringify(data.user));
+                    currentUser = data.user;
+                    
+                    document.getElementById('login-overlay').style.display = 'none';
+                    document.getElementById('user-display').innerText = `${currentUser.full_name} (${currentUser.role})`;
+                    switchTab('dashboard');
+                } else {
+                    alert(data.error || 'Login failed');
+                }
+            } catch (err) {
+                console.error(err);
+                alert("Server connection failed.");
+            }
+        }
 
-                document.getElementById('count-users').innerText = stats.users;
-                document.getElementById('count-products').innerText = stats.products;
-                document.getElementById('count-trans').innerText = stats.transactions;
+        function handleLogout() {
+            localStorage.clear();
+            currentUser = null;
+            document.getElementById('login-overlay').style.display = 'flex';
+            document.getElementById('user-display').innerText = 'Not Logged In';
+        }
+
+        // Authenticated Request wrapper
+        async function fetchWithAuth(endpoint, options = {}) {
+            const token = localStorage.getItem('admin_token');
+            if (!token) {
+                handleLogout();
+                return null;
+            }
+
+            options.headers = {
+                ...options.headers,
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            };
+
+            const res = await fetch(API_URL + endpoint, options);
+            if (res.status === 401 || res.status === 403) {
+                handleLogout();
+                return null;
+            }
+            return res;
+        }
+
+        // UI Tabs routing
+        function switchTab(tab) {
+            currentTab = tab;
+            
+            // Sidebar buttons update
+            document.querySelectorAll('.sidebar a').forEach(el => el.classList.remove('active'));
+            const menuEl = document.getElementById(`menu-${tab}`);
+            if (menuEl) menuEl.classList.add('active');
+
+            // Header title update
+            document.getElementById('page-title').innerText = tab.charAt(0).toUpperCase() + tab.slice(1);
+
+            // Execute content loading
+            if (tab === 'dashboard') loadDashboard();
+            else if (tab === 'users') loadUsers();
+            else if (tab === 'products') loadProducts();
+            else if (tab === 'transactions') loadTransactions();
+            else if (tab === 'reports') loadReports();
+            else if (tab === 'disputes') loadDisputes();
+            else if (tab === 'tickets') loadTickets();
+        }
+
+        // Tab: Dashboard Overview
+        async function loadDashboard() {
+            const container = document.getElementById('main-content');
+            container.innerHTML = `<div class="text-center my-5"><div class="spinner-border text-success" role="status"></div></div>`;
+            
+            try {
+                // Moderator /metrics is accessible to both roles
+                const res = await fetchWithAuth('/moderator/metrics');
+                if (!res) return;
+                const metrics = await res.json();
+
+                container.innerHTML = `
+                    <div class="row g-4 mb-4">
+                        <div class="col-md-3">
+                            <div class="card p-4 card-stat">
+                                <h6 class="text-muted">Total Users</h6>
+                                <h2>${metrics.total_users || 0}</h2>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card p-4 card-stat">
+                                <h6 class="text-muted">Active Products</h6>
+                                <h2>${metrics.total_products || 0}</h2>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card p-4 card-stat">
+                                <h6 class="text-muted">Completed Orders</h6>
+                                <h2>${metrics.total_transactions || 0}</h2>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card p-4 card-stat">
+                                <h6 class="text-muted">🌿 Total Carbon Saved</h6>
+                                <h2 class="text-success">${metrics.co2_saved_kg || 0} kg CO2</h2>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card p-4 mt-4">
+                        <h4>System Welcome Overview</h4>
+                        <p class="text-muted">You are logged in as <strong>${currentUser.full_name}</strong> (${currentUser.role}). Use the sidebar menu to handle user flags, review transactions, and moderate transactions or disputes.</p>
+                    </div>
+                `;
+            } catch (e) {
+                container.innerHTML = `<div class="alert alert-danger">Error loading dashboard: ${e.message}</div>`;
+            }
+        }
+
+        // Tab: Users
+        async function loadUsers() {
+            const container = document.getElementById('main-content');
+            container.innerHTML = `<div class="text-center my-5"><div class="spinner-border text-success" role="status"></div></div>`;
+            
+            try {
+                const endpoint = currentUser.role === 'admin' ? '/admin/users' : '/moderator/dashboard';
+                const res = await fetchWithAuth(endpoint);
+                if (!res) return;
+                
+                let users = [];
+                if (currentUser.role === 'admin') {
+                    users = await res.json();
+                } else {
+                    // Moderators can load users indirectly, fallback or fetch list
+                    const data = await res.json();
+                    // Just fallback to some users, or perform call
+                    const usersRes = await fetchWithAuth('/admin/users'); // fallback
+                    if (usersRes) users = await usersRes.json();
+                }
+
+                let rows = users.map(u => `
+                    <tr>
+                        <td><strong>${u.full_name}</strong></td>
+                        <td>${u.email}</td>
+                        <td><span class="badge bg-secondary">${u.role}</span></td>
+                        <td>${u.is_active ? '<span class="text-success">Active</span>' : '<span class="text-danger">Suspended</span>'}</td>
+                        <td>
+                            ${currentUser.role === 'admin' ? `
+                                <button class="btn btn-sm ${u.is_active ? 'btn-outline-danger' : 'btn-success'}" onclick="toggleUserStatus('${u.id}', ${u.is_active})">
+                                    ${u.is_active ? 'Ban' : 'Unban'}
+                                </button>
+                            ` : 'N/A'}
+                        </td>
+                    </tr>
+                `).join('');
+
+                container.innerHTML = `
+                    <div class="card p-4">
+                        <table class="table">
+                            <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Actions</th></tr></thead>
+                            <tbody>${rows || '<tr><td colspan="5" class="text-center">No users found.</td></tr>'}</tbody>
+                        </table>
+                    </div>
+                `;
+            } catch (e) {
+                container.innerHTML = `<div class="alert alert-danger">Error: ${e.message}</div>`;
+            }
+        }
+
+        async function toggleUserStatus(id, isActive) {
+            if (!confirm(`Are you sure you want to ${isActive ? 'Ban' : 'Unban'} this user?`)) return;
+            const res = await fetchWithAuth(`/admin/users/${id}`, {
+                method: 'PUT',
+                body: JSON.stringify({ is_active: !isActive })
+            });
+            if (res && res.ok) {
+                switchTab('users');
+            } else {
+                alert("Failed to modify user status.");
+            }
+        }
+
+        // Tab: Products
+        async function loadProducts() {
+            const container = document.getElementById('main-content');
+            container.innerHTML = `<div class="text-center my-5"><div class="spinner-border text-success" role="status"></div></div>`;
+            
+            try {
+                const res = await fetchWithAuth('/admin/listings');
+                if (!res) return;
+                const products = await res.json();
+
+                let rows = products.map(p => {
+                    let img = '';
+                    if (p.image_urls && p.image_urls.length > 0) {
+                        img = Array.isArray(p.image_urls) ? p.image_urls[0] : p.image_urls;
+                    }
+                    return `
+                        <tr>
+                            <td><img src="${img || 'https://via.placeholder.com/50'}" class="rounded" width="40" height="40" style="object-fit:cover;"></td>
+                            <td><strong>${p.title}</strong></td>
+                            <td>RM ${p.price}</td>
+                            <td><span class="badge bg-info">${p.type}</span></td>
+                            <td><span class="badge bg-secondary">${p.status}</span></td>
+                            <td>
+                                <button class="btn btn-sm btn-danger" onclick="suspendProduct('${p.id}')" ${p.status === 'Suspended' ? 'disabled' : ''}>
+                                    Suspend
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+
+                container.innerHTML = `
+                    <div class="card p-4">
+                        <table class="table">
+                            <thead><tr><th>Image</th><th>Title</th><th>Price</th><th>Type</th><th>Status</th><th>Actions</th></tr></thead>
+                            <tbody>${rows || '<tr><td colspan="6" class="text-center">No products found.</td></tr>'}</tbody>
+                        </table>
+                    </div>
+                `;
+            } catch (e) {
+                container.innerHTML = `<div class="alert alert-danger">Error: ${e.message}</div>`;
+            }
+        }
+
+        async function suspendProduct(id) {
+            if (!confirm('Are you sure you want to suspend this listing? This will cancel any active pending orders.')) return;
+            const res = await fetchWithAuth(`/admin/listings/${id}/status`, {
+                method: 'PUT',
+                body: JSON.stringify({ status: 'Suspended' })
+            });
+            if (res && res.ok) {
+                switchTab('products');
+            } else {
+                alert("Failed to suspend listing.");
+            }
+        }
+
+        // Tab: Transactions
+        async function loadTransactions() {
+            const container = document.getElementById('main-content');
+            container.innerHTML = `<div class="text-center my-5"><div class="spinner-border text-success" role="status"></div></div>`;
+            
+            try {
+                const res = await fetchWithAuth('/admin/transactions');
+                if (!res) return;
+                const transactions = await res.json();
+
+                let rows = transactions.map(t => `
+                    <tr>
+                        <td><code>${t.id.substring(0, 8).toUpperCase()}</code></td>
+                        <td>${t.product ? t.product.title : 'N/A'}</td>
+                        <td>RM ${t.amount}</td>
+                        <td><span class="badge bg-secondary">${t.status}</span></td>
+                        <td>${t.meetup_location || 'N/A'}</td>
+                        <td>${new Date(t.createdAt).toLocaleDateString()}</td>
+                    </tr>
+                `).join('');
+
+                container.innerHTML = `
+                    <div class="card p-4">
+                        <table class="table">
+                            <thead><tr><th>Order ID</th><th>Product</th><th>Amount</th><th>Status</th><th>Meetup Location</th><th>Date</th></tr></thead>
+                            <tbody>${rows || '<tr><td colspan="6" class="text-center">No transactions found.</td></tr>'}</tbody>
+                        </table>
+                    </div>
+                `;
+            } catch (e) {
+                container.innerHTML = `<div class="alert alert-danger">Error: ${e.message}</div>`;
+            }
+        }
+
+        // Tab: Reports
+        async function loadReports() {
+            const container = document.getElementById('main-content');
+            container.innerHTML = `<div class="text-center my-5"><div class="spinner-border text-success" role="status"></div></div>`;
+            
+            try {
+                const res = await fetchWithAuth('/admin/reports');
+                if (!res) return;
+                const reports = await res.json();
+
+                let rows = reports.map(r => `
+                    <tr>
+                        <td><strong>${r.violation_type}</strong></td>
+                        <td>${r.description}</td>
+                        <td>${r.product ? `<strong>${r.product.title}</strong> (ID: ${r.product.id.substring(0,8)})` : 'N/A'}</td>
+                        <td>${r.reporter ? r.reporter.full_name : 'Student'}</td>
+                        <td><span class="badge bg-secondary">${r.status}</span></td>
+                        <td>
+                            ${r.status === 'Pending' ? `
+                                <button class="btn btn-sm btn-success me-1" onclick="handleReport('${r.id}', 'Uphold')">Uphold</button>
+                                <button class="btn btn-sm btn-outline-danger" onclick="handleReport('${r.id}', 'Dismissed')">Dismiss</button>
+                            ` : 'Processed'}
+                        </td>
+                    </tr>
+                `).join('');
+
+                container.innerHTML = `
+                    <div class="card p-4">
+                        <table class="table">
+                            <thead><tr><th>Type</th><th>Description</th><th>Target Listing</th><th>Reporter</th><th>Status</th><th>Actions</th></tr></thead>
+                            <tbody>${rows || '<tr><td colspan="6" class="text-center">No reports filed.</td></tr>'}</tbody>
+                        </table>
+                    </div>
+                `;
+            } catch (e) {
+                container.innerHTML = `<div class="alert alert-danger">Error: ${e.message}</div>`;
+            }
+        }
+
+        async function handleReport(id, status) {
+            const reason = prompt(`Enter notes for report resolution (status: ${status}):`, "Reviewed by moderation.");
+            if (reason === null) return;
+
+            const res = await fetchWithAuth(`/moderator/reports/${id}/status`, {
+                method: 'PUT',
+                body: JSON.stringify({ status, admin_notes: reason })
+            });
+            if (res && res.ok) {
+                switchTab('reports');
+            } else {
+                alert("Failed to process report.");
+            }
+        }
+
+        // Tab: Disputes
+        async function loadDisputes() {
+            const container = document.getElementById('main-content');
+            container.innerHTML = `<div class="text-center my-5"><div class="spinner-border text-success" role="status"></div></div>`;
+            
+            try {
+                const res = await fetchWithAuth('/admin/disputes');
+                if (!res) return;
+                const disputes = await res.json();
+
+                let rows = disputes.map(d => `
+                    <tr>
+                        <td><code>${d.id.substring(0, 8).toUpperCase()}</code></td>
+                        <td>${d.complainant ? d.complainant.full_name : 'Student'}</td>
+                        <td><strong>${d.reason}</strong></td>
+                        <td>${d.description}</td>
+                        <td><span class="badge bg-warning text-dark">${d.status}</span></td>
+                        <td>
+                            <button class="btn btn-sm btn-primary" onclick="openThread('${d.id}', 'Dispute')">
+                                Chat & Resolve
+                            </button>
+                        </td>
+                    </tr>
+                `).join('');
+
+                container.innerHTML = `
+                    <div class="card p-4">
+                        <table class="table">
+                            <thead><tr><th>Dispute ID</th><th>Filer</th><th>Reason</th><th>Explanation</th><th>Status</th><th>Actions</th></tr></thead>
+                            <tbody>${rows || '<tr><td colspan="6" class="text-center">No active disputes.</td></tr>'}</tbody>
+                        </table>
+                    </div>
+                `;
+            } catch (e) {
+                container.innerHTML = `<div class="alert alert-danger">Error: ${e.message}</div>`;
+            }
+        }
+
+        // Tab: Support Tickets
+        async function loadTickets() {
+            const container = document.getElementById('main-content');
+            container.innerHTML = `<div class="text-center my-5"><div class="spinner-border text-success" role="status"></div></div>`;
+            
+            try {
+                const res = await fetchWithAuth('/admin/tickets');
+                if (!res) return;
+                const tickets = await res.json();
+
+                let rows = tickets.map(t => `
+                    <tr>
+                        <td><code>${t.id.substring(0, 8).toUpperCase()}</code></td>
+                        <td>${t.student ? t.student.full_name : 'Student'}</td>
+                        <td><strong>${t.subject}</strong></td>
+                        <td><span class="badge bg-info">${t.category}</span></td>
+                        <td><span class="badge bg-secondary">${t.status}</span></td>
+                        <td>
+                            <button class="btn btn-sm btn-primary" onclick="openThread('${t.id}', 'SupportTicket')">
+                                Handle Chat
+                            </button>
+                        </td>
+                    </tr>
+                `).join('');
+
+                container.innerHTML = `
+                    <div class="card p-4">
+                        <table class="table">
+                            <thead><tr><th>Ticket ID</th><th>Student</th><th>Subject</th><th>Category</th><th>Status</th><th>Actions</th></tr></thead>
+                            <tbody>${rows || '<tr><td colspan="6" class="text-center">No support tickets.</td></tr>'}</tbody>
+                        </table>
+                    </div>
+                `;
+            } catch (e) {
+                container.innerHTML = `<div class="alert alert-danger">Error: ${e.message}</div>`;
+            }
+        }
+
+        // Realtime Messages / Chat Threads
+        async function openThread(id, type) {
+            activeThreadId = id;
+            activeThreadType = type;
+            
+            document.getElementById('threadModalTitle').innerText = `${type} #${id.substring(0, 8).toUpperCase()}`;
+            document.getElementById('chatContainer').innerHTML = `<div class="text-center"><div class="spinner-border text-light" role="status"></div></div>`;
+            
+            // If support ticket, lock/claim it first
+            if (type === 'SupportTicket') {
+                await fetchWithAuth(`/moderator/tickets/${id}/claim`, { method: 'PUT' });
+            }
+
+            // Load Details & Messages
+            await refreshMessages();
+            
+            // Setup footer actions
+            const footer = document.getElementById('threadModalFooter');
+            footer.innerHTML = '';
+            
+            if (type === 'Dispute') {
+                footer.innerHTML = `
+                    <button class="btn btn-warning btn-sm me-2" onclick="triageDisputeAction('${id}', 'Investigate')">Investigate</button>
+                    <button class="btn btn-success btn-sm me-2" onclick="triageDisputeAction('${id}', 'Dismiss')">Dismiss (Reopen Order)</button>
+                    ${currentUser.role === 'admin' ? `
+                        <button class="btn btn-primary btn-sm me-2" onclick="arbitrateDisputeAction('${id}', 'Buyer')">Arbitrate (Refund Buyer)</button>
+                        <button class="btn btn-outline-success btn-sm" onclick="arbitrateDisputeAction('${id}', 'Seller')">Arbitrate (Release to Seller)</button>
+                    ` : ''}
+                `;
+            } else if (type === 'SupportTicket') {
+                footer.innerHTML = `
+                    <button class="btn btn-success" onclick="resolveTicketAction('${id}')">Resolve Ticket</button>
+                `;
+            }
+            
+            threadModalObj.show();
+        }
+
+        async function refreshMessages() {
+            if (!activeThreadId) return;
+            
+            try {
+                // Fetch basic info
+                let detailRes;
+                if (activeThreadType === 'Dispute') {
+                    detailRes = await fetchWithAuth(`/admin/disputes`);
+                } else {
+                    detailRes = await fetchWithAuth(`/admin/tickets`);
+                }
+                
+                if (detailRes) {
+                    const list = await detailRes.json();
+                    const item = list.find(x => x.id === activeThreadId);
+                    if (item) {
+                        document.getElementById('threadInfo').innerHTML = `
+                            <strong>Details:</strong> ${item.description || item.subject}<br>
+                            <strong>Status:</strong> ${item.status} | <strong>Assigned to:</strong> ${item.lockedByModeratorId || 'None'}
+                        `;
+                    }
+                }
+
+                // Fetch message thread
+                const res = await fetchWithAuth(`/tickets/thread/${activeThreadId}`);
+                if (!res) return;
+                const messages = await res.json();
+                
+                const container = document.getElementById('chatContainer');
+                container.innerHTML = messages.map(m => {
+                    const isSentByMe = m.sender_id === currentUser.id;
+                    return `
+                        <div class="chat-bubble ${isSentByMe ? 'sent' : 'received'}">
+                            <div>${m.content}</div>
+                            <div class="chat-meta">${m.sender ? m.sender.full_name : 'User'} (${m.sender ? m.sender.role : 'student'})</div>
+                        </div>
+                    `;
+                }).join('') || '<div class="text-center text-muted">No messages yet.</div>';
+                
+                container.scrollTop = container.scrollHeight;
             } catch (e) {
                 console.error(e);
             }
         }
 
-        async function loadUsers() {
-            document.getElementById('page-title').innerText = 'User Management';
-            const res = await fetch(API_URL + '/admin/users');
-            const users = await res.json();
-
-            let rows = users.map(u => `
-            <tr>
-                <td>${u.full_name}</td>
-                <td>${u.email}</td>
-                <td>${u.role}</td>
-                <td>RM ${u.balance}</td>
-                <td>
-                    <button class="btn btn-sm btn-danger" onclick="deleteUser('${u.id}')">Ban</button>
-                </td>
-            </tr>
-        `).join('');
-
-            document.getElementById('main-content').innerHTML = `
-            <table class="table table-striped bg-white">
-                <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Balance</th><th>Action</th></tr></thead>
-                <tbody>${rows}</tbody>
-            </table>
-        `;
+        async function sendThreadReply() {
+            const input = document.getElementById('replyInput');
+            const content = input.value.trim();
+            if (!content) return;
+            
+            try {
+                const res = await fetchWithAuth(`/tickets/thread/${activeThreadId}`, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        reference_type: activeThreadType,
+                        content: content
+                    })
+                });
+                
+                if (res && res.ok) {
+                    input.value = '';
+                    await refreshMessages();
+                } else {
+                    alert("Failed to send message.");
+                }
+            } catch (e) {
+                console.error(e);
+            }
         }
 
-        async function loadProducts() {
-            document.getElementById('page-title').innerText = 'Product Moderation';
-            const res = await fetch(API_URL + '/products');
-            const products = await res.json();
+        async function resolveTicketAction(id) {
+            if (!confirm('Resolve and close this ticket?')) return;
+            const reply = prompt("Enter final response notes (optional):", "Support resolved the issue.");
+            if (reply === null) return;
 
-            let rows = products.map(p => `
-            <tr>
-                <td><img src="${p.image_urls && p.image_urls.length > 0 ? (Array.isArray(p.image_urls) ? p.image_urls[0] : p.image_urls) : ''}" width="50"></td>
-                <td>${p.title}</td>
-                <td>RM ${p.price}</td>
-                <td>${p.status}</td>
-                <td>
-                    <button class="btn btn-sm btn-warning" onclick="deleteProduct('${p.id}')">Remove</button>
-                </td>
-            </tr>
-        `).join('');
-
-            document.getElementById('main-content').innerHTML = `
-            <table class="table table-striped bg-white">
-                <thead><tr><th>Image</th><th>Title</th><th>Price</th><th>Status</th><th>Action</th></tr></thead>
-                <tbody>${rows}</tbody>
-            </table>
-        `;
+            const res = await fetchWithAuth(`/moderator/tickets/${id}/resolve`, {
+                method: 'PUT',
+                body: JSON.stringify({ reply_content: reply })
+            });
+            if (res && res.ok) {
+                threadModalObj.hide();
+                switchTab('tickets');
+            } else {
+                alert("Failed to resolve ticket.");
+            }
         }
 
-        async function loadTransactions() {
-            document.getElementById('page-title').innerText = 'Transaction History';
-            const res = await fetch(API_URL + '/admin/transactions');
-            const transactions = await res.json();
+        async function triageDisputeAction(id, action) {
+            if (!confirm(`Mark dispute status as ${action}?`)) return;
+            const reply = prompt("Enter notes or reply message for this dispute action:", "");
+            if (reply === null) return;
 
-            let rows = transactions.map(t => `
-            <tr>
-                <td>${t.id.substring(0, 8)}...</td>
-                <td>${t.product ? t.product.title : 'Deleted Product'}</td>
-                <td>RM ${t.amount}</td>
-                <td><span class="badge bg-${t.status === 'completed' ? 'success' : (t.status === 'pending' ? 'warning' : 'secondary')}">${t.status}</span></td>
-                <td>${new Date(t.created_at).toLocaleDateString()}</td>
-            </tr>
-        `).join('');
-
-            document.getElementById('main-content').innerHTML = `
-            <table class="table table-striped bg-white">
-                <thead><tr><th>ID</th><th>Product</th><th>Amount</th><th>Status</th><th>Date</th></tr></thead>
-                <tbody>${rows}</tbody>
-            </table>
-        `;
+            const res = await fetchWithAuth(`/moderator/disputes/${id}/triage`, {
+                method: 'PUT',
+                body: JSON.stringify({ action, reply })
+            });
+            if (res && res.ok) {
+                threadModalObj.hide();
+                switchTab('disputes');
+            } else {
+                alert("Failed to triage dispute.");
+            }
         }
 
-        async function deleteUser(id) {
-            if (!confirm('Are you sure?')) return;
-            await fetch(API_URL + '/admin/users/' + id, { method: 'DELETE' });
-            loadUsers();
-        }
+        async function arbitrateDisputeAction(id, winner) {
+            if (!confirm(`Arbitrate dispute in favor of ${winner}? This action is permanent.`)) return;
+            const notes = prompt("Enter arbitration rationale/notes:", `Arbitrated in favor of ${winner}.`);
+            if (notes === null) return;
 
-        async function deleteProduct(id) {
-            if (!confirm('Are you sure?')) return;
-            await fetch(API_URL + '/products/' + id, { method: 'DELETE' });
-            loadProducts();
+            const res = await fetchWithAuth(`/admin/disputes/${id}/arbitrate`, {
+                method: 'POST',
+                body: JSON.stringify({ winning_party: winner, admin_notes: notes })
+            });
+            if (res && res.ok) {
+                threadModalObj.hide();
+                switchTab('disputes');
+            } else {
+                alert("Failed to arbitrate dispute.");
+            }
         }
-
-        // Load Dashboard by default
-        loadDashboard();
     </script>
-
 </body>
 
 </html>
-```

@@ -1,10 +1,13 @@
-import { User, Transaction, Product } from '../models/index.js';
+import { User, Transaction, Product, Category, SubCategory } from '../models/index.js';
 import { Op } from 'sequelize';
 import { getCarbonValue } from './transactionController.js';
 
 export const getLeaderboard = async (req, res) => {
     try {
         const users = await User.findAll({
+            where: {
+                role: 'student'
+            },
             attributes: ['id', 'full_name', 'email', 'total_carbon_saved'],
             order: [['total_carbon_saved', 'DESC']],
             limit: 10
@@ -42,22 +45,27 @@ export const getImpactByCategory = async (req, res) => {
             include: [{
                 model: Product,
                 as: 'product',
-                attributes: ['category']
+                include: [
+                    { model: Category, as: 'categoryModel', attributes: ['name', 'carbon_conversion_factor'] },
+                    { model: SubCategory, as: 'subcategoryModel', attributes: ['name', 'carbon_conversion_factor'] }
+                ]
             }]
         });
 
         const categoryMap = {};
 
         transactions.forEach(t => {
-            const cat = t.product?.category || 'Others';
-            const subCat = t.product?.sub_category_id;
-            
-            const carbonValue = getCarbonValue(cat, subCat);
-            
-            if (!categoryMap[cat]) {
-                categoryMap[cat] = 0;
+            if (t.product) {
+                const catName = t.product.categoryModel ? t.product.categoryModel.name : (t.product.category || 'Others');
+                const subCatName = t.product.subcategoryModel ? t.product.subcategoryModel.name : null;
+                
+                const carbonValue = getCarbonValue(catName, subCatName, t.product);
+                
+                if (!categoryMap[catName]) {
+                    categoryMap[catName] = 0;
+                }
+                categoryMap[catName] += carbonValue;
             }
-            categoryMap[cat] += carbonValue;
         });
 
         res.json(categoryMap);

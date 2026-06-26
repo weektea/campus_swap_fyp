@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:math' as math;
 import 'package:campus_swap/core/api/api_client.dart';
 import 'package:campus_swap/features/home/domain/entities/product.dart';
 import 'package:campus_swap/core/session/user_session.dart';
@@ -9,11 +10,17 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:campus_swap/features/profile/presentation/pages/public_profile_page.dart';
 import 'package:campus_swap/features/product/presentation/pages/edit_listing_page.dart';
+import 'package:campus_swap/features/product/presentation/pages/report_listing_page.dart';
 
 class ProductDetailsPage extends StatefulWidget {
   final Product product;
+  final bool initialIsSaved;
 
-  const ProductDetailsPage({super.key, required this.product});
+  const ProductDetailsPage({
+    super.key, 
+    required this.product,
+    this.initialIsSaved = false,
+  });
 
   @override
   State<ProductDetailsPage> createState() => _ProductDetailsPageState();
@@ -29,9 +36,28 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
   @override
   void initState() {
     super.initState();
+    _isSaved = widget.initialIsSaved;
+    _checkIfSaved();
     _trackView();
     _fetchSellerProducts();
     _fetchSimilarProducts();
+    _fetchCampusLocations();
+  }
+
+  Future<void> _checkIfSaved() async {
+    if (!UserSession().isLoggedIn) return;
+    try {
+      final apiClient = ApiClient();
+      final response = await apiClient.get('/saved');
+      if (response is List && mounted) {
+        final isSaved = response.any((item) => (item['id'] ?? '').toString() == widget.product.id);
+        setState(() {
+          _isSaved = isSaved;
+        });
+      }
+    } catch (e) {
+      // Ignore
+    }
   }
 
   Future<void> _fetchSellerProducts() async {
@@ -45,10 +71,10 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
           if (response is List) {
               if (mounted) {
                   setState(() {
-                      // Filter out current product
+                      // Filter out current product and non-available listings
                       _sellerProducts = response
                           .map((data) => Product.fromJson(data))
-                          .where((p) => p.id != widget.product.id)
+                          .where((p) => p.id != widget.product.id && p.status == 'Available')
                           .toList();
                       // _isLoadingSellerItems = false;
                   });
@@ -59,23 +85,100 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
       }
   }
 
+  double _calculateCosineSimilarity(Product target, Product candidate) {
+    // Combine title and description to construct content texts
+    final text1 = '${target.title} ${target.description}'.toLowerCase().replaceAll(RegExp(r'[^\w\s]'), ' ');
+    final text2 = '${candidate.title} ${candidate.description}'.toLowerCase().replaceAll(RegExp(r'[^\w\s]'), ' ');
+
+    final tokens1 = text1.split(RegExp(r'\s+')).where((t) => t.isNotEmpty).toList();
+    final tokens2 = text2.split(RegExp(r'\s+')).where((t) => t.isNotEmpty).toList();
+
+    if (tokens1.isEmpty || tokens2.isEmpty) return 0.0;
+
+    final allTerms = <String>{...tokens1, ...tokens2};
+
+    final tf1 = <String, double>{};
+    final tf2 = <String, double>{};
+
+    for (final t in tokens1) {
+      tf1[t] = (tf1[t] ?? 0.0) + 1.0;
+    }
+    for (final t in tokens2) {
+      tf2[t] = (tf2[t] ?? 0.0) + 1.0;
+    }
+
+    // Normalize Term Frequency
+    tf1.updateAll((key, value) => value / tokens1.length);
+    tf2.updateAll((key, value) => value / tokens2.length);
+
+    double dotProduct = 0.0;
+    double mag1 = 0.0;
+    double mag2 = 0.0;
+
+    for (final term in allTerms) {
+      final v1 = tf1[term] ?? 0.0;
+      final v2 = tf2[term] ?? 0.0;
+
+      dotProduct += v1 * v2;
+      mag1 += v1 * v1;
+      mag2 += v2 * v2;
+    }
+
+    if (mag1 == 0.0 || mag2 == 0.0) return 0.0;
+    return dotProduct / (math.sqrt(mag1) * math.sqrt(mag2));
+  }
+
   Future<void> _fetchSimilarProducts() async {
       try {
           final apiClient = ApiClient();
-          String endpoint = '/products?category=${widget.product.category}';
+          String endpoint = '';
+          bool usedSubCategory = false;
+          if (widget.product.subCategoryId.isNotEmpty) {
+              endpoint = '/products?sub_category_id=${widget.product.subCategoryId}';
+              usedSubCategory = true;
+          } else {
+              endpoint = '/products?category=${widget.product.category}';
+          }
           if (UserSession().isLoggedIn) {
               endpoint += '&exclude_reported_by=${UserSession().userId}';
           }
-          final response = await apiClient.get(endpoint);
+          var response = await apiClient.get(endpoint);
+          
+          List<Product> sortedList = [];
           if (response is List) {
-              if (mounted) {
-                  setState(() {
-                      _similarProducts = response
-                          .map((data) => Product.fromJson(data))
-                          .where((p) => p.id != widget.product.id)
-                          .toList();
-                  });
+              sortedList = response
+                  .map((data) => Product.fromJson(data as Map<String, dynamic>))
+                  .where((p) => p.id != widget.product.id && p.status == 'Available' && p.sellerId != UserSession().userId)
+                  .toList();
+          }
+
+          // Fallback to broad category if subcategory search yields no available candidate items
+          if (sortedList.isEmpty && usedSubCategory) {
+              String fallbackEndpoint = '/products?category=${widget.product.category}';
+              if (UserSession().isLoggedIn) {
+                  fallbackEndpoint += '&exclude_reported_by=${UserSession().userId}';
               }
+              final fallbackResponse = await apiClient.get(fallbackEndpoint);
+              if (fallbackResponse is List) {
+                  sortedList = fallbackResponse
+                      .map((data) => Product.fromJson(data as Map<String, dynamic>))
+                      .where((p) => p.id != widget.product.id && p.status == 'Available' && p.sellerId != UserSession().userId)
+                      .toList();
+              }
+          }
+
+          // Sort candidate products based on cosine similarity to the current product
+          sortedList.sort((a, b) {
+              final scoreA = _calculateCosineSimilarity(widget.product, a);
+              final scoreB = _calculateCosineSimilarity(widget.product, b);
+              return scoreB.compareTo(scoreA); // Descending (highest similarity first)
+          });
+
+          if (mounted) {
+              setState(() {
+                  // Take only the top 4 similar items
+                  _similarProducts = sortedList.take(4).toList();
+              });
           }
       } catch (e) {
           // Ignore
@@ -427,10 +530,15 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                                 final item = _sellerProducts[index];
                                 return GestureDetector(
                                     onTap: () {
-                                        // Navigate to that product
+                                         // Navigate to that product
                                          Navigator.push(context, MaterialPageRoute(
                                             builder: (_) => ProductDetailsPage(product: item)
-                                          ));
+                                          )).then((result) {
+                                              if (result == 'reported') {
+                                                  _fetchSellerProducts();
+                                                  _fetchSimilarProducts();
+                                              }
+                                          });
                                     },
                                     child: Container(
                                         width: 110,
@@ -497,7 +605,12 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                                     onTap: () {
                                          Navigator.push(context, MaterialPageRoute(
                                             builder: (_) => ProductDetailsPage(product: item)
-                                          ));
+                                          )).then((result) {
+                                              if (result == 'reported') {
+                                                  _fetchSellerProducts();
+                                                  _fetchSimilarProducts();
+                                              }
+                                          });
                                     },
                                     child: Container(
                                         width: 110,
@@ -689,6 +802,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: Text('Login to save items', style: GoogleFonts.outfit()),
             backgroundColor: Theme.of(context).colorScheme.error,
+            behavior: SnackBarBehavior.floating,
           ));
           return;
       }
@@ -716,7 +830,43 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
   }
 
   String _selectedLocation = 'Library';
-  final List<String> _campusLocations = ['Library', 'Student Center', 'Cafeteria A', 'Main Hall', 'Sports Complex', 'Hostel Block B'];
+  List<String> _campusLocations = ['Library', 'Student Center', 'Cafeteria A', 'Main Hall', 'Sports Complex', 'Hostel Block B'];
+  bool _hasFetchedLocations = false;
+
+  Future<void> _fetchCampusLocations([StateSetter? modalState]) async {
+    if (!UserSession().isLoggedIn) return;
+    try {
+      final apiClient = ApiClient();
+      final response = await apiClient.get('/zones');
+      debugPrint('Fetched active campus locations response: $response');
+      if (response is List && response.isNotEmpty) {
+        final List<String> loadedNames = response
+            .map<String>((item) {
+              final map = item as Map<String, dynamic>;
+              return (map['name'] ?? '').toString().trim();
+            })
+            .where((name) => name.isNotEmpty)
+            .toList();
+        debugPrint('Parsed active campus locations loaded: $loadedNames');
+        if (loadedNames.isNotEmpty && mounted) {
+          setState(() {
+            _campusLocations = loadedNames;
+            _hasFetchedLocations = true;
+            if (!_campusLocations.contains(_selectedLocation)) {
+              _selectedLocation = _campusLocations.first;
+            }
+          });
+          if (modalState != null) {
+            modalState(() {});
+          }
+        }
+      }
+    } catch (e, stack) {
+      debugPrint('Error fetching active campus locations: $e');
+      debugPrint('Stack trace: $stack');
+    }
+  }
+
   DateTime? _rentStartDate;
   DateTime? _rentEndDate;
 
@@ -725,87 +875,24 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please login to report')));
       return;
     }
-    final outerContext = context;
-    showDialog(
-      context: context,
-      builder: (context) {
-        String reason = '';
-        String selectedCategory = 'Scam/Fraud';
-        final List<String> categories = ['Scam/Fraud', 'Fake Item', 'Prohibited Item', 'Inappropriate Content', 'Other'];
-
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            return AlertDialog(
-              title: Text('Report Listing', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  DropdownButtonFormField<String>(
-                    value: selectedCategory,
-                    decoration: const InputDecoration(
-                      labelText: 'Reason for Report',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: categories.map((cat) => DropdownMenuItem(value: cat, child: Text(cat, style: GoogleFonts.outfit()))).toList(),
-                    onChanged: (val) {
-                      if (val != null) setModalState(() => selectedCategory = val);
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  Text('Provide details:', style: GoogleFonts.outfit()),
-                  const SizedBox(height: 8),
-                  TextField(
-                    onChanged: (v) => reason = v,
-                    decoration: const InputDecoration(
-                      hintText: 'e.g., Fake item, scam...',
-                      border: OutlineInputBorder(),
-                    ),
-                    maxLines: 3,
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-                ElevatedButton(
-                  onPressed: () async {
-                    if (reason.trim().isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please provide details'), backgroundColor: Colors.red));
-                      return;
-                    }
-                    Navigator.pop(context);
-                    
-                    try {
-                        final apiClient = ApiClient();
-                        await apiClient.post('/reports', {
-                            'item_id': widget.product.id,
-                            'reporter_id': UserSession().userId,
-                            'category': selectedCategory,
-                            'description': reason,
-                            'status': 'Pending'
-                        });
-                    } catch (e) {
-                        // Ignore mock error
-                    }
-
-                    if (outerContext.mounted) {
-                        ScaffoldMessenger.of(outerContext).showSnackBar(const SnackBar(content: Text('Listing reported successfully. Moderators will review.')));
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                  child: const Text('Submit', style: TextStyle(color: Colors.white)),
-                ),
-              ],
-            );
-          }
-        );
-      },
-    );
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ReportListingPage(product: widget.product),
+      ),
+    ).then((result) {
+      if (result == 'reported' && mounted) {
+        Navigator.pop(context, 'reported');
+      }
+    });
   }
 
   void _showBuyConfirmation(BuildContext context) {
     if (!UserSession().isLoggedIn) {
-       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please login first')));
+       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+         content: Text('Please login first', style: GoogleFonts.outfit()),
+         behavior: SnackBarBehavior.floating,
+       ));
        return;
     }
 
@@ -817,6 +904,10 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (context) => StatefulBuilder(
         builder: (context, setModalState) {
+          if (!_hasFetchedLocations) {
+            _fetchCampusLocations(setModalState);
+          }
+
           int rentDays = 0;
           double totalRentCost = 0.0;
           if (isRent && _rentStartDate != null && _rentEndDate != null) {
@@ -895,8 +986,9 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                          if (selectedDays > widget.product.maxRentalDuration) {
                               if (context.mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                      content: Text('Maximum rental duration is ${widget.product.maxRentalDuration} days!'),
+                                      content: Text('Maximum rental duration is ${widget.product.maxRentalDuration} days!', style: GoogleFonts.outfit()),
                                       backgroundColor: Colors.red,
+                                      behavior: SnackBarBehavior.floating,
                                   ));
                               }
                               return;
@@ -1025,13 +1117,17 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
               SnackBar(
                 content: Text(widget.product.type == 'Rent' ? 'Rental Request Sent!' : 'Purchase Request Sent!', style: GoogleFonts.outfit()),
                 backgroundColor: Colors.green,
+                behavior: SnackBarBehavior.floating,
               )
             );
             Navigator.pop(context); // Close details page on success? Or just stay. Usually stay is fine or go to chat.
         }
       } catch (e) {
           if (context.mounted) {
-             ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+             ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+               content: Text('Failed: $e', style: GoogleFonts.outfit()),
+               behavior: SnackBarBehavior.floating,
+             ));
           }
       } finally {
           if (mounted) setState(() => _isBuying = false);

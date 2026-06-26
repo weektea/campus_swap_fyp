@@ -8,7 +8,8 @@ import 'package:flutter/services.dart';
 import 'dart:io' show File;
 
 class SellPage extends StatefulWidget {
-  const SellPage({super.key});
+  final bool isPushed;
+  const SellPage({super.key, this.isPushed = false});
 
   @override
   State<SellPage> createState() => _SellPageState();
@@ -118,13 +119,13 @@ class _SellPageState extends State<SellPage> {
   }
 
    final Map<String, List<String>> _categoriesMap = {
-     'Books': ['Textbooks', 'Novels', 'Comics', 'Reference', 'Others'],
-     'Electronics': ['Laptops', 'Smartphones', 'Accessories', 'Audio', 'Others'],
-     'Fashion': ['Clothing', 'Shoes', 'Bags', 'Accessories'],
-     'Furniture': ['Chairs', 'Tables', 'Storage', 'Others'],
-     'Stationery': ['Writing', 'Paper', 'Art Supplies', 'Others'],
-     'Sports': ['Equipment', 'Apparel', 'Bicycles', 'Others'],
-     'Others': ['Miscellaneous']
+     'Books & Study Materials': ['Books', 'Calculators', 'Notes & Past Papers', 'Others'],
+     'Electronics & Gadgets': ['Audio', 'Laptops', 'Others', 'PC Accessories', 'Smartphones', 'Tablets'],
+     'Fashion & Accessories': ['Bags & Luggage', 'Clothing', 'Fashion Accessories', 'Shoes'],
+     'Furniture & Appliances': ['Appliances', 'Chairs', 'Others', 'Sofas', 'Storage', 'Tables & Desks'],
+     'Sports': ['Apparel', 'Bicycles', 'Equipment', 'Others'],
+     'Stationery': ['Art Supplies', 'Others', 'Paper', 'Writing'],
+     'Others': ['Cosmetics & Beauty', 'Drinkware', 'Miscellaneous']
   };
 
   final List<String> _conditions = [
@@ -243,11 +244,13 @@ class _SellPageState extends State<SellPage> {
      
      try {
          final apiClient = ApiClient();
+         final double? enteredPrice = double.tryParse(_priceController.text);
          final res = await apiClient.post('/products/generate-description', {
              'title': _titleController.text,
              'category': _selectedCategory,
              'condition': _selectedCondition,
-             'type': _listingType
+             'type': _listingType,
+             'price': enteredPrice ?? 0.0
          });
          
          if (mounted) {
@@ -286,7 +289,7 @@ class _SellPageState extends State<SellPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text('New Listing', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
-        automaticallyImplyLeading: false,
+        automaticallyImplyLeading: widget.isPushed,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh_rounded),

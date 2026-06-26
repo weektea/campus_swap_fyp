@@ -19,6 +19,32 @@ class CheckoutPage extends StatefulWidget {
 
 class _CheckoutPageState extends State<CheckoutPage> {
   SafeZone _selectedZone = SafeZone.predefinedZones.first;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchZones();
+  }
+
+  Future<void> _fetchZones() async {
+    try {
+      final apiClient = ApiClient();
+      final response = await apiClient.get('/zones');
+      if (response is List) {
+        final loadedZones = response
+            .map((item) => SafeZone.fromJson(item as Map<String, dynamic>))
+            .toList();
+        if (loadedZones.isNotEmpty && mounted) {
+          setState(() {
+            _selectedZone = loadedZones.first;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Error fetching zones in checkout: $e');
+    }
+  }
+
   DateTime? _rentStartDate;
   DateTime? _rentEndDate;
   bool _isSubmitting = false;

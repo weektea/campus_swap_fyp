@@ -63,6 +63,14 @@ const User = sequelize.define('User', {
         type: DataTypes.STRING(150), // Limited chars as per UC04
         allowNull: true,
     },
+    faculty: {
+        type: DataTypes.STRING,
+        allowNull: true,
+    },
+    year_of_study: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+    },
     privacy_setting: {
         type: DataTypes.ENUM('Public', 'Private', 'Friends Only'),
         defaultValue: 'Public', // From UC04

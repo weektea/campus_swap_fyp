@@ -1,4 +1,4 @@
-import { Product, User, Report } from '../models/index.js';
+import { Product, User, Report, Category, SubCategory } from '../models/index.js';
 import { Op } from 'sequelize';
 import fs from 'fs';
 import FormData from 'form-data';
@@ -13,13 +13,42 @@ export const createProduct = async (req, res) => {
             return res.status(400).json({ error: 'Missing required fields' });
         }
 
+        // Look up category UUID
+        let categoryId = null;
+        if (category) {
+            const catObj = await Category.findOne({ where: { name: category } });
+            if (catObj) {
+                categoryId = catObj.id;
+            }
+        }
+
+        // Look up subcategory UUID
+        let subCategoryId = null;
+        if (sub_category_id) {
+            const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+            if (uuidRegex.test(sub_category_id)) {
+                subCategoryId = sub_category_id;
+            } else {
+                const subCatObj = await SubCategory.findOne({
+                    where: {
+                        name: sub_category_id,
+                        ...(categoryId ? { category_id: categoryId } : {})
+                    }
+                });
+                if (subCatObj) {
+                    subCategoryId = subCatObj.id;
+                }
+            }
+        }
+
         // Create Product
         const newProduct = await Product.create({
             title,
-            description,
+            description: description || '', // Default to empty string, not null (allowNull: false)
             price: price || 0, // 0 if rental only
             category,
-            sub_category_id,
+            category_id: categoryId,
+            sub_category_id: subCategoryId,
             condition,
             seller_id,
             image_urls: image_urls || [],
@@ -65,7 +94,7 @@ export const createProduct = async (req, res) => {
 export const getAllProducts = async (req, res) => {
     try {
         // Extract query params
-        const { search, category, seller_id, min_price, max_price, condition, type } = req.query;
+        const { search, category, sub_category_id, seller_id, min_price, max_price, condition, type } = req.query;
 
         const whereClause = {
             status: 'Available' // Only show available items by default, unless seller listing
@@ -77,11 +106,20 @@ export const getAllProducts = async (req, res) => {
         }
 
         if (search) {
-            whereClause.title = { [Op.iLike]: `%${search}%` }; // Postgres uses iLike for case-insensitive
+            whereClause[Op.or] = [
+                { title: { [Op.iLike]: `%${search}%` } },
+                { description: { [Op.iLike]: `%${search}%` } },
+                { '$categoryModel.name$': { [Op.iLike]: `%${search}%` } },
+                { '$subcategoryModel.name$': { [Op.iLike]: `%${search}%` } }
+            ];
         }
 
         if (category && category !== 'All') {
             whereClause.category = category;
+        }
+
+        if (sub_category_id) {
+            whereClause.sub_category_id = sub_category_id;
         }
 
         // Price Filtering logic to handle both Sale and Rent types
@@ -111,7 +149,8 @@ export const getAllProducts = async (req, res) => {
 
         // Feature: Hide reported items
         const { exclude_reported_by } = req.query;
-        if (exclude_reported_by) {
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (exclude_reported_by && uuidRegex.test(exclude_reported_by)) {
             const reportedItems = await Report.findAll({
                 where: { reporter_id: exclude_reported_by },
                 attributes: ['product_id']
@@ -141,12 +180,26 @@ export const getAllProducts = async (req, res) => {
 
         const products = await Product.findAll({
             where: whereClause,
-            include: [{
-                model: User,
-                as: 'seller',
-                attributes: ['full_name', 'email', 'reputation_score', 'total_reviews'],
-                required: false // Force LEFT JOIN
-            }],
+            include: [
+                {
+                    model: User,
+                    as: 'seller',
+                    attributes: ['full_name', 'email', 'reputation_score', 'total_reviews'],
+                    required: false // Force LEFT JOIN
+                },
+                {
+                    model: Category,
+                    as: 'categoryModel',
+                    attributes: ['id', 'name'],
+                    required: false
+                },
+                {
+                    model: SubCategory,
+                    as: 'subcategoryModel',
+                    attributes: ['id', 'name'],
+                    required: false
+                }
+            ],
             order: order
         });
 
@@ -180,6 +233,29 @@ export const updateProduct = async (req, res) => {
         // UC09 Constraint: Prevent updating active orders, removed, or suspended items
         if (['Reserved', 'Sold', 'Removed', 'Suspended'].includes(product.status)) {
             return res.status(400).json({ error: `Cannot update a listing that is currently ${product.status}` });
+        }
+
+        // Handle category / subcategory lookup in updates
+        if (updates.category) {
+            const catObj = await Category.findOne({ where: { name: updates.category } });
+            if (catObj) {
+                updates.category_id = catObj.id;
+            }
+        }
+        if (updates.sub_category_id) {
+            const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+            if (!uuidRegex.test(updates.sub_category_id)) {
+                const catId = updates.category_id || product.category_id;
+                const subCatObj = await SubCategory.findOne({
+                    where: {
+                        name: updates.sub_category_id,
+                        ...(catId ? { category_id: catId } : {})
+                    }
+                });
+                if (subCatObj) {
+                    updates.sub_category_id = subCatObj.id;
+                }
+            }
         }
 
         await product.update(updates);
@@ -223,11 +299,16 @@ export const deleteProduct = async (req, res) => {
 export const reportProduct = async (req, res) => {
     try {
         const { id } = req.params;
-        const { violation_type, description } = req.body;
+        const { violation_type, description, evidence_urls } = req.body;
         const reporter_id = req.user.id;
 
         const product = await Product.findByPk(id);
         if (!product) return res.status(404).json({ error: 'Product not found' });
+
+        // Intercept self-report
+        if (product.seller_id === reporter_id) {
+            return res.status(400).json({ error: 'You cannot report your own listing' });
+        }
 
         // UC11 Constraint: Max 3 reports per 10 mins spam limit
         const tenMinsAgo = new Date(Date.now() - 10 * 60 * 1000);
@@ -239,7 +320,7 @@ export const reportProduct = async (req, res) => {
         });
 
         if (recentReports >= 3) {
-            return res.status(429).json({ error: 'Spam limit reached. Max 3 reports per 10 minutes allowed.' });
+            return res.status(429).json({ error: 'You are submitting reports too quickly' });
         }
 
         const newReport = await Report.create({
@@ -247,6 +328,7 @@ export const reportProduct = async (req, res) => {
             product_id: product.id,
             violation_type,
             description,
+            evidence_urls: evidence_urls || [],
             status: 'Pending'
         });
 
@@ -274,15 +356,26 @@ export const classifyImage = async (req, res) => {
             headers: formData.getHeaders(),
         });
 
-        // Clean up the uploaded file
-        fs.unlinkSync(req.file.path);
+        // Clean up the uploaded file safely
+        try {
+            if (fs.existsSync(req.file.path)) {
+                fs.unlinkSync(req.file.path);
+            }
+        } catch (unlinkErr) {
+            console.warn('Failed to clean up file after classification:', unlinkErr.message);
+        }
 
         res.json(response.data);
     } catch (error) {
         console.error('ML Classification Failed:', error.message);
-        if (req.file && fs.existsSync(req.file.path)) {
-            fs.unlinkSync(req.file.path);
+        try {
+            if (req.file && fs.existsSync(req.file.path)) {
+                fs.unlinkSync(req.file.path);
+            }
+        } catch (unlinkErr) {
+            console.warn('Failed to clean up file on ML failure (EBUSY expected on Windows):', unlinkErr.message);
         }
+
         
         // Fallback to Others if ML server is down
         res.json({
@@ -296,9 +389,16 @@ export const classifyImage = async (req, res) => {
 export const getPriceSuggestion = async (req, res) => {
     try {
         const { category, condition } = req.body;
-        // Mock algorithmic pricing based on condition standard deviations
-        await new Promise(resolve => setTimeout(resolve, 800));
+        
+        try {
+            console.log('Forwarding price suggestion request to ML service...');
+            const response = await axios.post('http://127.0.0.1:5000/predict-price', { category, condition });
+            return res.json(response.data);
+        } catch (mlErr) {
+            console.warn('ML Price Suggestion Service down, using local fallback:', mlErr.message);
+        }
 
+        // Fallback Mock algorithmic pricing based on condition standard deviations
         let base = 50.0;
         if (category === 'Electronics') base = 300.0;
         if (category === 'Books') base = 35.0;
@@ -321,8 +421,15 @@ export const getPriceSuggestion = async (req, res) => {
 
 export const generateDescription = async (req, res) => {
     try {
-        const { title, category, condition, type } = req.body;
-        await new Promise(resolve => setTimeout(resolve, 1500));
+        const { title, category, condition, type, price, location } = req.body;
+        
+        try {
+            console.log('Forwarding description generation request to ML service...');
+            const response = await axios.post('http://127.0.0.1:5000/generate-description', { title, category, condition, type, price, location });
+            return res.json(response.data);
+        } catch (mlErr) {
+            console.warn('ML Description Service down, using local fallback:', mlErr.message);
+        }
 
         const action = type === 'Rent' ? 'renting out' : 'selling';
         const conditionDesc = condition ? `It is in ${condition} condition and works perfectly.` : 'It is well maintained.';

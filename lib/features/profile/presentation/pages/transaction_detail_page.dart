@@ -4,6 +4,8 @@ import 'package:campus_swap/core/session/user_session.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:campus_swap/features/chat/presentation/pages/chat_detail_page.dart';
 import 'package:campus_swap/features/profile/presentation/pages/open_dispute_page.dart';
+import 'package:campus_swap/features/profile/presentation/pages/rate_experience_page.dart';
+import 'package:image_picker/image_picker.dart';
 
 class TransactionDetailPage extends StatefulWidget {
   final String transactionId;
@@ -18,6 +20,9 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
   bool _isLoading = true;
   dynamic _transaction;
   final session = UserSession();
+  String? _uploadedProofUrl;
+  bool _isUploadingProof = false;
+  bool _isUpdatingStatus = false;
 
   @override
   void initState() {
@@ -44,14 +49,50 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
     }
   }
 
-  Future<void> _updateStatus(String newStatus) async {
+  Future<void> _updateStatus(String newStatus, [Map<String, dynamic>? extraData]) async {
+      if (_isUpdatingStatus) return;
+      setState(() => _isUpdatingStatus = true);
       try {
           final apiClient = ApiClient();
-          await apiClient.patch('/transactions/${widget.transactionId}/status', {'status': newStatus});
+          final Map<String, dynamic> body = {'status': newStatus};
+          if (extraData != null) {
+              body.addAll(extraData);
+          }
+          await apiClient.patch('/transactions/${widget.transactionId}/status', body);
           _fetchTransactionDetails(); // Refresh
           if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Status updated to $newStatus')));
       } catch (e) {
           if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+      } finally {
+          if (mounted) {
+              setState(() => _isUpdatingStatus = false);
+          }
+      }
+  }
+
+  Future<void> _pickAndUploadProof() async {
+      final picker = ImagePicker();
+      final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+      if (image == null) return;
+
+      setState(() => _isUploadingProof = true);
+      try {
+          final apiClient = ApiClient();
+          final uploadRes = await apiClient.postMultipart('/upload', image);
+          if (uploadRes != null && uploadRes['url'] != null) {
+              setState(() {
+                  _uploadedProofUrl = uploadRes['url'];
+              });
+              if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Payment proof uploaded successfully!')));
+              }
+          }
+      } catch (e) {
+          if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Upload failed: $e')));
+          }
+      } finally {
+          setState(() => _isUploadingProof = false);
       }
   }
 
@@ -255,89 +296,371 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
       }
 
       if (status == 'Completed') {
-          // Keep existing completed logic for rating
-          return Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.05),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2))
-            ),
-            child: Text('Order completed! Go to My Transactions to rate your experience.', style: GoogleFonts.outfit())
-          );
-      }
+          final isBuyer = isBuying;
+          final hasRated = isBuyer 
+              ? _transaction['rating_from_buyer'] != null 
+              : _transaction['rating_from_seller'] != null;
 
-      if (status == 'Scheduled' && isBuying) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
+          if (hasRated) {
+              return Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.blue.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.blue.withValues(alpha: 0.2)),
+                    color: Colors.green.withValues(alpha: 0.05),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.green.withValues(alpha: 0.2))
                 ),
-                child: Text(
-                  'Please upload payment proof to proceed to the next step.',
-                  style: GoogleFonts.outfit(color: Colors.blue[800]),
-                ),
-              ),
-              const SizedBox(height: 24),
-              Text('Upload Payment Proof', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 12),
-              // Dashed border placeholder for upload
-              Container(
-                width: double.infinity,
-                height: 120,
-                decoration: BoxDecoration(
-                  color: Colors.grey.withValues(alpha: 0.05),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey.withValues(alpha: 0.3), style: BorderStyle.none),
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                child: Text('You have already submitted a review for this transaction. Thank you!', style: GoogleFonts.outfit(color: Colors.green[800], fontWeight: FontWeight.w600))
+              );
+          } else {
+              final product = _transaction['product'] ?? {};
+              final otherParty = isBuying ? _transaction['seller'] : _transaction['buyer'];
+              final String otherPartyName = otherParty != null ? (otherParty['full_name'] ?? 'Unknown User') : 'Unknown User';
+
+              return Column(
                   children: [
-                    Icon(Icons.upload_file_outlined, color: Colors.grey[600], size: 32),
-                    const SizedBox(height: 8),
-                    Text('Click to upload', style: GoogleFonts.outfit(color: Colors.grey[600])),
+                      Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.05),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2))
+                          ),
+                          child: Text('Order completed! Please rate your experience with the other student.', style: GoogleFonts.outfit())
+                      ),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                          width: double.infinity,
+                          height: 48,
+                          child: ElevatedButton.icon(
+                              onPressed: () {
+                                  Navigator.push(context, MaterialPageRoute(
+                                      builder: (_) => RateExperiencePage(
+                                          transactionId: _transaction['id'].toString(),
+                                          revieweeId: otherParty['id']?.toString() ?? '',
+                                          isSeller: !isBuying,
+                                          revieweeName: otherPartyName,
+                                          productName: product['title'] ?? 'Item',
+                                          onSubmitted: () {
+                                              _fetchTransactionDetails();
+                                          },
+                                      )
+                                  ));
+                              },
+                              icon: const Icon(Icons.star_rate_rounded, color: Colors.white),
+                              label: Text('Rate Experience', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                              style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF0D503C), // Matching RateExperiencePage button
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
+                              ),
+                          ),
+                      ),
                   ],
-                ),
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: ElevatedButton(
-                  onPressed: () => _updateStatus('To Confirm'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF82A093), // Approximate theme primary from images
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
-                  ),
-                  child: Text('Upload Proof', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-                ),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: OutlinedButton(
-                  onPressed: () => _updateStatus('Cancelled'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.red,
-                    side: BorderSide(color: Colors.red.withValues(alpha: 0.5)),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
-                  ),
-                  child: Text('Cancel Order', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 16)),
-                ),
-              ),
-            ],
-          );
+              );
+          }
       }
 
-      // Default empty placeholder for other statuses
+      if (status == 'Pending') {
+          if (isBuying) {
+              return Column(
+                  children: [
+                      Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                              color: Colors.blue.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.blue.withValues(alpha: 0.2)),
+                          ),
+                          child: Text('Waiting for seller to accept your request...', style: GoogleFonts.outfit(color: Colors.blue[800])),
+                      ),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                          width: double.infinity,
+                          height: 48,
+                          child: OutlinedButton(
+                              onPressed: () => _updateStatus('Cancelled'),
+                              style: OutlinedButton.styleFrom(
+                                  foregroundColor: Colors.red,
+                                  side: BorderSide(color: Colors.red.withValues(alpha: 0.5)),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              ),
+                              child: Text('Cancel Request', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 16)),
+                          ),
+                      ),
+                  ],
+              );
+          } else {
+              return Column(
+                  children: [
+                      Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                              color: Colors.amber.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.amber.withValues(alpha: 0.2)),
+                          ),
+                          child: Text('You have received a new request. Please accept or decline the transaction.', style: GoogleFonts.outfit(color: Colors.amber[800])),
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                          children: [
+                              Expanded(
+                                  child: SizedBox(
+                                      height: 48,
+                                      child: OutlinedButton(
+                                          onPressed: () => _updateStatus('Cancelled'),
+                                          style: OutlinedButton.styleFrom(
+                                              foregroundColor: Colors.red,
+                                              side: BorderSide(color: Colors.red.withValues(alpha: 0.5)),
+                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                          ),
+                                          child: Text('Decline', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+                                      ),
+                                  ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                  child: SizedBox(
+                                      height: 48,
+                                      child: ElevatedButton(
+                                          onPressed: () => _updateStatus('Scheduled'),
+                                          style: ElevatedButton.styleFrom(
+                                              backgroundColor: Theme.of(context).colorScheme.primary,
+                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                          ),
+                                          child: Text('Accept Request', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
+                                      ),
+                                  ),
+                              ),
+                          ],
+                      ),
+                  ],
+              );
+          }
+      }
+
+      if (status == 'Scheduled') {
+          if (isBuying) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.blue.withValues(alpha: 0.2)),
+                    ),
+                    child: Text(
+                      'Please upload payment proof to proceed to the next step.',
+                      style: GoogleFonts.outfit(color: Colors.blue[800]),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Text('Upload Payment Proof', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 12),
+                  GestureDetector(
+                    onTap: _isUploadingProof ? null : _pickAndUploadProof,
+                    child: Container(
+                      width: double.infinity,
+                      height: 150,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.withValues(alpha: 0.05),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.grey.withValues(alpha: 0.3)),
+                      ),
+                      child: _isUploadingProof
+                          ? const Center(child: CircularProgressIndicator())
+                          : _uploadedProofUrl != null
+                              ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Image.network(
+                                    '${ApiClient.baseUrl.replaceAll('/api', '')}$_uploadedProofUrl',
+                                    fit: BoxFit.cover,
+                                  ),
+                                )
+                              : Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.upload_file_outlined, color: Colors.grey[600], size: 32),
+                                    const SizedBox(height: 8),
+                                    Text('Click to upload payment proof', style: GoogleFonts.outfit(color: Colors.grey[600])),
+                                  ],
+                                ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: ElevatedButton(
+                      onPressed: () {
+                          if (_uploadedProofUrl == null) {
+                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please upload payment proof image first!'), backgroundColor: Colors.red));
+                              return;
+                          }
+                          _updateStatus('To Confirm', {'payment_proof_url': _uploadedProofUrl});
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Theme.of(context).colorScheme.primary,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
+                      ),
+                      child: Text('Submit Proof', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: OutlinedButton(
+                      onPressed: () => _updateStatus('Cancelled'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.red,
+                        side: BorderSide(color: Colors.red.withValues(alpha: 0.5)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
+                      ),
+                      child: Text('Cancel Order', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 16)),
+                    ),
+                  ),
+                ],
+              );
+          } else {
+              return Column(
+                  children: [
+                      Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                              color: Colors.blue.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.blue.withValues(alpha: 0.2)),
+                          ),
+                          child: Text('Waiting for buyer to upload payment/meetup proof...', style: GoogleFonts.outfit(color: Colors.blue[800])),
+                      ),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                          width: double.infinity,
+                          height: 48,
+                          child: OutlinedButton(
+                              onPressed: () => _updateStatus('Cancelled'),
+                              style: OutlinedButton.styleFrom(
+                                  foregroundColor: Colors.red,
+                                  side: BorderSide(color: Colors.red.withValues(alpha: 0.5)),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              ),
+                              child: Text('Cancel Transaction', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 16)),
+                          ),
+                      ),
+                  ],
+              );
+          }
+      }
+
+      if (status == 'To Confirm') {
+          if (isBuying) {
+              return Column(
+                  children: [
+                      Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                              color: Colors.blue.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.blue.withValues(alpha: 0.2)),
+                          ),
+                          child: Text('Waiting for seller to verify your payment/meetup proof and complete the order...', style: GoogleFonts.outfit(color: Colors.blue[800])),
+                      ),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                          width: double.infinity,
+                          height: 48,
+                          child: OutlinedButton(
+                              onPressed: () => _updateStatus('Cancelled'),
+                              style: OutlinedButton.styleFrom(
+                                  foregroundColor: Colors.red,
+                                  side: BorderSide(color: Colors.red.withValues(alpha: 0.5)),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              ),
+                              child: Text('Cancel Order', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 16)),
+                          ),
+                      ),
+                  ],
+              );
+          } else {
+              return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                      Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                              color: Colors.amber.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.amber.withValues(alpha: 0.2)),
+                          ),
+                          child: Text('Buyer has submitted payment/meetup proof. Please verify and confirm completion.', style: GoogleFonts.outfit(color: Colors.amber[800])),
+                      ),
+                      const SizedBox(height: 16),
+                      if (_transaction['payment_proof_url'] != null) ...[
+                          Text('Uploaded Payment Proof:', style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 8),
+                          ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: Image.network(
+                                  '${ApiClient.baseUrl.replaceAll('/api', '')}${_transaction['payment_proof_url']}',
+                                  width: double.infinity,
+                                  height: 220,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) => Container(
+                                      height: 100,
+                                      color: Colors.grey[200],
+                                      child: const Center(child: Icon(Icons.broken_image, color: Colors.grey)),
+                                  ),
+                              ),
+                          ),
+                          const SizedBox(height: 24),
+                      ],
+                      Row(
+                          children: [
+                              Expanded(
+                                  child: SizedBox(
+                                      height: 48,
+                                      child: OutlinedButton(
+                                          onPressed: () => _updateStatus('Cancelled'),
+                                          style: OutlinedButton.styleFrom(
+                                              foregroundColor: Colors.red,
+                                              side: BorderSide(color: Colors.red.withValues(alpha: 0.5)),
+                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                          ),
+                                          child: Text('Decline & Cancel', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+                                      ),
+                                  ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                  child: SizedBox(
+                                      height: 48,
+                                      child: ElevatedButton(
+                                          onPressed: () => _updateStatus('Completed'),
+                                          style: ElevatedButton.styleFrom(
+                                              backgroundColor: Theme.of(context).colorScheme.primary,
+                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                          ),
+                                          child: Text('Verify & Complete', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
+                                      ),
+                                  ),
+                              ),
+                          ],
+                      ),
+                  ],
+              );
+          }
+      }
+
       return const SizedBox.shrink();
   }
 }

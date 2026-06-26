@@ -5,9 +5,12 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:campus_swap/core/widgets/empty_state_widget.dart';
 import 'package:campus_swap/features/product/presentation/pages/sell_page.dart';
 import 'package:campus_swap/features/profile/presentation/pages/transaction_detail_page.dart';
+import 'package:campus_swap/features/home/presentation/pages/home_page.dart';
+import 'package:campus_swap/features/profile/presentation/pages/rate_experience_page.dart';
 
 class MyTransactionsPage extends StatefulWidget {
-  const MyTransactionsPage({super.key});
+  final bool isPushed;
+  const MyTransactionsPage({super.key, this.isPushed = false});
 
   @override
   State<MyTransactionsPage> createState() => _MyTransactionsPageState();
@@ -64,13 +67,18 @@ class _MyTransactionsPageState extends State<MyTransactionsPage> with SingleTick
     return Scaffold(
       appBar: AppBar(
         title: Text('My Orders', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+        automaticallyImplyLeading: widget.isPushed,
         bottom: TabBar(
             controller: _tabController,
+            labelColor: Colors.white,
+            unselectedLabelColor: Colors.white60,
+            indicatorColor: Colors.white,
             tabs: [
                 Tab(text: 'Purchases (${filteredBuying.length})'), 
                 Tab(text: 'Sales (${filteredSelling.length})')
             ],
             labelStyle: GoogleFonts.outfit(fontWeight: FontWeight.bold),
+            unselectedLabelStyle: GoogleFonts.outfit(),
         ),
       ),
       body: Column(
@@ -123,9 +131,17 @@ class _MyTransactionsPageState extends State<MyTransactionsPage> with SingleTick
               buttonText: isBuying ? 'Explore Market' : 'Start Selling',
               onActionPressed: () {
                   if (isBuying) {
-                      Navigator.pop(context); // Go back to profile -> home
+                      if (widget.isPushed) {
+                          Navigator.pop(context, 'go_to_home'); // Return result to switch tab to home page
+                      } else {
+                          // Directly embedded in HomePage, change selected tab to Home (index 0)
+                          final homeState = context.findAncestorStateOfType<HomePageState>();
+                          if (homeState != null) {
+                              homeState.setSelectedIndex(0);
+                          }
+                      }
                   } else {
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => const SellPage())).then((_) => _fetchAllTransactions());
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const SellPage(isPushed: true))).then((_) => _fetchAllTransactions());
                   }
               },
           );
@@ -190,21 +206,57 @@ class _MyTransactionsPageState extends State<MyTransactionsPage> with SingleTick
                     ),
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                      child: SizedBox(
-                        width: double.infinity,
-                        height: 44,
-                        child: OutlinedButton(
-                            onPressed: () async {
-                                await Navigator.push(context, MaterialPageRoute(builder: (_) => TransactionDetailPage(transactionId: item['id'])));
-                                _fetchAllTransactions();
-                            },
-                            style: OutlinedButton.styleFrom(
-                                foregroundColor: Colors.black87,
-                                side: BorderSide(color: Colors.grey.withValues(alpha: 0.3)),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: SizedBox(
+                              height: 44,
+                              child: OutlinedButton(
+                                  onPressed: () async {
+                                      await Navigator.push(context, MaterialPageRoute(builder: (_) => TransactionDetailPage(transactionId: item['id'])));
+                                      _fetchAllTransactions();
+                                  },
+                                  style: OutlinedButton.styleFrom(
+                                      foregroundColor: Colors.black87,
+                                      side: BorderSide(color: Colors.grey.withValues(alpha: 0.3)),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
+                                  ),
+                                  child: Text('View Progress', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 14)),
+                              ),
                             ),
-                            child: Text('View Progress', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 14)),
-                        ),
+                          ),
+                          if (status == 'Completed' && (isBuying ? item['rating_from_buyer'] == null : item['rating_from_seller'] == null)) ...[
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: SizedBox(
+                                height: 44,
+                                child: ElevatedButton(
+                                    onPressed: () async {
+                                        final otherParty = isBuying ? item['seller'] : item['buyer'];
+                                        await Navigator.push(context, MaterialPageRoute(
+                                            builder: (_) => RateExperiencePage(
+                                                transactionId: item['id'].toString(),
+                                                revieweeId: otherParty['id']?.toString() ?? '',
+                                                isSeller: !isBuying,
+                                                revieweeName: otherParty['full_name'] ?? 'User',
+                                                productName: product['title'] ?? 'Item',
+                                                onSubmitted: () {
+                                                    _fetchAllTransactions();
+                                                },
+                                            )
+                                        ));
+                                        _fetchAllTransactions();
+                                    },
+                                    style: ElevatedButton.styleFrom(
+                                        backgroundColor: const Color(0xFF0D503C), // Matching RateExperiencePage button
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
+                                    ),
+                                    child: Text('Rate Experience', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ),
                   ],

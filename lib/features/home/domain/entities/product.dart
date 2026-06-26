@@ -16,6 +16,7 @@ class Product {
   final double rentalPricePerDay;
   final int maxRentalDuration;
   final String subCategoryName;
+  final String subCategoryId;
   final double rentalDeposit;
   final double co2Saved;
   final String status;
@@ -38,6 +39,7 @@ class Product {
     this.rentalPricePerDay = 0.0,
     this.maxRentalDuration = 7,
     this.subCategoryName = '',
+    this.subCategoryId = '',
     this.rentalDeposit = 0.0,
     this.co2Saved = 0.0,
     this.status = 'Available',
@@ -73,6 +75,7 @@ class Product {
       rentalPricePerDay: double.tryParse(json['rental_price_per_day'].toString()) ?? 0.0,
       maxRentalDuration: int.tryParse(json['max_rental_duration'].toString()) ?? 7,
       subCategoryName: json['sub_category_name'] as String? ?? '',
+      subCategoryId: json['sub_category_id'] as String? ?? '',
       rentalDeposit: double.tryParse(json['rental_deposit'].toString()) ?? 0.0,
       co2Saved: double.tryParse(json['co2_saved'].toString()) ?? 0.0,
       status: json['status'] as String? ?? 'Available',

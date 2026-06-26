@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BrainCircuit, Image as ImageIcon, Sparkles, CheckCircle2, History, RotateCcw, ArrowUpRight, ArrowDownRight } from 'lucide-react';
-import { LineChart, Line, ResponsiveContainer, YAxis } from 'recharts';
+import { LineChart, Line, BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
+import api from '../services/api';
 
 const MLModels = () => {
     // ----------------------------------------------------------------
@@ -35,6 +36,25 @@ const MLModels = () => {
     useEffect(() => {
         fetchImageMetrics();
         const intervalId = setInterval(fetchImageMetrics, 3000); // Poll every 3 seconds
+        return () => clearInterval(intervalId);
+    }, []);
+
+    const [mlDashboardData, setMlDashboardData] = useState(null);
+    const [loadingDashboard, setLoadingDashboard] = useState(true);
+
+    const fetchMlDashboardData = async () => {
+        try {
+            const res = await api.get('/admin/ml-dashboard');
+            setMlDashboardData(res.data);
+            setLoadingDashboard(false);
+        } catch (e) {
+            console.error("Failed to fetch ML Dashboard metrics:", e);
+        }
+    };
+
+    useEffect(() => {
+        fetchMlDashboardData();
+        const intervalId = setInterval(fetchMlDashboardData, 10000); // Poll every 10 seconds
         return () => clearInterval(intervalId);
     }, []);
 
@@ -377,6 +397,113 @@ const MLModels = () => {
                         </tbody>
                     </table>
                 </div>
+            </div>
+
+            {/* Recommendation System ML Dashboard */}
+            <div style={{ marginTop: '48px', borderTop: '1px solid #e5e7eb', paddingTop: '32px' }}>
+                <div style={{ marginBottom: '24px' }}>
+                    <h2 style={{ fontSize: '1.5rem', margin: '0 0 8px 0', fontWeight: 'bold' }}>Recommendation System ML Dashboard</h2>
+                    <p style={{ margin: 0, color: 'var(--text-muted)' }}>Real-time telemetry measuring content-based recommendation effectiveness, cold-start fallback behavior, and user engagement heatmap.</p>
+                </div>
+
+                {loadingDashboard || !mlDashboardData ? (
+                    <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>Loading ML telemetry...</div>
+                ) : (
+                    <>
+                        {/* 1. ML Effectiveness Monitor & A/B Testing CTR */}
+                        <div className="flex gap-6 mb-8">
+                            <div className="card flex-1" style={{ borderLeft: '4px solid #8b5cf6' }}>
+                                <h3 style={{ fontSize: '1.125rem', margin: '0 0 16px 0', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <Sparkles size={18} color="#8b5cf6" />
+                                    ML Effectiveness Monitor (A/B Test CTR)
+                                </h3>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '24px', marginBottom: '20px' }}>
+                                    <div style={{ flex: 1, padding: '16px', background: '#f5f3ff', borderRadius: '12px', textAlign: 'center' }}>
+                                        <div style={{ fontSize: '0.875rem', color: '#6b7280', fontWeight: '500', marginBottom: '4px' }}>ML Recommended Feed</div>
+                                        <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#8b5cf6' }}>
+                                            {mlDashboardData.ml_effectiveness.ml_ctr}%
+                                        </div>
+                                        <div style={{ fontSize: '0.75rem', color: '#10b981', fontWeight: 'bold', marginTop: '4px' }}>
+                                            {(mlDashboardData.ml_effectiveness.ml_ctr / Math.max(1, mlDashboardData.ml_effectiveness.control_ctr)).toFixed(1)}x Lift
+                                        </div>
+                                    </div>
+                                    <div style={{ flex: 1, padding: '16px', background: '#f3f4f6', borderRadius: '12px', textAlign: 'center' }}>
+                                        <div style={{ fontSize: '0.875rem', color: '#6b7280', fontWeight: '500', marginBottom: '4px' }}>Standard/Latest Feed (Control)</div>
+                                        <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#4b5563' }}>
+                                            {mlDashboardData.ml_effectiveness.control_ctr}%
+                                        </div>
+                                        <div style={{ fontSize: '0.75rem', color: '#6b7280', fontWeight: '500', marginTop: '4px' }}>Baseline</div>
+                                    </div>
+                                    <div style={{ flex: 1, padding: '16px', background: '#ecfdf5', borderRadius: '12px', textAlign: 'center' }}>
+                                        <div style={{ fontSize: '0.875rem', color: '#047857', fontWeight: '500', marginBottom: '4px' }}>Precision @ 5</div>
+                                        <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#10b981' }}>
+                                            {mlDashboardData.ml_effectiveness.precision_at_5}%
+                                        </div>
+                                        <div style={{ fontSize: '0.75rem', color: '#047857', fontWeight: '500', marginTop: '4px' }}>Recommendation Accuracy</div>
+                                    </div>
+                                </div>
+                                <div style={{ fontSize: '0.875rem', color: 'var(--text-muted)', display: 'flex', justifyContent: 'space-between' }}>
+                                    <span>Total Impressions: <strong>{mlDashboardData.ml_effectiveness.total_impressions.toLocaleString()}</strong></span>
+                                    <span>Total Click Events: <strong>{mlDashboardData.ml_effectiveness.total_clicks.toLocaleString()}</strong></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* 2. Heatmap & Trending Grid */}
+                        <div className="flex gap-6 mb-8">
+                            {/* User Activity Heatmap */}
+                            <div className="card flex-1" style={{ flex: '1.5' }}>
+                                <h3 style={{ fontSize: '1.125rem', margin: '0 0 16px 0', fontWeight: 'bold' }}>User Activity Heatmap (Student Hourly Interaction Peak)</h3>
+                                <div style={{ height: '220px', width: '100%' }}>
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart data={mlDashboardData.activity_heatmap} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                            <XAxis dataKey="hour" stroke="#9ca3af" fontSize={10} tickLine={false} />
+                                            <YAxis stroke="#9ca3af" fontSize={10} tickLine={false} />
+                                            <Tooltip contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }} />
+                                            <Bar dataKey="count" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                </div>
+                                <p style={{ margin: '12px 0 0 0', fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'center' }}>
+                                    Shows the total user interaction clicks (views & saves) distributed over a 24-hour cycle.
+                                </p>
+                            </div>
+
+                            {/* Trending Items */}
+                            <div className="card flex-1">
+                                <h3 style={{ fontSize: '1.125rem', margin: '0 0 16px 0', fontWeight: 'bold' }}>Trending Items (Cold-Start Fallback Catalog)</h3>
+                                <div style={{ overflowX: 'auto' }}>
+                                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
+                                        <thead>
+                                            <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
+                                                <th style={{ padding: '8px', color: '#6b7280', fontWeight: '600' }}>Item Title</th>
+                                                <th style={{ padding: '8px', color: '#6b7280', fontWeight: '600' }}>Category</th>
+                                                <th style={{ padding: '8px', color: '#6b7280', fontWeight: '600', textAlign: 'right' }}>Views</th>
+                                                <th style={{ padding: '8px', color: '#6b7280', fontWeight: '600', textAlign: 'right' }}>Saves</th>
+                                                <th style={{ padding: '8px', color: '#6b7280', fontWeight: '600', textAlign: 'right' }}>Score</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {mlDashboardData.trending_items.map((item, idx) => (
+                                                <tr key={item.id} style={{ borderBottom: idx < mlDashboardData.trending_items.length - 1 ? '1px solid #f3f4f6' : 'none' }}>
+                                                    <td style={{ padding: '10px 8px', fontWeight: '500', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={item.title}>
+                                                        {item.title}
+                                                    </td>
+                                                    <td style={{ padding: '10px 8px', color: '#6b7280' }}>{item.category}</td>
+                                                    <td style={{ padding: '10px 8px', textAlign: 'right', fontWeight: 'bold' }}>{item.view_count}</td>
+                                                    <td style={{ padding: '10px 8px', textAlign: 'right', fontWeight: 'bold' }}>{item.save_count}</td>
+                                                    <td style={{ padding: '10px 8px', textAlign: 'right', color: '#8b5cf6', fontWeight: 'bold' }}>
+                                                        {item.popularity_score}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </>
+                )}
             </div>
         </div>
     );

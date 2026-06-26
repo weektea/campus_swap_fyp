@@ -1,7 +1,10 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:campus_swap/core/api/api_client.dart';
+import 'package:campus_swap/main.dart' show navigatorKey;
+import 'package:campus_swap/features/notification/presentation/pages/notifications_page.dart';
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -15,6 +18,8 @@ class NotificationService {
   final ValueNotifier<int> unreadCountNotifier = ValueNotifier(0);
 
   Future<void> init({Function(String?)? onNotificationTap}) async {
+    if (kIsWeb) return; // No-op on Web to avoid crashes
+    
     const AndroidInitializationSettings initializationSettingsAndroid =
         AndroidInitializationSettings('@mipmap/ic_launcher');
 
@@ -32,8 +37,9 @@ class NotificationService {
 
   void startPolling() {
     _pollingTimer?.cancel();
+    checkForNotifications(); // Run immediately on start
     _pollingTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
-      _checkForNewNotifications();
+      checkForNotifications();
     });
   }
 
@@ -41,7 +47,7 @@ class NotificationService {
     _pollingTimer?.cancel();
   }
 
-  Future<void> _checkForNewNotifications() async {
+  Future<void> checkForNotifications() async {
     try {
       final response = await _apiClient.get('/notifications');
       
@@ -64,6 +70,27 @@ class NotificationService {
   }
 
   Future<void> _showNotification(Map<String, dynamic> note) async {
+    if (kIsWeb) {
+      // Display in-app SnackBar notification alert for web browsers
+      final context = navigatorKey.currentContext;
+      if (context != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${note['title'] ?? 'Notification'}: ${note['message'] ?? ''}'),
+            action: SnackBarAction(
+              label: 'View',
+              onPressed: () {
+                navigatorKey.currentState?.push(
+                  MaterialPageRoute(builder: (_) => const NotificationsPage()),
+                );
+              },
+            ),
+          ),
+        );
+      }
+      return;
+    }
+
     const AndroidNotificationDetails androidPlatformChannelSpecifics =
         AndroidNotificationDetails(
             'campus_swap_channel', 'Campus Swap Notifications',

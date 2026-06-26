@@ -1,4 +1,5 @@
-import { Category, SubCategory } from '../models/index.js';
+import { Category, SubCategory, Product } from '../models/index.js';
+import sequelize from '../config/database.js';
 
 export const getCategories = async (req, res) => {
     try {
@@ -6,9 +7,24 @@ export const getCategories = async (req, res) => {
             include: [{
                 model: SubCategory,
                 as: 'subcategories',
-                attributes: ['id', 'name']
+                attributes: [
+                    'id',
+                    'name',
+                    [
+                        sequelize.literal(`(
+                            SELECT COUNT(*)::integer
+                            FROM "Products" AS p
+                            WHERE p.sub_category_id = "subcategories".id
+                              AND p.status = 'Available'
+                        )`),
+                        'product_count'
+                    ]
+                ]
             }],
-            order: [['name', 'ASC']]
+            order: [
+                ['name', 'ASC'],
+                [{ model: SubCategory, as: 'subcategories' }, 'name', 'ASC']
+            ]
         });
         res.json(categories);
     } catch (error) {

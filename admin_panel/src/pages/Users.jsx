@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Edit, UserPlus, Trash2 } from 'lucide-react';
+import { Search, Edit, UserPlus, Trash2, UserX } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 
@@ -70,14 +70,14 @@ const Users = () => {
 
     const handleDeleteUser = async () => {
         if (!selectedUser) return;
-        if (!window.confirm('Are you sure you want to permanently delete this user?')) return;
+        if (!window.confirm('Are you sure you want to deactivate this user account?')) return;
         
         try {
             await api.delete(`/admin/users/${selectedUser.id}`);
             setIsEditModalOpen(false);
             fetchUsers();
         } catch (err) {
-            alert(err.response?.data?.error || 'Failed to delete user');
+            alert(err.response?.data?.error || 'Failed to deactivate user');
         }
     };
 
@@ -185,7 +185,7 @@ const Users = () => {
                                         {user.role}
                                     </span>
                                 </td>
-                                <td style={{ color: 'var(--primary)', fontWeight: 'bold' }}>{user.eco_score || 0}</td>
+                                <td style={{ color: 'var(--primary)', fontWeight: 'bold' }}>{typeof user.total_carbon_saved === 'number' ? user.total_carbon_saved.toFixed(1) : (user.total_carbon_saved || 0)}</td>
                                 <td>
                                     {user.is_active ? (
                                         <span style={{ padding: '4px 12px', background: '#dcfce7', borderRadius: '12px', color: '#16a34a', fontSize: '0.75rem', fontWeight: 'bold' }}>
@@ -265,7 +265,7 @@ const Users = () => {
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             {currentUser?.role === 'admin' && selectedUser.role !== 'admin' ? (
                                 <button className="btn" style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5', display: 'flex', alignItems: 'center', gap: '8px' }} onClick={handleDeleteUser}>
-                                    <Trash2 size={16} /> Delete
+                                    <UserX size={16} /> Deactivate
                                 </button>
                             ) : <div></div>}
 

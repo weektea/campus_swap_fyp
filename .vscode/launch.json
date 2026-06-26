@@ -1,0 +1,24 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Campus Swap (Web - HTML Renderer)",
+      "request": "launch",
+      "type": "dart",
+      "args": [
+        "--web-renderer",
+        "html"
+      ]
+    },
+    {
+      "name": "Campus Swap (Web - Local CanvasKit)",
+      "request": "launch",
+      "type": "dart",
+      "args": [
+        "--web-renderer",
+        "canvaskit",
+        "--no-web-resources-cdn"
+      ]
+    }
+  ]
+}

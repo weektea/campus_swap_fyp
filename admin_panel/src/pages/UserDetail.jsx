@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Edit, Trash2, Box, Info } from 'lucide-react';
+import { ArrowLeft, Edit, Trash2, Box, Info, UserX } from 'lucide-react';
 import api from '../services/api';
 
 const UserDetail = () => {
@@ -55,13 +55,13 @@ const UserDetail = () => {
     };
 
     const handleDeleteUser = async () => {
-        if (!window.confirm('Are you sure you want to permanently delete this user?')) return;
+        if (!window.confirm('Are you sure you want to deactivate this user account?')) return;
         
         try {
             await api.delete(`/admin/users/${user.id}`);
             navigate('/users');
         } catch (err) {
-            alert(err.response?.data?.error || 'Failed to delete user');
+            alert(err.response?.data?.error || 'Failed to deactivate user');
         }
     };
 
@@ -155,7 +155,7 @@ const UserDetail = () => {
                                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                                     {isAdmin && user.role !== 'admin' ? (
                                         <button className="btn" style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5', display: 'flex', alignItems: 'center', gap: '8px' }} onClick={handleDeleteUser}>
-                                            <Trash2 size={16} /> Delete User
+                                            <UserX size={16} /> Deactivate User
                                         </button>
                                     ) : <div></div>}
                                     <button className="btn" style={{ background: 'var(--primary)' }} onClick={handleUpdateUser} disabled={!canEdit}>

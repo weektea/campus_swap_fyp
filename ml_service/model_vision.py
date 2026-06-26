@@ -4,21 +4,49 @@ from torchvision import models, transforms
 from PIL import Image
 import os
 
-# Define Sub-Categories mapping
-SUB_CATEGORIES = {
-    'Books': ['Textbooks', 'Novels', 'Comics', 'Reference', 'Others'],
-    'Electronics': ['Laptops', 'Smartphones', 'Accessories', 'Audio', 'Others'],
-    'Fashion': ['Clothing', 'Shoes', 'Bags', 'Accessories'],
-    'Furniture': ['Chairs', 'Tables', 'Storage', 'Others'],
-    'Stationery': ['Writing', 'Paper', 'Art Supplies', 'Others'],
-    'Sports': ['Equipment', 'Apparel', 'Bicycles', 'Others'],
-    'Others': ['Miscellaneous']
-}
+import requests
 
-# Flatten into a strict list of 27 classes for the CNN to predict directly
-FLAT_CLASSES = sorted([f"{cat}___{sub}" for cat, subs in SUB_CATEGORIES.items() for sub in subs])
+FLAT_CLASSES = []
 
-MODEL_PATH = "custom_model.pth"
+def fetch_categories_from_api():
+    global FLAT_CLASSES
+    try:
+        print("Fetching categories from Node.js API...")
+        response = requests.get('http://localhost:3000/api/categories', timeout=5)
+        if response.status_code == 200:
+            categories = response.json()
+            classes = []
+            for cat in categories:
+                cat_name = cat.get('name')
+                for sub in cat.get('subcategories', []):
+                    classes.append(f"{cat_name}___{sub.get('name')}")
+            if classes:
+                FLAT_CLASSES = sorted(classes)
+                print(f"Dynamically loaded {len(FLAT_CLASSES)} categories from DB.")
+                return
+    except Exception as e:
+        print(f"Warning: Could not fetch categories from API ({e}).")
+    
+    print("Attempting to load categories from dataset folder...")
+    try:
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        dataset_root = os.path.join(current_dir, "dataset", "user_corrections")
+        if os.path.exists(dataset_root):
+            classes = [d for d in os.listdir(dataset_root) if os.path.isdir(os.path.join(dataset_root, d)) and "___" in d]
+            if classes:
+                FLAT_CLASSES = sorted(classes)
+                print(f"Loaded {len(FLAT_CLASSES)} categories from dataset directory.")
+                return
+    except Exception as ex:
+        print(f"Warning: Could not scan dataset folders ({ex}).")
+        
+    print("Using fallback category list.")
+    FLAT_CLASSES = ["Others___Miscellaneous"]
+
+fetch_categories_from_api()
+
+# Use absolute path to ensure custom_model.pth is loaded regardless of working directory
+MODEL_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "custom_model.pth")
 
 # Image transformations
 data_transforms = transforms.Compose([
@@ -44,8 +72,18 @@ def get_model():
     # Load custom trained weights if they exist
     if os.path.exists(MODEL_PATH):
         try:
-            model.load_state_dict(torch.load(MODEL_PATH, map_location=device))
-            print(f"Loaded existing model from {MODEL_PATH}")
+            state_dict = torch.load(MODEL_PATH, map_location=device)
+            # Check if the number of classes matches the saved model's output layer
+            if 'classifier.1.weight' in state_dict and state_dict['classifier.1.weight'].shape[0] != len(FLAT_CLASSES):
+                print(f"Model output size mismatch. Expected {len(FLAT_CLASSES)} classes but weights have {state_dict['classifier.1.weight'].shape[0]}. Reinitializing classifier head.")
+                # Load only matching layers
+                model_dict = model.state_dict()
+                state_dict = {k: v for k, v in state_dict.items() if k in model_dict and v.shape == model_dict[k].shape}
+                model_dict.update(state_dict)
+                model.load_state_dict(model_dict)
+            else:
+                model.load_state_dict(state_dict)
+                print(f"Loaded existing model from {MODEL_PATH}")
         except Exception as e:
             print(f"Error loading model: {e}")
             
@@ -198,7 +236,7 @@ def fine_tune_model(dataset_dir: str):
             "recall": f"{round(rec, 1)}%",
             "latency": f"{inference_time_ms}ms",
             "dataset_size": len(dataset),
-            "classes": "27 Sub-Categories (Full)"
+            "classes": f"{len(FLAT_CLASSES)} Sub-Categories"
         }
         history.append(new_metric)
         

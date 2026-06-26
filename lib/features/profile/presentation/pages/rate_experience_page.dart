@@ -49,10 +49,11 @@ class _RateExperiencePageState extends State<RateExperiencePage> {
           combinedReview = '$tagsStr\n\n$combinedReview'.trim();
       }
 
-      await apiClient.patch('/transactions/${widget.transactionId}/rate', {
+      await apiClient.post('/reviews', {
+        'transaction_id': widget.transactionId,
+        'reviewee_id': widget.revieweeId,
         'rating': _rating,
-        'review': combinedReview,
-        'is_seller': widget.isSeller
+        'comment': combinedReview,
       });
 
       if (mounted) {
