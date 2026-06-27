@@ -14,6 +14,7 @@ async function findAdmins() {
         await User.create({
             email: 'admin@campus-swap.edu.my',
             password_hash: hash,
+            username: 'system_admin',
             full_name: 'System Admin',
             role: 'admin',
             is_active: true

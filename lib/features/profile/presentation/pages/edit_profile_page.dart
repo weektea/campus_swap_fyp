@@ -16,6 +16,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
   final _yearController = TextEditingController();
   final _bioController = TextEditingController();
   final _studentIdController = TextEditingController();
+  final _usernameController = TextEditingController();
+  final _fullNameController = TextEditingController();
   String _privacySetting = 'Public';
   bool _isLoading = false;
   bool _isUploading = false;
@@ -32,6 +34,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
     _yearController.dispose();
     _bioController.dispose();
     _studentIdController.dispose();
+    _usernameController.dispose();
+    _fullNameController.dispose();
     super.dispose();
   }
 
@@ -46,6 +50,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
         _yearController.text = userData['year_of_study']?.toString() ?? '';
         _bioController.text = userData['bio'] ?? '';
         _studentIdController.text = userData['university_id'] ?? '';
+        _usernameController.text = userData['username'] ?? '';
+        _fullNameController.text = userData['full_name'] ?? '';
         if (userData['privacy_setting'] != null) {
           _privacySetting = userData['privacy_setting'];
           if (_privacySetting == 'Friends Only') {
@@ -166,6 +172,46 @@ class _EditProfilePageState extends State<EditProfilePage> {
                   Text("Academic Info", style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey[700])),
                   const SizedBox(height: 16),
                   
+                  // Full Name Field (Immutable once set)
+                  TextFormField(
+                    controller: _fullNameController,
+                    enabled: false,
+                    decoration: InputDecoration(
+                        labelText: 'Full Name',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        filled: true,
+                        fillColor: Colors.grey[100],
+                        prefixIcon: const Icon(Icons.person, color: Colors.grey),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  
+                  // Username Field (Immutable once set)
+                  TextFormField(
+                    controller: _usernameController,
+                    enabled: false,
+                    decoration: InputDecoration(
+                        labelText: 'Username (Unique ID)',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        filled: true,
+                        fillColor: Colors.grey[100],
+                        prefixIcon: const Icon(Icons.alternate_email, color: Colors.grey),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 4),
+                    child: Text(
+                      'Username and Full Name are permanent for account security and cannot be changed.',
+                      style: GoogleFonts.outfit(
+                        fontSize: 12,
+                        color: Colors.red[600],
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  
                   // Read-Only Student ID Field
                   TextFormField(
                     controller: _studentIdController,
@@ -215,6 +261,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                     value: _privacySetting,
                     decoration: InputDecoration(
                       labelText: 'Profile Privacy',
+                      helperText: 'Controls visibility of Email, Faculty, and Year of Study.',
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                     items: ['Public', 'Private'].map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),

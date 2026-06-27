@@ -102,7 +102,7 @@ router.get('/thread/:reference_id', verifyToken, async (req, res) => {
     try {
         const messages = await TicketMessage.findAll({
             where: { reference_id: req.params.reference_id },
-            include: [{ model: User, as: 'sender', attributes: ['id', 'email', 'role', 'full_name'] }],
+            include: [{ model: User, as: 'sender', attributes: ['id', 'email', 'role', 'username', 'full_name'] }],
             order: [['createdAt', 'ASC']]
         });
         res.json(messages);

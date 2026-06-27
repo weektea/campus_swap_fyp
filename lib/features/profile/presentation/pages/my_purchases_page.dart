@@ -238,7 +238,7 @@ class _MyTransactionsPageState extends State<MyTransactionsPage> with SingleTick
                                                 transactionId: item['id'].toString(),
                                                 revieweeId: otherParty['id']?.toString() ?? '',
                                                 isSeller: !isBuying,
-                                                revieweeName: otherParty['full_name'] ?? 'User',
+                                                revieweeName: otherParty['username'] != null ? '@${otherParty['username']}' : 'User',
                                                 productName: product['title'] ?? 'Item',
                                                 onSubmitted: () {
                                                     _fetchAllTransactions();

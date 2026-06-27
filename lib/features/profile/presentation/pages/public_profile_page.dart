@@ -99,7 +99,13 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
                                             : null,
                                     ),
                                     const SizedBox(height: 12),
-                                    Text(widget.userName, style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.bold)),
+                                    if (_userProfile != null && _userProfile!['full_name'] != null) ...[
+                                      Text(_userProfile!['full_name'], style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.bold)),
+                                      const SizedBox(height: 4),
+                                      Text('@${widget.userName}', style: GoogleFonts.outfit(fontSize: 16, color: Colors.teal, fontWeight: FontWeight.w500)),
+                                    ] else ...[
+                                      Text('@${widget.userName}', style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.bold)),
+                                    ],
                                     if (_userProfile != null && _userProfile!['reputation_score'] != null) ...[
                                       const SizedBox(height: 8),
                                       Row(
@@ -146,10 +152,12 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
                               ],
                             ),
                           ),
-                          if (_userProfile!['email'] != null)
-                            _buildInfoRow('Email', _userProfile!['email']),
-                          if (_userProfile!['phone_number'] != null)
-                            _buildInfoRow('Phone Number', _userProfile!['phone_number']),
+                           if (_userProfile!['full_name'] != null)
+                             _buildInfoRow('Full Name', _userProfile!['full_name']),
+                           if (_userProfile!['email'] != null)
+                             _buildInfoRow('Email', _userProfile!['email']),
+                           if (_userProfile!['phone_number'] != null)
+                             _buildInfoRow('Phone Number', _userProfile!['phone_number']),
                           if (_userProfile!['faculty'] != null)
                             _buildInfoRow('Faculty', _userProfile!['faculty']),
                           if (_userProfile!['year_of_study'] != null)

@@ -9,6 +9,7 @@ class UserSession {
 
   String? userId;
   String? email;
+  String? username;
   String? fullName;
   String? token;
   String? avatarUrl;
@@ -19,6 +20,7 @@ class UserSession {
   void clear() {
     userId = null;
     email = null;
+    username = null;
     fullName = null;
     token = null;
     avatarUrl = null;

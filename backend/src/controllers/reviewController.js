@@ -117,7 +117,7 @@ export const getUserReviews = async (req, res) => {
         const reviews = await Review.findAll({
             where: { reviewee_id: user_id },
             include: [
-                { model: User, as: 'reviewer', attributes: ['full_name'] },
+                { model: User, as: 'reviewer', attributes: ['username', 'full_name'] },
                 { model: Transaction, as: 'transaction', attributes: ['review_status'] }
             ],
             order: [['createdAt', 'DESC']]

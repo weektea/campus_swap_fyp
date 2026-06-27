@@ -59,9 +59,9 @@ admin@campus-swap.edu.my
 password123
 
 # Test Register
-Test Student6     21/ 22/ 23/ 24/ 25/ 26/ 27/ 28 29
-24PMR01666        02111/  02888 02999
-016-1122666         2211222/   2211888 2211999
+Test Student6     21/ 22/ 23/ 24/ 25/ 26/ 27/  29
+24PMR01666        02111/  
+016-1122666         2211222/   
 stu6@tarc.edu.my
 Test1234@
 

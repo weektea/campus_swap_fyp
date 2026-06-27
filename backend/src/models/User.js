@@ -16,6 +16,15 @@ const User = sequelize.define('User', {
             is: /.*\.edu\.my$/i, // Enforce .edu.my domain for campus verification
         },
     },
+    username: {
+        type: DataTypes.STRING,
+        allowNull: false,
+        unique: true,
+    },
+    full_name: {
+        type: DataTypes.STRING,
+        allowNull: false,
+    },
     phone_number: {
         type: DataTypes.STRING,
         allowNull: true,
@@ -27,10 +36,6 @@ const User = sequelize.define('User', {
     // ...
 
     password_hash: {
-        type: DataTypes.STRING,
-        allowNull: false,
-    },
-    full_name: {
         type: DataTypes.STRING,
         allowNull: false,
     },
@@ -74,6 +79,16 @@ const User = sequelize.define('User', {
     privacy_setting: {
         type: DataTypes.ENUM('Public', 'Private', 'Friends Only'),
         defaultValue: 'Public', // From UC04
+    },
+    show_full_name: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false,
+        allowNull: false,
+    },
+    show_phone_number: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false,
+        allowNull: false,
     },
     total_carbon_saved: {
         type: DataTypes.FLOAT,

@@ -9,6 +9,7 @@ async function testRegister() {
         const payload = {
             email: 'test_student_01@student.um.edu.my',
             password: 'TestPassword@123',
+            username: 'test_student_one',
             full_name: 'Test Student One',
             phone_number: '+6012-3456789',
             university_id: '24PMR12345'

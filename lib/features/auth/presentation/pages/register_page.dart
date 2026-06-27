@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'dart:async';
 import 'package:campus_swap/core/api/api_client.dart';
 
 class RegisterPage extends StatefulWidget {
@@ -11,6 +12,7 @@ class RegisterPage extends StatefulWidget {
 
 class _RegisterPageState extends State<RegisterPage> {
   final _formKey = GlobalKey<FormState>();
+  final _usernameController = TextEditingController();
   final _fullNameController = TextEditingController();
   final _universityIdController = TextEditingController();
   final _emailController = TextEditingController();
@@ -22,7 +24,67 @@ class _RegisterPageState extends State<RegisterPage> {
   bool _isPasswordVisible = false;
   bool _isConfirmPasswordVisible = false;
 
-  void _register() async {
+  Timer? _usernameDebounce;
+  bool _isCheckingUsername = false;
+  bool _isUsernameValid = false;
+  String? _usernameFeedback;
+
+  @override
+  void dispose() {
+    _usernameController.dispose();
+    _fullNameController.dispose();
+    _universityIdController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
+    _phoneController.dispose();
+    _usernameDebounce?.cancel();
+    super.dispose();
+  }
+
+  void _onUsernameChanged(String val) {
+    if (_usernameDebounce?.isActive ?? false) _usernameDebounce!.cancel();
+
+    if (val.trim().length < 3) {
+      setState(() {
+        _isUsernameValid = false;
+        _usernameFeedback = 'Username must be at least 3 characters';
+      });
+      return;
+    }
+
+    setState(() {
+      _isCheckingUsername = true;
+      _usernameFeedback = null;
+    });
+
+    _usernameDebounce = Timer(const Duration(milliseconds: 500), () async {
+      try {
+        final client = ApiClient();
+        final res = await client.get('/auth/check-username?username=${Uri.encodeComponent(val.trim())}');
+        
+        if (mounted) {
+          setState(() {
+            _isCheckingUsername = false;
+            _isUsernameValid = res['available'] ?? false;
+            _usernameFeedback = res['available'] == true 
+                ? 'Username is available' 
+                : (res['error'] ?? 'Username already taken');
+          });
+        }
+      } catch (e) {
+        if (mounted) {
+          setState(() {
+            _isCheckingUsername = false;
+            _isUsernameValid = false;
+            _usernameFeedback = 'Could not verify username';
+          });
+        }
+      }
+    });
+  }
+
+  Future<void> _register() async {
     if (_formKey.currentState!.validate()) {
       if (_passwordController.text != _confirmPasswordController.text) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Passwords do not match')));
@@ -34,7 +96,8 @@ class _RegisterPageState extends State<RegisterPage> {
       try {
         final apiClient = ApiClient();
         await apiClient.post('/auth/register', {
-          'full_name': _fullNameController.text,
+          'username': _usernameController.text.toLowerCase().trim(),
+          'full_name': _fullNameController.text.trim(),
           'university_id': _universityIdController.text.toUpperCase(),
           'email': _emailController.text,
           'password': _passwordController.text,
@@ -68,8 +131,71 @@ class _RegisterPageState extends State<RegisterPage> {
             children: [
               TextFormField(
                 controller: _fullNameController,
-                decoration: const InputDecoration(labelText: 'Full Name', prefixIcon: Icon(Icons.person_outline)),
-                validator: (v) => v!.isEmpty ? 'Required' : null,
+                decoration: const InputDecoration(
+                  labelText: 'Full Name',
+                  prefixIcon: Icon(Icons.badge_outlined),
+                  hintText: 'e.g., Zhang Xiao Ming',
+                ),
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) return 'Required';
+                  if (v.trim().length < 2 || v.trim().length > 50) {
+                    return 'Must be between 2 and 50 characters';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+              
+              TextFormField(
+                controller: _usernameController,
+                onChanged: _onUsernameChanged,
+                decoration: InputDecoration(
+                  labelText: 'Username (Unique ID)', 
+                  prefixIcon: const Icon(Icons.person_outline),
+                  suffixIcon: _isCheckingUsername
+                      ? const Padding(
+                          padding: EdgeInsets.all(12.0),
+                          child: SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        )
+                      : _usernameFeedback == null
+                          ? null
+                          : Icon(
+                              _isUsernameValid ? Icons.check_circle : Icons.cancel,
+                              color: _isUsernameValid ? Colors.green : Colors.red,
+                            ),
+                  helperText: _isUsernameValid && _usernameFeedback != null ? _usernameFeedback : null,
+                  helperStyle: const TextStyle(color: Colors.green),
+                  errorText: !_isUsernameValid && _usernameFeedback != null ? _usernameFeedback : null,
+                ),
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) return 'Required';
+                  if (!_isUsernameValid) return _usernameFeedback ?? 'Username is not available';
+                  return null;
+                },
+              ),
+              Padding(
+                padding: const EdgeInsets.only(top: 6, left: 12, right: 12),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Used for your profile link and tagging. Cannot be changed later. Letters, numbers, and underscores only.',
+                        style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                      ),
+                      const SizedBox(height: 2),
+                      const Text(
+                        'This is your system ID, not your real name.',
+                        style: TextStyle(fontSize: 11, color: Colors.redAccent, fontWeight: FontWeight.w500),
+                      ),
+                    ],
+                  ),
+                ),
               ),
               const SizedBox(height: 16),
               

@@ -93,7 +93,7 @@ export const getUserTransactions = async (req, res) => {
                 {
                     model: User,
                     as: type === 'selling' ? 'buyer' : 'seller',
-                    attributes: ['id', 'full_name', 'email']
+                    attributes: ['id', 'username', 'full_name', 'email']
                 },
                 {
                     model: Review,
@@ -131,8 +131,8 @@ export const getTransactionById = async (req, res) => {
         const transaction = await Transaction.findByPk(id, {
             include: [
                 { model: Product, as: 'product' },
-                { model: User, as: 'buyer', attributes: ['id', 'full_name', 'email', 'profile_image_url'] },
-                { model: User, as: 'seller', attributes: ['id', 'full_name', 'email', 'profile_image_url'] },
+                { model: User, as: 'buyer', attributes: ['id', 'username', 'full_name', 'email', 'profile_image_url'] },
+                { model: User, as: 'seller', attributes: ['id', 'username', 'full_name', 'email', 'profile_image_url'] },
                 { model: Review, as: 'reviews', required: false }
             ]
         });

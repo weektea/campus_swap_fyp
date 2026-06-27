@@ -62,8 +62,8 @@ export const getChatList = async (req, res) => {
                 ]
             },
             include: [
-                { model: User, as: 'sender', attributes: ['id', 'full_name'] },
-                { model: User, as: 'receiver', attributes: ['id', 'full_name'] }
+                { model: User, as: 'sender', attributes: ['id', 'username', 'full_name'] },
+                { model: User, as: 'receiver', attributes: ['id', 'username', 'full_name'] }
             ],
             order: [['createdAt', 'DESC']]
         });
@@ -82,7 +82,9 @@ export const getChatList = async (req, res) => {
             if (!partners.has(partner.id)) {
                 partners.set(partner.id, {
                     id: partner.id,
-                    name: partner.full_name,
+                    name: partner.username,
+                    username: partner.username,
+                    full_name: partner.full_name,
                     lastMessage: msg.content,
                     time: msg.createdAt,
                     unread: 0 // logic to be added

@@ -152,9 +152,16 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
                             ),
                             const SizedBox(height: 16),
                             Text(
-                              _userData!['full_name'] ?? 'No Name',
+                              _userData!['full_name'] ?? (_userData!['username'] != null ? '@${_userData!['username']}' : 'No Name'),
                               style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.bold),
                             ),
+                            if (_userData!['username'] != null) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                '@${_userData!['username']}',
+                                style: const TextStyle(fontSize: 16, color: Colors.teal, fontWeight: FontWeight.w500),
+                              ),
+                            ],
                             const SizedBox(height: 4),
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -175,6 +182,7 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
                       
                       const Divider(),
                       _buildSectionHeader('Basic Information', Icons.badge_outlined),
+                      _buildDataRow('Full Name', _userData!['full_name'] ?? 'N/A'),
                       _buildDataRow('Email', _userData!['email'] ?? 'N/A'),
                       _buildDataRow('Phone Number', _userData!['phone_number'] ?? 'Not provided'),
 
@@ -188,6 +196,32 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
                       _buildSectionHeader('Personalization & Privacy', Icons.privacy_tip_outlined),
                       _buildDataRow('Bio', _userData!['bio'] ?? 'No bio available.'),
                       _buildDataRow('Privacy Setting', _userData!['privacy_setting'] ?? 'Public'),
+                      _buildDataRow('Full Name Visibility', _userData!['show_full_name'] == true ? 'Visible' : 'Hidden (Private)'),
+                      _buildDataRow('Phone Visibility', _userData!['show_phone_number'] == true ? 'Visible' : 'Hidden (Private)'),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4, bottom: 12),
+                        child: InkWell(
+                          onTap: () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Go to Settings to change Full Name and Phone visibility.'),
+                              ),
+                            );
+                          },
+                          child: Row(
+                            children: [
+                              Icon(Icons.info_outline, size: 16, color: Colors.grey[600]),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Change Name & Phone visibility in Settings.',
+                                  style: TextStyle(fontSize: 12, color: Colors.grey[600], fontStyle: FontStyle.italic),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
 
                       const Divider(),
                       _buildSectionHeader('Trading & Platform Metrics', Icons.analytics_outlined),

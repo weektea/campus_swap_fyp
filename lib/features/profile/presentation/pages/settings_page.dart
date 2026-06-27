@@ -7,7 +7,6 @@ import 'package:campus_swap/core/theme/theme_provider.dart';
 import 'package:campus_swap/features/profile/presentation/pages/help_page.dart';
 import 'package:campus_swap/core/api/api_client.dart';
 import 'package:campus_swap/features/profile/presentation/pages/change_password_page.dart';
-import 'package:campus_swap/features/profile/presentation/pages/privacy_settings_page.dart';
 import 'package:campus_swap/features/profile/presentation/pages/edit_profile_page.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -20,6 +19,56 @@ class SettingsPage extends StatefulWidget {
 class _SettingsPageState extends State<SettingsPage> {
   bool _notificationsEnabled = true;
   bool _emailUpdates = false;
+  bool _showFullName = true;
+  bool _showPhoneNumber = true;
+  bool _isLoadingSettings = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPrivacySettings();
+  }
+
+  Future<void> _loadPrivacySettings() async {
+    setState(() => _isLoadingSettings = true);
+    try {
+      final apiClient = ApiClient();
+      final res = await apiClient.get('/auth/user/${UserSession().userId}');
+      if (res != null && res['user'] != null) {
+        final userData = res['user'];
+        setState(() {
+          _showFullName = userData['show_full_name'] ?? true;
+          _showPhoneNumber = userData['show_phone_number'] ?? true;
+        });
+      }
+    } catch (_) {}
+    finally {
+      if (mounted) setState(() => _isLoadingSettings = false);
+    }
+  }
+
+  Future<void> _updatePrivacySetting(String key, bool value) async {
+    try {
+      final apiClient = ApiClient();
+      await apiClient.patch('/auth/user/${UserSession().userId}', {
+        key: value,
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Privacy setting updated!'),
+            duration: const Duration(milliseconds: 500),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to save setting: $e')),
+        );
+      }
+    }
+  }
 
   void _logout() {
     UserSession().clear();
@@ -51,7 +100,33 @@ class _SettingsPageState extends State<SettingsPage> {
 
           const Divider(height: 32),
 
-          // Section 2: Display & Accessibility
+          // Section 2: Privacy Settings
+          Text("Privacy Settings", style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey[700])),
+          const SizedBox(height: 8),
+          SwitchListTile(
+            value: _showFullName,
+            onChanged: (val) {
+              setState(() => _showFullName = val);
+              _updatePrivacySetting('show_full_name', val);
+            },
+            title: Text("Show Full Name on Profile", style: GoogleFonts.outfit()),
+            subtitle: Text("If turned off, only your @username handle is visible to other students.", style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey)),
+            activeColor: Theme.of(context).colorScheme.primary,
+          ),
+          SwitchListTile(
+            value: _showPhoneNumber,
+            onChanged: (val) {
+              setState(() => _showPhoneNumber = val);
+              _updatePrivacySetting('show_phone_number', val);
+            },
+            title: Text("Show Phone Number on Profile", style: GoogleFonts.outfit()),
+            subtitle: Text("Allow other buyers and sellers to see your contact number.", style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey)),
+            activeColor: Theme.of(context).colorScheme.primary,
+          ),
+
+          const Divider(height: 32),
+
+          // Section 3: Display & Accessibility
           Text("Display & Accessibility", style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey[700])),
           const SizedBox(height: 8),
           SwitchListTile(
@@ -76,7 +151,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
           const Divider(height: 32),
 
-          // Section 3: Notification Settings
+          // Section 4: Notification Settings
           Text("Notification Settings", style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey[700])),
           const SizedBox(height: 8),
           SwitchListTile(

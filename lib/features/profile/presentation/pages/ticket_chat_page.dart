@@ -157,7 +157,7 @@ class _TicketChatPageState extends State<TicketChatPage> {
           children: [
             if (!isMe) ...[
               Text(
-                isMod ? 'Moderator Support' : (sender['full_name'] ?? sender['email'] ?? 'User'),
+                isMod ? 'Moderator Support' : (sender['full_name'] ?? (sender['username'] != null ? '@${sender['username']}' : (sender['email'] ?? 'User'))),
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 12,

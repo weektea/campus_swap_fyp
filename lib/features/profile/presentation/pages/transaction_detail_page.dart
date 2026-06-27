@@ -182,7 +182,7 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
     final otherParty = isBuying ? _transaction['seller'] : _transaction['buyer'];
     final status = _transaction['status'];
     final productImg = product['image_urls'] != null && (product['image_urls'] as List).isNotEmpty ? product['image_urls'][0] : '';
-    final String otherPartyName = otherParty['full_name'] ?? 'Unknown User';
+    final String otherPartyName = otherParty['full_name'] ?? (otherParty['username'] != null ? '@${otherParty['username']}' : 'Unknown User');
 
     return Scaffold(
       appBar: AppBar(
@@ -247,11 +247,11 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
                   child: Text(otherPartyName[0].toUpperCase(), style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold)),
               ),
               title: Text(otherPartyName, style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
-              subtitle: Text(otherParty['email'] ?? '', style: GoogleFonts.outfit(fontSize: 12)),
+              subtitle: Text('${otherParty['username'] != null ? '@${otherParty['username']} • ' : ''}${otherParty['email'] ?? ''}', style: GoogleFonts.outfit(fontSize: 12)),
               trailing: ElevatedButton.icon(
                   onPressed: () {
                        Navigator.push(context, MaterialPageRoute(builder: (_) => ChatDetailPage(
-                           sellerName: otherPartyName,
+                           sellerName: otherParty['username'] != null ? '@${otherParty['username']}' : 'Unknown User',
                            otherUserId: otherParty['id']?.toString() ?? ''
                        )));
                   },
@@ -315,7 +315,7 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
           } else {
               final product = _transaction['product'] ?? {};
               final otherParty = isBuying ? _transaction['seller'] : _transaction['buyer'];
-              final String otherPartyName = otherParty != null ? (otherParty['full_name'] ?? 'Unknown User') : 'Unknown User';
+              final String otherPartyName = otherParty != null ? (otherParty['username'] != null ? '@${otherParty['username']}' : 'Unknown User') : 'Unknown User';
 
               return Column(
                   children: [

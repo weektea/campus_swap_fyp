@@ -42,7 +42,7 @@ export const getSavedItems = async (req, res) => {
             include: [{
                 model: Product,
                 as: 'product',
-                include: [{ model: User, as: 'seller', attributes: ['full_name'] }]
+                include: [{ model: User, as: 'seller', attributes: ['username', 'full_name'] }]
             }]
         });
 

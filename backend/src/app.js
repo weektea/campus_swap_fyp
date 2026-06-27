@@ -403,9 +403,47 @@ if (process.env.NODE_ENV !== 'test') {
                         IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='SavedItems' AND column_name='updatedAt') THEN
                             ALTER TABLE "SavedItems" DROP COLUMN "updatedAt";
                         END IF;
+
+                        -- 1. Ensure username column exists
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='Users' AND column_name='username') THEN
+                            ALTER TABLE "Users" ADD COLUMN "username" VARCHAR(255);
+                        END IF;
+
+                        -- 2. Ensure full_name column exists
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='Users' AND column_name='full_name') THEN
+                            ALTER TABLE "Users" ADD COLUMN "full_name" VARCHAR(255);
+                        END IF;
+
+                        -- 3. Populate full_name from username if it is null
+                        UPDATE "Users" 
+                        SET "full_name" = INITCAP(REPLACE("username", '_', ' '))
+                        WHERE "full_name" IS NULL;
+
+                        -- 4. Alter columns to NOT NULL and add UNIQUE constraint for username
+                        ALTER TABLE "Users" ALTER COLUMN "full_name" SET NOT NULL;
+                        ALTER TABLE "Users" ALTER COLUMN "username" SET NOT NULL;
+
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE table_name='Users' AND constraint_name='Users_username_key') THEN
+                            ALTER TABLE "Users" ADD CONSTRAINT "Users_username_key" UNIQUE ("username");
+                        END IF;
+
+                        -- 5. Add show_full_name and show_phone_number columns if they do not exist
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='Users' AND column_name='show_full_name') THEN
+                            ALTER TABLE "Users" ADD COLUMN "show_full_name" BOOLEAN DEFAULT FALSE NOT NULL;
+                        ELSE
+                            ALTER TABLE "Users" ALTER COLUMN "show_full_name" SET DEFAULT FALSE;
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='Users' AND column_name='show_phone_number') THEN
+                            ALTER TABLE "Users" ADD COLUMN "show_phone_number" BOOLEAN DEFAULT FALSE NOT NULL;
+                        ELSE
+                            ALTER TABLE "Users" ALTER COLUMN "show_phone_number" SET DEFAULT FALSE;
+                        END IF;
+
+                        -- Force all existing users to false to align with "default hide" policy
+                        UPDATE "Users" SET "show_full_name" = FALSE, "show_phone_number" = FALSE;
                     END $$;
                 `);
-                console.log('SavedItems table pre-sync migrations executed successfully');
+                console.log('SavedItems and Users table pre-sync migrations executed successfully');
             } catch (migrationErr) {
                 console.error('SavedItems table pre-sync migrations failed (might have run already):', migrationErr.message);
                 try {

@@ -29,6 +29,8 @@ class _ProfilePageState extends State<ProfilePage> {
   bool _isUploading = false;
   double _reputationScore = 5.0;
   int _totalReviews = 0;
+  bool _showFullNamePublic = false;
+  bool _showPhonePublic = false;
 
   @override
   void initState() {
@@ -51,6 +53,12 @@ class _ProfilePageState extends State<ProfilePage> {
                   if (userData['profile_image_url'] != null) {
                       session.avatarUrl = userData['profile_image_url'];
                   }
+                  if (userData['username'] != null) {
+                      session.username = userData['username'];
+                  }
+                  if (userData['full_name'] != null) {
+                      session.fullName = userData['full_name'];
+                  }
                   // Extract True Backend Carbon Value
                   if (userData['total_carbon_saved'] != null) {
                       _co2Saved = double.tryParse(userData['total_carbon_saved'].toString()) ?? 0.0;
@@ -69,6 +77,12 @@ class _ProfilePageState extends State<ProfilePage> {
                   }
                   if (userData['total_reviews'] != null) {
                       _totalReviews = int.tryParse(userData['total_reviews'].toString()) ?? 0;
+                  }
+                  if (userData['show_full_name'] != null) {
+                      _showFullNamePublic = userData['show_full_name'];
+                  }
+                  if (userData['show_phone_number'] != null) {
+                      _showPhonePublic = userData['show_phone_number'];
                   }
               });
           }
@@ -181,12 +195,20 @@ class _ProfilePageState extends State<ProfilePage> {
             ),
             const SizedBox(height: 16),
             Text(
-              session.fullName ?? 'Guest User', 
+              session.fullName ?? (session.username != null ? '@${session.username}' : 'Guest User'), 
               style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
             ),
+            if (session.username != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                '@${session.username}',
+                style: const TextStyle(fontSize: 16, color: Colors.teal, fontWeight: FontWeight.w500),
+              ),
+            ],
+            const SizedBox(height: 4),
             Text(
               session.email ?? 'Not Logged In',
-              style: const TextStyle(fontSize: 16, color: Colors.grey),
+              style: const TextStyle(fontSize: 14, color: Colors.grey),
             ),
             if (session.isLoggedIn) ...[
               const SizedBox(height: 12),
@@ -195,13 +217,57 @@ class _ProfilePageState extends State<ProfilePage> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(builder: (_) => const StudentProfilePage()),
-                  );
+                  ).then((_) => _fetchUserProfile()); // Refresh on return in case settings updated
                 },
                 style: OutlinedButton.styleFrom(
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                   side: BorderSide(color: Colors.teal.shade300),
                 ),
                 child: Text('View Profile', style: TextStyle(color: Colors.teal.shade700)),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.grey[50],
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: Colors.grey.shade200),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.shield_outlined, size: 14, color: Colors.blueGrey[600]),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Name: ${_showFullNamePublic ? "Show" : "Hide"} • Phone: ${_showPhonePublic ? "Show" : "Hide"}',
+                      style: TextStyle(fontSize: 11, color: Colors.grey[800], fontWeight: FontWeight.w500),
+                    ),
+                    const SizedBox(width: 6),
+                    GestureDetector(
+                      onTap: () {
+                        showDialog(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            title: const Text('Privacy Status Info'),
+                            content: const Text(
+                              'Go to Settings (top right gear icon) to toggle whether your Full Name and Phone Number are visible to other students on your profile.'
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(context),
+                                child: const Text('Got it'),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                      child: Tooltip(
+                        message: 'Configure in Settings',
+                        child: Icon(Icons.info_outline, size: 15, color: Colors.grey[500]),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
             if (session.isLoggedIn) ...[

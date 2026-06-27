@@ -8,7 +8,7 @@ export const getLeaderboard = async (req, res) => {
             where: {
                 role: 'student'
             },
-            attributes: ['id', 'full_name', 'email', 'total_carbon_saved'],
+            attributes: ['id', 'username', 'full_name', 'email', 'total_carbon_saved'],
             order: [['total_carbon_saved', 'DESC']],
             limit: 10
         });
@@ -17,7 +17,7 @@ export const getLeaderboard = async (req, res) => {
         const leaderboard = users.map((u, index) => {
             return {
                 id: u.id,
-                name: u.full_name || u.email || 'Unknown User',
+                name: u.username || u.email || 'Unknown User',
                 co2: u.total_carbon_saved,
                 rank: index + 1
             };

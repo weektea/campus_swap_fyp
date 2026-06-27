@@ -86,6 +86,7 @@ class _LoginPageState extends State<LoginPage> {
         session.token = response['token'];
         session.userId = response['user']['id'];
         session.email = response['user']['email'];
+        session.username = response['user']['username'];
         session.fullName = response['user']['full_name'];
         session.role = response['user']['role'];
 

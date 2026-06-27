@@ -13,7 +13,7 @@ export const getListings = async (req, res) => {
             include: [{ 
                 model: User, 
                 as: 'seller', 
-                attributes: ['full_name', 'email', 'reputation_score', 'is_active', 'is_verified'] 
+                attributes: ['username', 'full_name', 'email', 'reputation_score', 'is_active', 'is_verified'] 
             }] 
         });
         res.json(products);
@@ -60,8 +60,8 @@ export const getDisputes = async (req, res) => {
                     as: 'transaction',
                     include: [
                         { model: Product, as: 'product' },
-                        { model: User, as: 'buyer', attributes: ['id', 'email', 'full_name'] },
-                        { model: User, as: 'seller', attributes: ['id', 'email', 'full_name'] }
+                        { model: User, as: 'buyer', attributes: ['id', 'email', 'username', 'full_name'] },
+                        { model: User, as: 'seller', attributes: ['id', 'email', 'username', 'full_name'] }
                     ]
                 },
                 'complainant',
@@ -579,7 +579,7 @@ export const getMLDashboardMetrics = async (req, res) => {
 export const getAllListings = async (req, res) => {
     try {
         const listings = await Product.findAll({
-            include: [{ model: User, as: 'seller', attributes: ['id', 'email', 'full_name'] }],
+            include: [{ model: User, as: 'seller', attributes: ['id', 'email', 'username', 'full_name'] }],
             order: [['createdAt', 'DESC']]
         });
         res.json(listings);
@@ -715,14 +715,35 @@ export const deleteUser = async (req, res) => {
 
 export const createUser = async (req, res) => {
     try {
-        const { email, password, full_name, role } = req.body;
+        let { email, password, full_name, role, username } = req.body;
         const bcrypt = await import('bcryptjs');
         const hash = await bcrypt.default.hash(password || 'password123', 10);
         
+        if (!full_name && email) {
+            full_name = email.split('@')[0].split(/[._-]/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+        }
+
+        if (!username && email) {
+            username = email.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '').toLowerCase();
+            if (username.length < 3) {
+                username = username + Math.floor(100 + Math.random() * 900);
+            }
+        } else if (username) {
+            username = username.toLowerCase().trim();
+        }
+
+        if (username) {
+            const existing = await User.findOne({ where: { username } });
+            if (existing) {
+                username = username + Math.floor(10 + Math.random() * 90);
+            }
+        }
+        
         const user = await User.create({
             email,
-            password_hash: hash,
+            username,
             full_name,
+            password_hash: hash,
             role: role || 'student',
             is_active: true
         });
@@ -786,8 +807,8 @@ export const getAllTransactions = async (req, res) => {
     try {
         const transactions = await Transaction.findAll({
             include: [
-                { model: User, as: 'buyer', attributes: ['email', 'full_name'] },
-                { model: User, as: 'seller', attributes: ['email', 'full_name'] },
+                { model: User, as: 'buyer', attributes: ['email', 'username', 'full_name'] },
+                { model: User, as: 'seller', attributes: ['email', 'username', 'full_name'] },
                 { model: Product, as: 'product', attributes: ['title', 'price', 'type'] }
             ],
             order: [['createdAt', 'DESC']]
@@ -802,8 +823,8 @@ export const getAllReviews = async (req, res) => {
     try {
         const reviews = await Review.findAll({
             include: [
-                { model: User, as: 'reviewer', attributes: ['email', 'full_name'] },
-                { model: User, as: 'reviewee', attributes: ['email', 'full_name'] }
+                { model: User, as: 'reviewer', attributes: ['email', 'username', 'full_name'] },
+                { model: User, as: 'reviewee', attributes: ['email', 'username', 'full_name'] }
             ],
             order: [['createdAt', 'DESC']]
         });

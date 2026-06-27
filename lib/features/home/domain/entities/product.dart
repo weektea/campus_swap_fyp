@@ -67,7 +67,7 @@ class Product {
       imageUrl: images.isNotEmpty ? images[0] : '',
       imageUrls: images,
       category: json['category'] as String,
-      sellerName: json['seller']?['full_name'] ?? 'Unknown Seller',
+      sellerName: json['seller']?['username'] ?? 'Unknown Seller',
       sellerId: json['seller_id'] as String? ?? '',
       condition: json['condition'] as String? ?? 'Good',
       postedAt: DateTime.parse(json['createdAt']),

@@ -81,7 +81,7 @@ export const getRecommendations = async (req, res) => {
                     include: [{
                         model: User,
                         as: 'seller',
-                        attributes: ['full_name', 'reputation_score']
+                        attributes: ['username', 'full_name', 'reputation_score']
                     }]
                 });
                 
@@ -98,7 +98,7 @@ export const getRecommendations = async (req, res) => {
                         seller_id: { [Op.ne]: user_id },
                         ...(reportedIds.length > 0 ? { id: { [Op.notIn]: reportedIds } } : {})
                     },
-                    include: [{ model: User, as: 'seller', attributes: ['full_name', 'reputation_score'] }],
+                    include: [{ model: User, as: 'seller', attributes: ['username', 'full_name', 'reputation_score'] }],
                     order: [['createdAt', 'DESC']],
                     limit: 10
                 });
@@ -117,7 +117,7 @@ export const getRecommendations = async (req, res) => {
             include: [{
                 model: User,
                 as: 'seller',
-                attributes: ['full_name', 'reputation_score']
+                attributes: ['username', 'full_name', 'reputation_score']
             }, {
                 model: Category,
                 as: 'categoryModel'
@@ -263,7 +263,7 @@ export const getTrendingProducts = async (req, res) => {
             // Cold start fallback: return latest available items
             const fallback = await Product.findAll({
                 where: { status: 'Available' },
-                include: [{ model: User, as: 'seller', attributes: ['full_name', 'reputation_score'] }],
+                include: [{ model: User, as: 'seller', attributes: ['username', 'full_name', 'reputation_score'] }],
                 order: [['createdAt', 'DESC']],
                 limit: parseInt(limit)
             });
@@ -280,7 +280,7 @@ export const getTrendingProducts = async (req, res) => {
             include: [{
                 model: User,
                 as: 'seller',
-                attributes: ['full_name', 'reputation_score']
+                attributes: ['username', 'full_name', 'reputation_score']
             }]
         });
 

@@ -26,7 +26,8 @@ const createAdmin = async () => {
         await User.create({
             email,
             password_hash: hashedPassword,
-            full_name: 'Super Administrator',
+            username: 'super_admin',
+            full_name: 'Super Admin',
             role: 'admin', // KEY PART
             phone_number: '000-0000000',
             is_verified: true,

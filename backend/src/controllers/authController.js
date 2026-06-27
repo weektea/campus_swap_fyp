@@ -3,14 +3,46 @@ import jwt from 'jsonwebtoken';
 import { User, Transaction, Dispute, Report, Product } from '../models/index.js';
 import { Op } from 'sequelize';
 
+export const validateUsernameFormat = (username) => {
+    if (!username) {
+        return { valid: false, error: 'Username is required' };
+    }
+    const normalized = username.toLowerCase().trim();
+    if (normalized.length < 3 || normalized.length > 30) {
+        return { valid: false, error: 'Username must be between 3 and 30 characters' };
+    }
+    const usernameRegex = /^[a-zA-Z0-9_]+$/;
+    if (!usernameRegex.test(normalized)) {
+        return { valid: false, error: 'Username can only contain letters, numbers, and underscores' };
+    }
+    const reserved = ['admin', 'system', 'moderator', 'support', 'root', 'campus_swap'];
+    if (reserved.includes(normalized)) {
+        return { valid: false, error: 'This username is reserved' };
+    }
+    return { valid: true, normalized };
+};
+
 export const register = async (req, res) => {
     try {
-        const { email, password, full_name, university_id, phone_number } = req.body;
+        const { email, password, university_id, phone_number, username, full_name } = req.body;
 
         // 1. Validation
-        if (!email || !password || !full_name || !university_id) {
+        if (!email || !password || !university_id || !username || !full_name) {
             return res.status(400).json({ error: 'All fields are required' });
         }
+
+        // Full Name Validation
+        const cleanedFullName = full_name.trim();
+        if (cleanedFullName.length < 2 || cleanedFullName.length > 50) {
+            return res.status(400).json({ error: 'Full name must be between 2 and 50 characters' });
+        }
+
+        // Username Format check
+        const usernameVal = validateUsernameFormat(username);
+        if (!usernameVal.valid) {
+            return res.status(400).json({ error: usernameVal.error });
+        }
+        const normalizedUsername = usernameVal.normalized;
 
         // Email Validation
         if (!email.endsWith('.edu.my')) {
@@ -49,6 +81,11 @@ export const register = async (req, res) => {
             return res.status(400).json({ error: 'Email already registered' });
         }
 
+        const existingUsername = await User.findOne({ where: { username: normalizedUsername } });
+        if (existingUsername) {
+            return res.status(400).json({ error: 'Username already registered' });
+        }
+
         const existingUniId = await User.findOne({ where: { university_id } });
         if (existingUniId) {
             return res.status(400).json({ error: 'University ID already registered' });
@@ -67,8 +104,9 @@ export const register = async (req, res) => {
         // 4. Create User
         const user = await User.create({
             email,
+            username: normalizedUsername,
+            full_name: cleanedFullName,
             password_hash: hashedPassword,
-            full_name,
             university_id: university_id.toUpperCase(), // Store uniform uppercase
             phone_number,
             role: 'student',
@@ -88,6 +126,7 @@ export const register = async (req, res) => {
             user: {
                 id: user.id,
                 email: user.email,
+                username: user.username,
                 full_name: user.full_name,
                 role: user.role
             }
@@ -105,14 +144,17 @@ export const login = async (req, res) => {
         
         const identifier = email || student_id;
 
-        // 1. Check User by email or university_id
+        // 1. Check User by email, university_id, or username
         let user = await User.findOne({ where: { email: identifier } });
         if (!user) {
             user = await User.findOne({ where: { university_id: identifier } });
         }
+        if (!user && identifier) {
+            user = await User.findOne({ where: { username: identifier.toLowerCase().trim() } });
+        }
         
         if (!user) {
-            return res.status(400).json({ error: 'Invalid ID/email or password' });
+            return res.status(400).json({ error: 'Invalid ID/email/username or password' });
         }
 
         // Security check: Is user banned?
@@ -127,7 +169,7 @@ export const login = async (req, res) => {
         // 2. Check Password
         const isMatch = await bcrypt.compare(password, user.password_hash);
         if (!isMatch) {
-            return res.status(400).json({ error: 'Invalid ID/email or password' });
+            return res.status(400).json({ error: 'Invalid ID/email/username or password' });
         }
 
         // 3. Generate Token
@@ -143,6 +185,7 @@ export const login = async (req, res) => {
             user: {
                 id: user.id,
                 email: user.email,
+                username: user.username,
                 full_name: user.full_name,
                 role: user.role
             }
@@ -164,14 +207,23 @@ export const updateProfile = async (req, res) => {
             return res.status(404).json({ error: 'User not found' });
         }
 
+        // Username and Full Name immutability check
+        if (updates.username !== undefined && updates.username !== user.username) {
+            return res.status(400).json({ error: 'Username cannot be modified after registration' });
+        }
+        if (updates.full_name !== undefined && updates.full_name !== user.full_name) {
+            return res.status(400).json({ error: 'Full name cannot be modified after registration' });
+        }
+
         // Whitelist allowed updates
         if (updates.profile_picture !== undefined) user.profile_image_url = updates.profile_picture;
-        if (updates.full_name !== undefined) user.full_name = updates.full_name;
         if (updates.phone_number !== undefined) user.phone_number = updates.phone_number;
         if (updates.bio !== undefined) user.bio = updates.bio;
         if (updates.faculty !== undefined) user.faculty = updates.faculty;
         if (updates.year_of_study !== undefined) user.year_of_study = updates.year_of_study;
         if (updates.privacy_setting !== undefined) user.privacy_setting = updates.privacy_setting;
+        if (updates.show_full_name !== undefined) user.show_full_name = updates.show_full_name;
+        if (updates.show_phone_number !== undefined) user.show_phone_number = updates.show_phone_number;
 
         await user.save();
 
@@ -180,6 +232,7 @@ export const updateProfile = async (req, res) => {
             user: {
                 id: user.id,
                 email: user.email,
+                username: user.username,
                 full_name: user.full_name,
                 profile_picture: user.profile_image_url,
                 phone: user.phone_number,
@@ -187,6 +240,8 @@ export const updateProfile = async (req, res) => {
                 faculty: user.faculty,
                 year_of_study: user.year_of_study,
                 privacy_setting: user.privacy_setting,
+                show_full_name: user.show_full_name,
+                show_phone_number: user.show_phone_number,
                 role: user.role
             }
         });
@@ -205,9 +260,10 @@ export const getUserProfile = async (req, res) => {
 
         const user = await User.findByPk(id, {
             attributes: [
-                'id', 'email', 'full_name', 'profile_image_url', 'phone_number', 
+                'id', 'username', 'email', 'full_name', 'profile_image_url', 'phone_number', 
                 'role', 'total_carbon_saved', 'carbon_saved_buyer', 'carbon_saved_seller', 
                 'items_reused', 'reputation_score', 'total_reviews', 'privacy_setting', 
+                'show_full_name', 'show_phone_number',
                 'bio', 'faculty', 'year_of_study', 'createdAt', 'is_active'
             ]
         });
@@ -217,13 +273,22 @@ export const getUserProfile = async (req, res) => {
         }
 
         // Privacy Redaction Logic (UC02, UC04)
-        // Redact contact info if setting is Private or Friends Only, UNLESS requester is the owner or an admin
         const isOwner = requesterId === user.id;
         const isAdminOrMod = requesterRole === 'admin' || requesterRole === 'moderator';
         
+        // Granular toggles redactions
+        if (!isOwner && !isAdminOrMod) {
+            if (!user.show_full_name) {
+                user.setDataValue('full_name', null);
+            }
+            if (!user.show_phone_number) {
+                user.phone_number = null;
+            }
+        }
+
+        // General profile privacy redactions (except email/faculty/year which are bound to general privacy setting)
         if (!isOwner && !isAdminOrMod && user.privacy_setting !== 'Public') {
             user.email = null;
-            user.phone_number = null;
             user.faculty = null;
             user.year_of_study = null;
         }
@@ -232,6 +297,27 @@ export const getUserProfile = async (req, res) => {
     } catch (error) {
         console.error('Get User Profile Error:', error);
         res.status(500).json({ error: 'Failed to fetch user profile' });
+    }
+};
+
+export const checkUsername = async (req, res) => {
+    try {
+        const { username } = req.query;
+        if (!username) {
+            return res.status(400).json({ available: false, error: 'Username query parameter is required' });
+        }
+        const val = validateUsernameFormat(username);
+        if (!val.valid) {
+            return res.status(200).json({ available: false, error: val.error });
+        }
+        const existing = await User.findOne({ where: { username: val.normalized } });
+        if (existing) {
+            return res.status(200).json({ available: false, error: 'Username is already taken' });
+        }
+        return res.json({ available: true });
+    } catch (e) {
+        console.error('Check Username Error:', e);
+        res.status(500).json({ error: 'Failed to verify username availability' });
     }
 };
 
