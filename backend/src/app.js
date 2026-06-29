@@ -4,12 +4,17 @@ import dotenv from 'dotenv';
 import pg from 'pg';
 import axios from 'axios';
 import { Op } from 'sequelize';
+import { createServer } from 'http';
+import { initSocket } from './config/socket.js';
 
 dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 3000;
 const ML_SERVICE_URL = process.env.ML_SERVICE_URL || 'http://localhost:5000';
+
+const httpServer = createServer(app);
+initSocket(httpServer);
 
 app.use(cors());
 app.use(express.json());
@@ -441,6 +446,11 @@ if (process.env.NODE_ENV !== 'test') {
 
                         -- Force all existing users to false to align with "default hide" policy
                         UPDATE "Users" SET "show_full_name" = FALSE, "show_phone_number" = FALSE;
+
+                        -- 6. Ensure awarded_carbon_points exists in Transactions table
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='Transactions' AND column_name='awarded_carbon_points') THEN
+                            ALTER TABLE "Transactions" ADD COLUMN "awarded_carbon_points" DOUBLE PRECISION;
+                        END IF;
                     END $$;
                 `);
                 console.log('SavedItems and Users table pre-sync migrations executed successfully');
@@ -459,7 +469,7 @@ if (process.env.NODE_ENV !== 'test') {
         .then(async () => {
             console.log('Database synced');
             await runProductCategoryMigration();
-            app.listen(port, '0.0.0.0', () => {
+            httpServer.listen(port, '0.0.0.0', () => {
                 console.log(`Server running on port ${port}`);
             });
             startCronJobs();
@@ -469,7 +479,7 @@ if (process.env.NODE_ENV !== 'test') {
             process.exit(1);
         });
 } else {
-    app.listen(port, '0.0.0.0', () => {
+    httpServer.listen(port, '0.0.0.0', () => {
         console.log(`Server running on port ${port} (test mode)`);
     });
 }

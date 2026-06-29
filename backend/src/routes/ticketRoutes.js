@@ -3,6 +3,7 @@ import { Op } from 'sequelize';
 import { authenticateToken as verifyToken } from '../middleware/authMiddleware.js';
 import { Report, Dispute, SupportTicket, TicketMessage, Product, User, Transaction } from '../models/index.js';
 import Notification from '../models/Notification.js';
+import { emitToUser, emitToAdmins } from '../config/socket.js';
 
 const router = express.Router();
 
@@ -38,6 +39,9 @@ router.post('/', verifyToken, async (req, res) => {
             description,
             status: 'Open'
         });
+
+        // Emit new ticket event to admin room
+        emitToAdmins('new_ticket_submitted', ticket);
 
         res.status(201).json(ticket);
     } catch (error) {
@@ -232,6 +236,43 @@ router.post('/thread/:reference_id', verifyToken, async (req, res) => {
                         type: 'System',
                         related_id: req.params.reference_id
                     });
+                }
+            }
+        }
+
+        const msgWithSender = await TicketMessage.findByPk(message.id, {
+            include: [{ model: User, as: 'sender', attributes: ['id', 'email', 'role', 'username', 'full_name'] }]
+        });
+
+        if (req.user.role === 'admin' || req.user.role === 'moderator') {
+            if (reference_type === 'Dispute') {
+                const dispute = await Dispute.findByPk(req.params.reference_id, {
+                    include: [{ model: Transaction, as: 'transaction' }]
+                });
+                if (dispute) {
+                    if (dispute.complainant_id) emitToUser(dispute.complainant_id, 'receive_new_message', msgWithSender || message);
+                    if (dispute.transaction) {
+                        if (dispute.transaction.buyer_id) emitToUser(dispute.transaction.buyer_id, 'receive_new_message', msgWithSender || message);
+                        if (dispute.transaction.seller_id) emitToUser(dispute.transaction.seller_id, 'receive_new_message', msgWithSender || message);
+                    }
+                }
+            } else if (reference_type === 'SupportTicket') {
+                const ticket = await SupportTicket.findByPk(req.params.reference_id);
+                if (ticket?.user_id) {
+                    emitToUser(ticket.user_id, 'receive_new_message', msgWithSender || message);
+                }
+            }
+        } else {
+            emitToAdmins('receive_new_message', msgWithSender || message);
+            if (reference_type === 'Dispute') {
+                const dispute = await Dispute.findByPk(req.params.reference_id, {
+                    include: [{ model: Transaction, as: 'transaction' }]
+                });
+                if (dispute && dispute.transaction) {
+                    const counterpartId = req.user.id === dispute.transaction.buyer_id 
+                        ? dispute.transaction.seller_id 
+                        : dispute.transaction.buyer_id;
+                    emitToUser(counterpartId, 'receive_new_message', msgWithSender || message);
                 }
             }
         }

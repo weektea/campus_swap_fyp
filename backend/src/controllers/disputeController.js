@@ -1,35 +1,43 @@
 import { Dispute, Transaction, User, Product, Category, SubCategory } from '../models/index.js';
 import { createNotification } from './notificationController.js';
+import { emitToAdmins } from '../config/socket.js';
 import { getCarbonValue } from './transactionController.js';
 
 const rollbackCarbonPoints = async (transaction) => {
     try {
-        const product = await Product.findByPk(transaction.product_id, {
-            include: [
-                { model: Category, as: 'categoryModel' },
-                { model: SubCategory, as: 'subcategoryModel' }
-            ]
-        });
-        if (product) {
-            const catName = product.categoryModel ? product.categoryModel.name : product.category;
-            const subCatName = product.subcategoryModel ? product.subcategoryModel.name : null;
-            const co2Saved = getCarbonValue(catName, subCatName, product);
-
-            if (transaction.buyer_id === transaction.seller_id) {
-                await User.decrement(
-                    { items_reused: 1, total_carbon_saved: co2Saved, carbon_saved_buyer: co2Saved, carbon_saved_seller: co2Saved },
-                    { where: { id: transaction.buyer_id } }
-                );
+        let co2Saved = 0.0;
+        if (transaction.awarded_carbon_points !== null && transaction.awarded_carbon_points !== undefined) {
+            co2Saved = parseFloat(transaction.awarded_carbon_points);
+        } else {
+            const product = await Product.findByPk(transaction.product_id, {
+                include: [
+                    { model: Category, as: 'categoryModel' },
+                    { model: SubCategory, as: 'subcategoryModel' }
+                ]
+            });
+            if (product) {
+                const catName = product.categoryModel ? product.categoryModel.name : product.category;
+                const subCatName = product.subcategoryModel ? product.subcategoryModel.name : null;
+                co2Saved = getCarbonValue(catName, subCatName, product);
             } else {
-                await User.decrement(
-                    { items_reused: 1, total_carbon_saved: co2Saved, carbon_saved_buyer: co2Saved },
-                    { where: { id: transaction.buyer_id } }
-                );
-                await User.decrement(
-                    { items_reused: 1, total_carbon_saved: co2Saved, carbon_saved_seller: co2Saved },
-                    { where: { id: transaction.seller_id } }
-                );
+                co2Saved = 2.5; // fallback
             }
+        }
+
+        if (transaction.buyer_id === transaction.seller_id) {
+            await User.decrement(
+                { items_reused: 1, total_carbon_saved: co2Saved, carbon_saved_buyer: co2Saved, carbon_saved_seller: co2Saved },
+                { where: { id: transaction.buyer_id } }
+            );
+        } else {
+            await User.decrement(
+                { items_reused: 1, total_carbon_saved: co2Saved, carbon_saved_buyer: co2Saved },
+                { where: { id: transaction.buyer_id } }
+            );
+            await User.decrement(
+                { items_reused: 1, total_carbon_saved: co2Saved, carbon_saved_seller: co2Saved },
+                { where: { id: transaction.seller_id } }
+            );
         }
     } catch (e) {
         console.error('Failed to rollback carbon points:', e);
@@ -95,6 +103,9 @@ export const createDispute = async (req, res) => {
             'System',
             dispute.id
         );
+
+        // Emit new dispute event to admin room
+        emitToAdmins('new_dispute_raised', dispute);
 
         res.status(201).json(dispute);
     } catch (error) {
@@ -227,27 +238,34 @@ export const arbitrateDispute = async (req, res) => {
                         { model: SubCategory, as: 'subcategoryModel' }
                     ]
                 });
+                
+                let co2Saved = 0.0;
                 if (product) {
                      const catName = product.categoryModel ? product.categoryModel.name : product.category;
                      const subCatName = product.subcategoryModel ? product.subcategoryModel.name : null;
-                     const co2Saved = getCarbonValue(catName, subCatName, product);
-                     
-                     if (transaction.buyer_id === transaction.seller_id) {
-                         await User.increment(
-                             { items_reused: 1, total_carbon_saved: co2Saved, carbon_saved_buyer: co2Saved, carbon_saved_seller: co2Saved },
-                             { where: { id: transaction.buyer_id } }
-                         );
-                     } else {
-                         await User.increment(
-                             { items_reused: 1, total_carbon_saved: co2Saved, carbon_saved_buyer: co2Saved },
-                             { where: { id: transaction.buyer_id } }
-                         );
-                         await User.increment(
-                             { items_reused: 1, total_carbon_saved: co2Saved, carbon_saved_seller: co2Saved },
-                             { where: { id: transaction.seller_id } }
-                         );
-                     }
+                     co2Saved = getCarbonValue(catName, subCatName, product);
                 }
+
+                transaction.awarded_carbon_points = co2Saved;
+                await transaction.save();
+
+                if (product) {
+                     if (transaction.buyer_id === transaction.seller_id) {
+                          await User.increment(
+                              { items_reused: 1, total_carbon_saved: co2Saved, carbon_saved_buyer: co2Saved, carbon_saved_seller: co2Saved },
+                              { where: { id: transaction.buyer_id } }
+                          );
+                      } else {
+                          await User.increment(
+                              { items_reused: 1, total_carbon_saved: co2Saved, carbon_saved_buyer: co2Saved },
+                              { where: { id: transaction.buyer_id } }
+                          );
+                          await User.increment(
+                              { items_reused: 1, total_carbon_saved: co2Saved, carbon_saved_seller: co2Saved },
+                              { where: { id: transaction.seller_id } }
+                          );
+                      }
+                 }
             }
         } else {
             return res.status(400).json({ error: 'winning_party must be Buyer or Seller' });

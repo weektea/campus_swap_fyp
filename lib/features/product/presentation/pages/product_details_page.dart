@@ -438,7 +438,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                                const Icon(Icons.eco, color: Colors.green, size: 18),
                                const SizedBox(width: 8),
                                Text(
-                                   "Eco-Impact: Saves ${widget.product.co2Saved}kg CO2",
+                                   "Eco-Impact: Saves ${widget.product.co2Saved} kg CO2e",
                                    style: GoogleFonts.outfit(color: Colors.green[800], fontWeight: FontWeight.bold, fontSize: 13)
                                )
                            ],

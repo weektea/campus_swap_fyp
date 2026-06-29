@@ -59,7 +59,7 @@ const Analytics = () => {
             ['Transactional Health', 'Suspended Accounts', metrics.suspended_users, 'total accounts deactivated'],
             [],
             ['Category Carbon Contribution'],
-            ['Category Name', 'Carbon Saved (kg)']
+            ['Category Name', 'Carbon Saved (kg CO2e)']
         ];
 
         (metrics.category_distribution || []).forEach(item => {
@@ -292,7 +292,7 @@ const Analytics = () => {
                                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                     ))}
                                 </Pie>
-                                <Tooltip formatter={(value) => [`${Number(value).toFixed(2)} kg`, 'Carbon Saved']} />
+                                <Tooltip formatter={(value) => [`${Number(value).toFixed(2)} kg CO2e`, 'Carbon Saved']} />
                             </PieChart>
                         </ResponsiveContainer>
                     </div>
@@ -354,7 +354,7 @@ const Analytics = () => {
                 <div className="card flex-col no-print" style={{ height: '280px' }}>
                     <h3 style={{ margin: '0 0 1rem 0', fontSize: '0.9rem' }}>GMV Sales Trend (RM)</h3>
                     <div style={{ flex: 1, width: '100%' }}>
-                        <ResponsiveContainer width="100%" height="100%">
+                        <ResponsiveContainer width="100%" height={220}>
                             <LineChart data={metrics?.daily_sales || []}>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
                                 <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#6b7280' }} dy={10} />

@@ -343,18 +343,24 @@ export const getSystemMetrics = async (req, res) => {
                 dayEntry.sales += amt;
             }
 
-            // Carbon (Prioritize SubCategory first)
-            let itemCarbon = 2.5; // Fallback
+            // Carbon (Prioritize Transaction Snapshot, fallback to DB factor)
+            let itemCarbon = 0.0;
             let catName = 'Other';
-
-            if (t.product && t.product.subcategoryModel && t.product.subcategoryModel.carbon_conversion_factor > 0) {
-                itemCarbon = parseFloat(t.product.subcategoryModel.carbon_conversion_factor);
-                catName = t.product.subcategoryModel.name;
-            } else if (t.product && t.product.categoryModel) {
-                itemCarbon = parseFloat(t.product.categoryModel.carbon_conversion_factor || 0);
+            if (t.product && t.product.categoryModel) {
                 catName = t.product.categoryModel.name;
             } else if (t.product && t.product.category) {
                 catName = t.product.category;
+            }
+
+            if (t.awarded_carbon_points !== null && t.awarded_carbon_points !== undefined) {
+                itemCarbon = parseFloat(t.awarded_carbon_points);
+            } else {
+                itemCarbon = 2.5; // Fallback
+                if (t.product && t.product.subcategoryModel && t.product.subcategoryModel.carbon_conversion_factor > 0) {
+                    itemCarbon = parseFloat(t.product.subcategoryModel.carbon_conversion_factor);
+                } else if (t.product && t.product.categoryModel) {
+                    itemCarbon = parseFloat(t.product.categoryModel.carbon_conversion_factor || 0);
+                }
             }
 
             estimatedCarbonSaved += itemCarbon;
@@ -859,8 +865,12 @@ export const getAllCategories = async (req, res) => {
 
 export const createCategory = async (req, res) => {
     try {
-        const { name, icon_name, carbon_conversion_factor } = req.body;
-        const cat = await Category.create({ name, icon_name, carbon_conversion_factor });
+        const { name, icon_name, icon_url, carbon_conversion_factor } = req.body;
+        const cat = await Category.create({ 
+            name, 
+            icon_url: icon_url || icon_name || 'box-icon', 
+            carbon_conversion_factor 
+        });
         res.json(cat);
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -979,6 +989,61 @@ export const getAlerts = async (req, res) => {
         }
 
         res.json({ alerts, total: alerts.reduce((acc, a) => acc + a.count, 0) });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+};
+
+export const updateCategory = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { name, icon_url, carbon_conversion_factor } = req.body;
+        const cat = await Category.findByPk(id);
+        if (!cat) return res.status(404).json({ error: 'Category not found' });
+
+        if (name !== undefined) cat.name = name;
+        if (icon_url !== undefined) cat.icon_url = icon_url;
+        if (carbon_conversion_factor !== undefined) cat.carbon_conversion_factor = parseFloat(carbon_conversion_factor) || 0.0;
+
+        await cat.save();
+        res.json(cat);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+};
+
+export const updateZone = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { name, description, latitude, longitude, is_active } = req.body;
+        const zone = await SafeMeetupZone.findByPk(id);
+        if (!zone) return res.status(404).json({ error: 'Zone not found' });
+
+        if (name !== undefined) zone.name = name;
+        if (description !== undefined) zone.description = description;
+        if (latitude !== undefined) zone.latitude = parseFloat(latitude);
+        if (longitude !== undefined) zone.longitude = parseFloat(longitude);
+        if (is_active !== undefined) zone.is_active = is_active;
+
+        await zone.save();
+        res.json(zone);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+};
+
+export const updateSubCategory = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { name, carbon_conversion_factor } = req.body;
+        const sub = await SubCategory.findByPk(id);
+        if (!sub) return res.status(404).json({ error: 'SubCategory not found' });
+
+        if (name !== undefined) sub.name = name;
+        if (carbon_conversion_factor !== undefined) sub.carbon_conversion_factor = parseFloat(carbon_conversion_factor) || 0.0;
+
+        await sub.save();
+        res.json(sub);
     } catch (e) {
         res.status(500).json({ error: e.message });
     }

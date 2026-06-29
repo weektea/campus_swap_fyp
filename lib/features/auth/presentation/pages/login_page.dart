@@ -4,6 +4,7 @@ import 'package:campus_swap/features/home/presentation/pages/home_page.dart';
 import 'package:campus_swap/features/auth/presentation/pages/register_page.dart';
 import 'package:campus_swap/core/session/user_session.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:campus_swap/core/services/socket_service.dart';
 
 import 'package:campus_swap/features/auth/presentation/pages/forgot_password_page.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -89,6 +90,9 @@ class _LoginPageState extends State<LoginPage> {
         session.username = response['user']['username'];
         session.fullName = response['user']['full_name'];
         session.role = response['user']['role'];
+
+        // Initialize real-time WebSocket connection
+        SocketService().init();
 
         if (mounted) {
            Navigator.pushReplacement(

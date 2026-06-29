@@ -132,14 +132,14 @@ class _SustainabilityDashboardPageState extends State<SustainabilityDashboardPag
               ),
               child: Column(
                 children: [
-                   _buildStatMetric("Total Impact", "${_co2Saved.toStringAsFixed(1)} kg", Icons.public),
+                   _buildStatMetric("Total Impact", "${_co2Saved.toStringAsFixed(1)} kg CO2e", Icons.public),
                    const SizedBox(height: 16),
                    Row(
                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                      children: [
-                        _buildStatMetric("Emissions Avoided\n(Bought)", "${_co2Bought.toStringAsFixed(1)} kg", Icons.shopping_bag_outlined, isSub: true),
+                        _buildStatMetric("Emissions Avoided\n(Bought)", "${_co2Bought.toStringAsFixed(1)} kg CO2e", Icons.shopping_bag_outlined, isSub: true),
                         Container(width: 1, height: 40, color: Colors.white30),
-                        _buildStatMetric("Waste Diverted\n(Sold)", "${_co2Sold.toStringAsFixed(1)} kg", Icons.sell_outlined, isSub: true),
+                        _buildStatMetric("Waste Diverted\n(Sold)", "${_co2Sold.toStringAsFixed(1)} kg CO2e", Icons.sell_outlined, isSub: true),
                      ],
                    ),
                    const SizedBox(height: 24),
@@ -243,7 +243,7 @@ class _SustainabilityDashboardPageState extends State<SustainabilityDashboardPag
                                 )
                             ),
                             const SizedBox(width: 12),
-                            SizedBox(width: 40, child: Text("${e.value.toStringAsFixed(1)}kg", style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade600), textAlign: TextAlign.right)),
+                            SizedBox(width: 80, child: Text("${e.value.toStringAsFixed(1)} kg CO2e", style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade600), textAlign: TextAlign.right)),
                         ]
                     ),
                   );
@@ -279,7 +279,7 @@ class _SustainabilityDashboardPageState extends State<SustainabilityDashboardPag
                           child: Text("#$rank", style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
                       ),
                       title: Text(name, style: GoogleFonts.outfit(fontWeight: isMe ? FontWeight.bold : FontWeight.normal, color: isMe ? Colors.green.shade700 : Colors.black87)),
-                      trailing: Text("${co2.toStringAsFixed(1)} kg", style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Colors.green.shade600)),
+                      trailing: Text("${co2.toStringAsFixed(1)} kg CO2e", style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Colors.green.shade600)),
                       tileColor: isMe ? Colors.green.shade50 : null,
                       shape: isMe ? RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)) : null,
                   );

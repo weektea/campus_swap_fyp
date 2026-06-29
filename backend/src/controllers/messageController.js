@@ -1,5 +1,6 @@
 import { Message, User } from '../models/index.js';
 import { Op } from 'sequelize';
+import { emitToUser } from '../config/socket.js';
 
 // Send Message
 export const sendMessage = async (req, res) => {
@@ -17,6 +18,15 @@ export const sendMessage = async (req, res) => {
             content,
             mapped_zone_id: mapped_zone_id || null // UC25: Safe Campus Zone Sharing
         });
+
+        // Fetch msg with sender details
+        const msgWithSender = await Message.findByPk(msg.id, {
+            include: [{ model: User, as: 'sender', attributes: ['id', 'username', 'full_name'] }]
+        });
+
+        // Emit message to receiver socket
+        emitToUser(receiver_id, 'receive_new_message', msgWithSender || msg);
+
         res.status(201).json(msg);
     } catch (error) {
         console.error('Send Msg Error:', error);

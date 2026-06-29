@@ -4,6 +4,8 @@ import 'core/theme/app_theme.dart';
 import 'features/auth/presentation/pages/login_page.dart';
 import 'core/theme/theme_provider.dart';
 import 'features/notification/presentation/pages/notifications_page.dart';
+import 'core/services/socket_service.dart';
+import 'core/session/user_session.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -12,6 +14,11 @@ void main() async {
          MaterialPageRoute(builder: (_) => const NotificationsPage())
       );
   });
+
+  if (UserSession().isLoggedIn) {
+    SocketService().init();
+  }
+
   runApp(const CampusSwapApp());
 }
 

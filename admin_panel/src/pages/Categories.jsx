@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Trash2, ChevronDown, ChevronRight, MapPin } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, ChevronRight, MapPin, Edit } from 'lucide-react';
 import api from '../services/api';
 
 const loadLeaflet = () => {
@@ -56,6 +56,7 @@ const Categories = () => {
     // Form States
     const [newCatName, setNewCatName] = useState('');
     const [newCatCarbon, setNewCatCarbon] = useState('');
+    const [newCatIcon, setNewCatIcon] = useState('box-icon');
     
     const [selectedParentId, setSelectedParentId] = useState(null);
     const [newSubName, setNewSubName] = useState('');
@@ -65,9 +66,31 @@ const Categories = () => {
     const [newZoneDesc, setNewZoneDesc] = useState('');
     const [newZoneLat, setNewZoneLat] = useState('');
     const [newZoneLng, setNewZoneLng] = useState('');
+    const [newZoneActive, setNewZoneActive] = useState(true);
+
+    const [isEditCatModalOpen, setIsEditCatModalOpen] = useState(false);
+    const [editCatId, setEditCatId] = useState(null);
+    const [editCatName, setEditCatName] = useState('');
+    const [editCatIcon, setEditCatIcon] = useState('');
+    const [editCatCarbon, setEditCatCarbon] = useState('');
+
+    const [isEditSubModalOpen, setIsEditSubModalOpen] = useState(false);
+    const [editSubId, setEditSubId] = useState(null);
+    const [editSubName, setEditSubName] = useState('');
+    const [editSubCarbon, setEditSubCarbon] = useState('');
+
+    const [isEditZoneModalOpen, setIsEditZoneModalOpen] = useState(false);
+    const [editZoneId, setEditZoneId] = useState(null);
+    const [editZoneName, setEditZoneName] = useState('');
+    const [editZoneDesc, setEditZoneDesc] = useState('');
+    const [editZoneLat, setEditZoneLat] = useState('');
+    const [editZoneLng, setEditZoneLng] = useState('');
+    const [editZoneActive, setEditZoneActive] = useState(true);
 
     const mapInstanceRef = useRef(null);
     const markerInstanceRef = useRef(null);
+    const editMapInstanceRef = useRef(null);
+    const editMarkerInstanceRef = useRef(null);
 
     useEffect(() => {
         const userStr = localStorage.getItem('user');
@@ -176,6 +199,95 @@ const Categories = () => {
             }
         }
     }, [newZoneLat, newZoneLng]);
+
+    // Load Leaflet and initialize map when edit modal opens
+    useEffect(() => {
+        if (!isEditZoneModalOpen) {
+            return;
+        }
+
+        let isMounted = true;
+        let mapTimeout = null;
+
+        loadLeaflet().then((L) => {
+            if (!isMounted || !isEditZoneModalOpen) return;
+
+            mapTimeout = setTimeout(() => {
+                const mapEl = document.getElementById('edit-zone-map');
+                if (!mapEl) return;
+
+                L.Icon.Default.mergeOptions({
+                    iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+                    iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+                    shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+                });
+
+                const initLat = parseFloat(editZoneLat) || 5.457;
+                const initLng = parseFloat(editZoneLng) || 100.286;
+
+                const map = L.map('edit-zone-map').setView([initLat, initLng], 15);
+                editMapInstanceRef.current = map;
+
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    maxZoom: 19,
+                    attribution: '&copy; OpenStreetMap contributors'
+                }).addTo(map);
+
+                const marker = L.marker([initLat, initLng], { draggable: true }).addTo(map);
+                editMarkerInstanceRef.current = marker;
+
+                // Handle marker drag
+                marker.on('dragend', (e) => {
+                    const position = marker.getLatLng();
+                    setEditZoneLat(position.lat.toFixed(6));
+                    setEditZoneLng(position.lng.toFixed(6));
+                });
+
+                // Handle map clicks
+                map.on('click', (e) => {
+                    const { lat, lng } = e.latlng;
+                    marker.setLatLng([lat, lng]);
+                    setEditZoneLat(lat.toFixed(6));
+                    setEditZoneLng(lng.toFixed(6));
+                });
+
+                setTimeout(() => {
+                    if (editMapInstanceRef.current) {
+                        editMapInstanceRef.current.invalidateSize();
+                    }
+                }, 200);
+
+            }, 100);
+        }).catch(err => {
+            console.error('Failed to load Leaflet:', err);
+        });
+
+        return () => {
+            isMounted = false;
+            if (mapTimeout) clearTimeout(mapTimeout);
+            if (editMapInstanceRef.current) {
+                editMapInstanceRef.current.remove();
+                editMapInstanceRef.current = null;
+                editMarkerInstanceRef.current = null;
+            }
+        };
+    }, [isEditZoneModalOpen]);
+
+    // Update edit map/marker when manual inputs change
+    useEffect(() => {
+        if (!editMapInstanceRef.current || !editMarkerInstanceRef.current) return;
+
+        const lat = parseFloat(editZoneLat);
+        const lng = parseFloat(editZoneLng);
+
+        if (!isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+            const currentLatLng = editMarkerInstanceRef.current.getLatLng();
+            if (Math.abs(currentLatLng.lat - lat) > 0.00001 || Math.abs(currentLatLng.lng - lng) > 0.00001) {
+                editMarkerInstanceRef.current.setLatLng([lat, lng]);
+                editMapInstanceRef.current.panTo([lat, lng]);
+            }
+        }
+    }, [editZoneLat, editZoneLng]);
 
     const allZonesMapRef = useRef(null);
     const allZonesMarkersRef = useRef({});
@@ -290,14 +402,38 @@ const Categories = () => {
         try {
             await api.post('/admin/categories', {
                 name: newCatName,
+                icon_url: newCatIcon,
                 carbon_conversion_factor: parseFloat(newCatCarbon) || 0.0
             });
             setIsAddCatModalOpen(false);
             setNewCatName('');
             setNewCatCarbon('');
+            setNewCatIcon('box-icon');
             fetchData();
         } catch (err) {
             alert(err.response?.data?.error || 'Failed to add category');
+        }
+    };
+
+    const openEditCatModal = (cat) => {
+        setEditCatId(cat.id);
+        setEditCatName(cat.name);
+        setEditCatIcon(cat.icon_url || cat.icon_name || 'box-icon');
+        setEditCatCarbon(cat.carbon_conversion_factor.toString());
+        setIsEditCatModalOpen(true);
+    };
+
+    const handleEditCategory = async () => {
+        try {
+            await api.put(`/admin/categories/${editCatId}`, {
+                name: editCatName,
+                icon_url: editCatIcon,
+                carbon_conversion_factor: parseFloat(editCatCarbon) || 0.0
+            });
+            setIsEditCatModalOpen(false);
+            fetchData();
+        } catch (err) {
+            alert(err.response?.data?.error || 'Failed to update category');
         }
     };
 
@@ -345,6 +481,26 @@ const Categories = () => {
         }
     };
 
+    const openEditSubModal = (sub) => {
+        setEditSubId(sub.id);
+        setEditSubName(sub.name);
+        setEditSubCarbon(sub.carbon_conversion_factor.toString());
+        setIsEditSubModalOpen(true);
+    };
+
+    const handleEditSubCategory = async () => {
+        try {
+            await api.put(`/admin/subcategories/${editSubId}`, {
+                name: editSubName,
+                carbon_conversion_factor: parseFloat(editSubCarbon) || 0.0
+            });
+            setIsEditSubModalOpen(false);
+            fetchData();
+        } catch (err) {
+            alert(err.response?.data?.error || 'Failed to update subcategory');
+        }
+    };
+
     // Zone Handlers
     const handleAddZone = async () => {
         try {
@@ -353,16 +509,43 @@ const Categories = () => {
                 description: newZoneDesc,
                 latitude: newZoneLat,
                 longitude: newZoneLng,
-                is_active: true
+                is_active: newZoneActive
             });
             setIsAddZoneModalOpen(false);
             setNewZoneName('');
             setNewZoneDesc('');
             setNewZoneLat('');
             setNewZoneLng('');
+            setNewZoneActive(true);
             fetchData();
         } catch (err) {
             alert(err.response?.data?.error || 'Failed to add zone');
+        }
+    };
+
+    const openEditZoneModal = (zone) => {
+        setEditZoneId(zone.id);
+        setEditZoneName(zone.name);
+        setEditZoneDesc(zone.description || '');
+        setEditZoneLat(zone.latitude.toString());
+        setEditZoneLng(zone.longitude.toString());
+        setEditZoneActive(zone.is_active !== false);
+        setIsEditZoneModalOpen(true);
+    };
+
+    const handleEditZone = async () => {
+        try {
+            await api.put(`/admin/zones/${editZoneId}`, {
+                name: editZoneName,
+                description: editZoneDesc,
+                latitude: parseFloat(editZoneLat),
+                longitude: parseFloat(editZoneLng),
+                is_active: editZoneActive
+            });
+            setIsEditZoneModalOpen(false);
+            fetchData();
+        } catch (err) {
+            alert(err.response?.data?.error || 'Failed to update zone');
         }
     };
 
@@ -419,7 +602,7 @@ const Categories = () => {
                                                     {cat.subcategories?.length || 0} sub
                                                 </span>
                                             </td>
-                                            <td>{cat.carbon_conversion_factor} kg / item</td>
+                                            <td>{cat.carbon_conversion_factor} kg CO2e / item</td>
                                             {isAdmin && (
                                                 <td style={{ textAlign: 'right' }}>
                                                     <button 
@@ -427,6 +610,12 @@ const Categories = () => {
                                                         onClick={(e) => { e.stopPropagation(); openAddSubModal(cat.id); }}
                                                     >
                                                         + SubCategory
+                                                    </button>
+                                                    <button 
+                                                        style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', marginRight: '16px' }}
+                                                        onClick={(e) => { e.stopPropagation(); openEditCatModal(cat); }}
+                                                    >
+                                                        <Edit size={18} />
                                                     </button>
                                                     <button 
                                                         style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer' }}
@@ -447,9 +636,15 @@ const Categories = () => {
                                                         {sub.name}
                                                     </div>
                                                 </td>
-                                                <td style={{ color: '#16a34a', fontWeight: 'bold' }}>{sub.carbon_conversion_factor} kg</td>
+                                                <td style={{ color: '#16a34a', fontWeight: 'bold' }}>{sub.carbon_conversion_factor} kg CO2e</td>
                                                 {isAdmin && (
                                                     <td style={{ textAlign: 'right' }}>
+                                                        <button 
+                                                            style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', marginRight: '16px' }}
+                                                            onClick={() => openEditSubModal(sub)}
+                                                        >
+                                                            <Edit size={16} />
+                                                        </button>
                                                         <button 
                                                             style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer' }}
                                                             onClick={() => handleDeleteSubCategory(sub.id, sub.name)}
@@ -518,6 +713,11 @@ const Categories = () => {
                                             <td>
                                                 <div style={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px' }}>
                                                     <MapPin size={14} color="var(--primary)"/> {zone.name}
+                                                    {zone.is_active === false && (
+                                                        <span style={{ fontSize: '0.65rem', background: '#fee2e2', color: '#dc2626', padding: '1px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
+                                                            Inactive
+                                                        </span>
+                                                    )}
                                                 </div>
                                                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>{zone.description}</div>
                                                 <div style={{ fontSize: '0.7rem', color: '#9ca3af', marginTop: '2px', fontFamily: 'monospace' }}>
@@ -526,6 +726,12 @@ const Categories = () => {
                                             </td>
                                             {isAdmin && (
                                                 <td style={{ textAlign: 'right' }}>
+                                                    <button 
+                                                        style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', marginRight: '16px' }}
+                                                        onClick={(e) => { e.stopPropagation(); openEditZoneModal(zone); }}
+                                                    >
+                                                        <Edit size={18} />
+                                                    </button>
                                                     <button 
                                                         style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer' }}
                                                         onClick={(e) => { e.stopPropagation(); handleDeleteZone(zone.id); }}
@@ -549,11 +755,33 @@ const Categories = () => {
                 <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}>
                     <div className="card" style={{ width: '400px' }}>
                         <h2 style={{ marginTop: 0 }}>Add Category</h2>
-                        <input type="text" className="input" value={newCatName} onChange={e => setNewCatName(e.target.value)} placeholder="Category Name" />
-                        <input type="number" className="input" value={newCatCarbon} onChange={e => setNewCatCarbon(e.target.value)} placeholder="Fallback Carbon Offset (kg)" />
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '600', marginBottom: '4px', color: '#4b5563' }}>Category Name</label>
+                        <input type="text" className="input" value={newCatName} onChange={e => setNewCatName(e.target.value)} placeholder="Category Name (e.g. Books)" />
+                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '600', marginBottom: '4px', color: '#4b5563' }}>Icon Name/URL</label>
+                        <input type="text" className="input" value={newCatIcon} onChange={e => setNewCatIcon(e.target.value)} placeholder="Icon Name/URL (e.g. book-icon)" />
+                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '600', marginBottom: '4px', color: '#4b5563' }}>Fallback Carbon Offset (kg CO2e)</label>
+                        <input type="number" className="input" value={newCatCarbon} onChange={e => setNewCatCarbon(e.target.value)} placeholder="Fallback Carbon Offset (kg CO2e)" />
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '16px' }}>
                             <button className="btn btn-outline" onClick={() => setIsAddCatModalOpen(false)}>Cancel</button>
                             <button className="btn" onClick={handleAddCategory}>Add Category</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {isEditCatModalOpen && (
+                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}>
+                    <div className="card" style={{ width: '400px' }}>
+                        <h2 style={{ marginTop: 0 }}>Edit Category</h2>
+                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '600', marginBottom: '4px', color: '#4b5563' }}>Category Name</label>
+                        <input type="text" className="input" value={editCatName} onChange={e => setEditCatName(e.target.value)} placeholder="Category Name" />
+                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '600', marginBottom: '4px', color: '#4b5563' }}>Icon Name/URL</label>
+                        <input type="text" className="input" value={editCatIcon} onChange={e => setEditCatIcon(e.target.value)} placeholder="Icon Name/URL (e.g. shirt-icon)" />
+                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '600', marginBottom: '4px', color: '#4b5563' }}>Carbon Offset (kg CO2e)</label>
+                        <input type="number" className="input" value={editCatCarbon} onChange={e => setEditCatCarbon(e.target.value)} placeholder="Fallback Carbon Offset (kg CO2e)" />
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '16px' }}>
+                            <button className="btn btn-outline" onClick={() => setIsEditCatModalOpen(false)}>Cancel</button>
+                            <button className="btn" onClick={handleEditCategory}>Save Changes</button>
                         </div>
                     </div>
                 </div>
@@ -563,11 +791,29 @@ const Categories = () => {
                 <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}>
                     <div className="card" style={{ width: '400px' }}>
                         <h2 style={{ marginTop: 0 }}>Add SubCategory</h2>
+                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '600', marginBottom: '4px', color: '#4b5563' }}>SubCategory Name</label>
                         <input type="text" className="input" value={newSubName} onChange={e => setNewSubName(e.target.value)} placeholder="SubCategory Name (e.g. T-Shirts)" />
-                        <input type="number" className="input" value={newSubCarbon} onChange={e => setNewSubCarbon(e.target.value)} placeholder="Carbon Offset Factor (kg) - e.g. 2.5" />
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '600', marginBottom: '4px', color: '#4b5563' }}>Carbon Offset Factor (kg CO2e)</label>
+                        <input type="number" className="input" value={newSubCarbon} onChange={e => setNewSubCarbon(e.target.value)} placeholder="Carbon Offset Factor (kg CO2e) - e.g. 2.5" />
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '16px' }}>
                             <button className="btn btn-outline" onClick={() => setIsAddSubModalOpen(false)}>Cancel</button>
                             <button className="btn" onClick={handleAddSubCategory}>Add SubCategory</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {isEditSubModalOpen && (
+                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}>
+                    <div className="card" style={{ width: '400px' }}>
+                        <h2 style={{ marginTop: 0 }}>Edit SubCategory</h2>
+                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '600', marginBottom: '4px', color: '#4b5563' }}>SubCategory Name</label>
+                        <input type="text" className="input" value={editSubName} onChange={e => setEditSubName(e.target.value)} placeholder="SubCategory Name" />
+                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '600', marginBottom: '4px', color: '#4b5563' }}>Carbon Offset Factor (kg CO2e)</label>
+                        <input type="number" className="input" value={editSubCarbon} onChange={e => setEditSubCarbon(e.target.value)} placeholder="Carbon Offset Factor (kg CO2e)" />
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '16px' }}>
+                            <button className="btn btn-outline" onClick={() => setIsEditSubModalOpen(false)}>Cancel</button>
+                            <button className="btn" onClick={handleEditSubCategory}>Save Changes</button>
                         </div>
                     </div>
                 </div>
@@ -599,6 +845,10 @@ const Categories = () => {
                                         <input type="number" className="input" value={newZoneLng} onChange={e => setNewZoneLng(e.target.value)} placeholder="e.g. 100.2863" step="any" style={{ width: '100%', margin: 0 }} />
                                     </div>
                                 </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
+                                    <input type="checkbox" id="add-zone-active" checked={newZoneActive} onChange={e => setNewZoneActive(e.target.checked)} />
+                                    <label htmlFor="add-zone-active" style={{ fontSize: '0.9rem', fontWeight: '600', color: '#4b5563', cursor: 'pointer' }}>Active (Show on Mobile App)</label>
+                                </div>
                             </div>
                             
                             {/* Right Side: Map */}
@@ -626,6 +876,68 @@ const Categories = () => {
                         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '24px', borderTop: '1px solid #e5e7eb', paddingTop: '16px' }}>
                             <button className="btn btn-outline" onClick={() => setIsAddZoneModalOpen(false)}>Cancel</button>
                             <button className="btn" onClick={handleAddZone} disabled={!newZoneName || !newZoneLat || !newZoneLng}>Create Zone</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {isEditZoneModalOpen && (
+                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}>
+                    <div className="card" style={{ width: '760px', maxWidth: '95vw', padding: '24px' }}>
+                        <h2 style={{ marginTop: 0, marginBottom: '20px', fontSize: '1.5rem', fontWeight: '700' }}>Edit Safe Meetup Zone</h2>
+                        
+                        <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
+                            {/* Left Side: Form inputs */}
+                            <div style={{ flex: '1 1 320px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '600', marginBottom: '4px', color: '#4b5563' }}>Zone Name</label>
+                                    <input type="text" className="input" value={editZoneName} onChange={e => setEditZoneName(e.target.value)} placeholder="e.g. Main Library" style={{ width: '100%', margin: 0 }} />
+                                </div>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '600', marginBottom: '4px', color: '#4b5563' }}>Description or Instructions</label>
+                                    <textarea className="input" style={{ resize: 'none', height: '80px', width: '100%', margin: 0 }} value={editZoneDesc} onChange={e => setEditZoneDesc(e.target.value)} placeholder="Description or Instructions..." />
+                                </div>
+                                <div style={{ display: 'flex', gap: '12px' }}>
+                                    <div style={{ flex: 1 }}>
+                                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '600', marginBottom: '4px', color: '#4b5563' }}>Latitude</label>
+                                        <input type="number" className="input" value={editZoneLat} onChange={e => setEditZoneLat(e.target.value)} placeholder="e.g. 5.4578" step="any" style={{ width: '100%', margin: 0 }} />
+                                    </div>
+                                    <div style={{ flex: 1 }}>
+                                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '600', marginBottom: '4px', color: '#4b5563' }}>Longitude</label>
+                                        <input type="number" className="input" value={editZoneLng} onChange={e => setEditZoneLng(e.target.value)} placeholder="e.g. 100.2863" step="any" style={{ width: '100%', margin: 0 }} />
+                                    </div>
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
+                                    <input type="checkbox" id="edit-zone-active" checked={editZoneActive} onChange={e => setEditZoneActive(e.target.checked)} />
+                                    <label htmlFor="edit-zone-active" style={{ fontSize: '0.9rem', fontWeight: '600', color: '#4b5563', cursor: 'pointer' }}>Active (Show on Mobile App)</label>
+                                </div>
+                            </div>
+                            
+                            {/* Right Side: Map */}
+                            <div style={{ flex: '1 1 320px', display: 'flex', flexDirection: 'column' }}>
+                                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '600', marginBottom: '6px', color: '#4b5563' }}>
+                                    Map Location (Click on map or drag pin)
+                                </label>
+                                <div 
+                                    id="edit-zone-map" 
+                                    style={{ 
+                                        width: '100%', 
+                                        height: '220px', 
+                                        borderRadius: '8px', 
+                                        border: '1px solid #d1d5db',
+                                        overflow: 'hidden',
+                                        zIndex: 1
+                                    }}
+                                ></div>
+                                <span style={{ fontSize: '0.75rem', color: '#9ca3af', marginTop: '6px', fontStyle: 'italic' }}>
+                                    Click anywhere on the map above to select the coordinates, or manually edit latitude/longitude.
+                                </span>
+                            </div>
+                        </div>
+                        
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '24px', borderTop: '1px solid #e5e7eb', paddingTop: '16px' }}>
+                            <button className="btn btn-outline" onClick={() => setIsEditZoneModalOpen(false)}>Cancel</button>
+                            <button className="btn" onClick={handleEditZone} disabled={!editZoneName || !editZoneLat || !editZoneLng}>Save Changes</button>
                         </div>
                     </div>
                 </div>

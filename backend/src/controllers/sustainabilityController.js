@@ -59,7 +59,9 @@ export const getImpactByCategory = async (req, res) => {
                 const catName = t.product.categoryModel ? t.product.categoryModel.name : (t.product.category || 'Others');
                 const subCatName = t.product.subcategoryModel ? t.product.subcategoryModel.name : null;
                 
-                const carbonValue = getCarbonValue(catName, subCatName, t.product);
+                const carbonValue = t.awarded_carbon_points !== null && t.awarded_carbon_points !== undefined
+                    ? parseFloat(t.awarded_carbon_points)
+                    : getCarbonValue(catName, subCatName, t.product);
                 
                 if (!categoryMap[catName]) {
                     categoryMap[catName] = 0;

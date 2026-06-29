@@ -61,8 +61,12 @@ class _MyTransactionsPageState extends State<MyTransactionsPage> with SingleTick
 
   @override
   Widget build(BuildContext context) {
-    final filteredBuying = _filterStatus == 'All' ? _buyingTransactions : _buyingTransactions.where((t) => t['status'] == _filterStatus).toList();
-    final filteredSelling = _filterStatus == 'All' ? _sellingTransactions : _sellingTransactions.where((t) => t['status'] == _filterStatus).toList();
+    final filteredBuying = _filterStatus == 'All' 
+        ? _buyingTransactions 
+        : _buyingTransactions.where((t) => t['status']?.toString().toLowerCase() == _filterStatus.toLowerCase()).toList();
+    final filteredSelling = _filterStatus == 'All' 
+        ? _sellingTransactions 
+        : _sellingTransactions.where((t) => t['status']?.toString().toLowerCase() == _filterStatus.toLowerCase()).toList();
 
     return Scaffold(
       appBar: AppBar(
@@ -225,7 +229,7 @@ class _MyTransactionsPageState extends State<MyTransactionsPage> with SingleTick
                               ),
                             ),
                           ),
-                          if (status == 'Completed' && (isBuying ? item['rating_from_buyer'] == null : item['rating_from_seller'] == null)) ...[
+                          if (status.toString().toLowerCase() == 'completed' && (isBuying ? item['rating_from_buyer'] == null : item['rating_from_seller'] == null)) ...[
                             const SizedBox(width: 12),
                             Expanded(
                               child: SizedBox(
@@ -267,13 +271,13 @@ class _MyTransactionsPageState extends State<MyTransactionsPage> with SingleTick
   }
 
   Color _getStatusColor(String status) {
-      switch(status) {
-          case 'Pending': return Colors.orange;
-          case 'Scheduled': return Colors.blue;
-          case 'To Confirm': return Colors.amber;
-          case 'Completed': return Colors.green;
-          case 'Cancelled': return Colors.red;
-          case 'Disputed': return Colors.purple;
+      switch(status.toString().toLowerCase()) {
+          case 'pending': return Colors.orange;
+          case 'scheduled': return Colors.blue;
+          case 'to confirm': return Colors.amber;
+          case 'completed': return Colors.green;
+          case 'cancelled': return Colors.red;
+          case 'disputed': return Colors.purple;
           default: return Colors.grey;
       }
   }

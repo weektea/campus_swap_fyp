@@ -25,13 +25,16 @@ router.delete('/reviews/:id', authenticateToken, isAdmin, adminController.delete
 // Manage Categories & Zones
 router.get('/categories', authenticateToken, isAdminOrModerator, adminController.getAllCategories);
 router.post('/categories', authenticateToken, isAdmin, adminController.createCategory);
+router.put('/categories/:id', authenticateToken, isAdmin, adminController.updateCategory);
 router.delete('/categories/:id', authenticateToken, isAdmin, adminController.deleteCategory);
 
 router.post('/subcategories', authenticateToken, isAdmin, adminController.createSubCategory);
+router.put('/subcategories/:id', authenticateToken, isAdmin, adminController.updateSubCategory);
 router.delete('/subcategories/:id', authenticateToken, isAdmin, adminController.deleteSubCategory);
 
 router.get('/zones', authenticateToken, isAdminOrModerator, adminController.getAllZones);
 router.post('/zones', authenticateToken, isAdmin, adminController.createZone);
+router.put('/zones/:id', authenticateToken, isAdmin, adminController.updateZone);
 router.delete('/zones/:id', authenticateToken, isAdmin, adminController.deleteZone);
 
 // Manage Reports and Disputes

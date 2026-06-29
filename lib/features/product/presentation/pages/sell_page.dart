@@ -32,6 +32,43 @@ class _SellPageState extends State<SellPage> {
 
   static const int _maxImages = 9;
 
+  Map<String, List<String>> _categoriesMap = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _categoriesMap = Map.from(_fallbackCategoriesMap);
+    _loadCategories();
+  }
+
+  Future<void> _loadCategories() async {
+    try {
+      final apiClient = ApiClient();
+      final response = await apiClient.get('/categories');
+      if (response is List) {
+        final Map<String, List<String>> loadedMap = {};
+        for (var cat in response) {
+          final String catName = cat['name'] as String;
+          final List<dynamic> subs = cat['subcategories'] as List<dynamic>;
+          final List<String> subNames = subs.map((s) => s['name'] as String).toList();
+          if (!subNames.contains('Others')) {
+            subNames.add('Others');
+          }
+          loadedMap[catName] = subNames;
+        }
+        if (loadedMap.isNotEmpty) {
+          if (mounted) {
+            setState(() {
+              _categoriesMap = loadedMap;
+            });
+          }
+        }
+      }
+    } catch (e) {
+      // Bypassed: keep using fallback categories
+    }
+  }
+
   Future<void> _pickImages() async {
     if (_imageFiles.length >= _maxImages) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Maximum $_maxImages images allowed.')));
@@ -89,8 +126,18 @@ class _SellPageState extends State<SellPage> {
       
       setState(() {
         _isAnalyzing = false;
-        _selectedCategory = result['category'] ?? 'Others';
-        _selectedSubCategory = result['sub_category'] ?? 'Others';
+        final mlCategory = result['category'] ?? 'Others';
+        final mlSubCategory = result['sub_category'] ?? 'Others';
+
+        // Add to map dynamically if it doesn't exist to ensure co-existence
+        if (!_categoriesMap.containsKey(mlCategory)) {
+          _categoriesMap[mlCategory] = [mlSubCategory];
+        } else if (!_categoriesMap[mlCategory]!.contains(mlSubCategory)) {
+          _categoriesMap[mlCategory]!.add(mlSubCategory);
+        }
+
+        _selectedCategory = mlCategory;
+        _selectedSubCategory = mlSubCategory;
         
         // Fulfill UC07: Auto-fill Title and Price based on category if empty
         if (_titleController.text.isEmpty) {
@@ -118,7 +165,7 @@ class _SellPageState extends State<SellPage> {
     }
   }
 
-   final Map<String, List<String>> _categoriesMap = {
+  static final Map<String, List<String>> _fallbackCategoriesMap = {
      'Books & Study Materials': ['Books', 'Calculators', 'Notes & Past Papers', 'Others'],
      'Electronics & Gadgets': ['Audio', 'Laptops', 'Others', 'PC Accessories', 'Smartphones', 'Tablets'],
      'Fashion & Accessories': ['Bags & Luggage', 'Clothing', 'Fashion Accessories', 'Shoes'],

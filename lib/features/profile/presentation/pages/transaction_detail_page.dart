@@ -6,6 +6,7 @@ import 'package:campus_swap/features/chat/presentation/pages/chat_detail_page.da
 import 'package:campus_swap/features/profile/presentation/pages/open_dispute_page.dart';
 import 'package:campus_swap/features/profile/presentation/pages/rate_experience_page.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:campus_swap/core/services/socket_service.dart';
 
 class TransactionDetailPage extends StatefulWidget {
   final String transactionId;
@@ -25,9 +26,39 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
   bool _isUpdatingStatus = false;
 
   @override
+  void dispose() {
+    SocketService().socket?.off('transaction_status_updated');
+    super.dispose();
+  }
+
+  @override
   void initState() {
     super.initState();
     _fetchTransactionDetails();
+
+    // Listen for WebSocket status updates dynamically
+    SocketService().socket?.on('transaction_status_updated', (data) {
+      if (mounted && data != null) {
+        final txId = data['transaction_id']?.toString() ?? data['id']?.toString();
+        if (txId == widget.transactionId.toString()) {
+          _fetchTransactionDetailsSilently();
+        }
+      }
+    });
+  }
+
+  Future<void> _fetchTransactionDetailsSilently() async {
+    try {
+      final apiClient = ApiClient();
+      final res = await apiClient.get('/transactions/${widget.transactionId}');
+      if (mounted) {
+        setState(() {
+          _transaction = res;
+        });
+      }
+    } catch (e) {
+      // Silently ignore background failures
+    }
   }
 
   Future<void> _fetchTransactionDetails() async {
@@ -417,7 +448,7 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
                                               side: BorderSide(color: Colors.red.withValues(alpha: 0.5)),
                                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                           ),
-                                          child: Text('Decline', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+                                          child: Text('Decline Request', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
                                       ),
                                   ),
                               ),
@@ -552,7 +583,7 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
                                   side: BorderSide(color: Colors.red.withValues(alpha: 0.5)),
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                               ),
-                              child: Text('Cancel Transaction', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 16)),
+                              child: Text('Cancel Order', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 16)),
                           ),
                       ),
                   ],
@@ -630,13 +661,13 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
                                   child: SizedBox(
                                       height: 48,
                                       child: OutlinedButton(
-                                          onPressed: () => _updateStatus('Cancelled'),
+                                          onPressed: () => _updateStatus('Disputed'),
                                           style: OutlinedButton.styleFrom(
                                               foregroundColor: Colors.red,
                                               side: BorderSide(color: Colors.red.withValues(alpha: 0.5)),
                                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                           ),
-                                          child: Text('Decline & Cancel', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+                                          child: Text('Report Issue / Dispute Payment', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 13)),
                                       ),
                                   ),
                               ),
@@ -650,7 +681,7 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
                                               backgroundColor: Theme.of(context).colorScheme.primary,
                                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                           ),
-                                          child: Text('Verify & Complete', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
+                                          child: Text('Confirm & Complete', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
                                       ),
                                   ),
                               ),

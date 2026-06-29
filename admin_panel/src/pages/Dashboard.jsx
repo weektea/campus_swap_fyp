@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { TrendingUp, Circle, Clock } from 'lucide-react';
 import api from '../services/api';
+import { useSocket } from '../context/SocketContext';
 
 const Dashboard = () => {
     const navigate = useNavigate();
@@ -9,70 +10,88 @@ const Dashboard = () => {
     const [tasks, setTasks] = useState([]);
     const [myLockedTasks, setMyLockedTasks] = useState(0);
     const [loading, setLoading] = useState(true);
+    const socket = useSocket();
+
+    const fetchDashboardData = async () => {
+        try {
+            // Catch errors for each request so one failure doesn't kill the dashboard
+            let metricsData = {}, ticketsData = [], reportsData = [];
+            try {
+                const res = await api.get('/admin/metrics');
+                metricsData = res.data;
+            } catch (e) { console.error(e); }
+
+            try {
+                const res = await api.get('/admin/tickets');
+                ticketsData = res.data;
+            } catch (e) { console.error(e); }
+
+            try {
+                const res = await api.get('/admin/reports');
+                reportsData = res.data;
+            } catch (e) { console.error(e); }
+            
+            setMetrics(metricsData);
+            
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            let lockedCount = 0;
+
+            const combined = [
+                ...ticketsData.map(t => {
+                    if (t.lockedByModeratorId === user.id) lockedCount++;
+                    return {
+                        id: `TKT-${t.id}`,
+                        type: 'Support Ticket',
+                        target: `User: ${t.student?.email || 'Unknown'}`,
+                        submittedAt: t.createdAt,
+                        status: t.status,
+                        lockedBy: t.lockedByModeratorId,
+                        raw: t
+                    };
+                }),
+                ...reportsData.map(r => ({
+                    id: `REP-${r.id}`,
+                    type: 'Report',
+                    target: r.product ? `Listing: ${r.product.title}` : 'General',
+                    submittedAt: r.createdAt,
+                    status: r.status,
+                    lockedBy: null,
+                    raw: r
+                }))
+            ];
+
+            setMyLockedTasks(lockedCount);
+
+            combined.sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
+            setTasks(combined.slice(0, 5));
+            
+            setLoading(false);
+        } catch (err) {
+            console.error('Failed to fetch dashboard data:', err);
+            setLoading(false);
+        }
+    };
 
     useEffect(() => {
-        const fetchDashboardData = async () => {
-            try {
-                // Catch errors for each request so one failure doesn't kill the dashboard
-                let metricsData = {}, ticketsData = [], reportsData = [];
-                try {
-                    const res = await api.get('/admin/metrics');
-                    metricsData = res.data;
-                } catch (e) { console.error(e); }
-
-                try {
-                    const res = await api.get('/admin/tickets');
-                    ticketsData = res.data;
-                } catch (e) { console.error(e); }
-
-                try {
-                    const res = await api.get('/admin/reports');
-                    reportsData = res.data;
-                } catch (e) { console.error(e); }
-                
-                setMetrics(metricsData);
-                
-                const user = JSON.parse(localStorage.getItem('user') || '{}');
-                let lockedCount = 0;
-
-                const combined = [
-                    ...ticketsData.map(t => {
-                        if (t.lockedByModeratorId === user.id) lockedCount++;
-                        return {
-                            id: `TKT-${t.id}`,
-                            type: 'Support Ticket',
-                            target: `User: ${t.student?.email || 'Unknown'}`,
-                            submittedAt: t.createdAt,
-                            status: t.status,
-                            lockedBy: t.lockedByModeratorId,
-                            raw: t
-                        };
-                    }),
-                    ...reportsData.map(r => ({
-                        id: `REP-${r.id}`,
-                        type: 'Report',
-                        target: r.product ? `Listing: ${r.product.title}` : 'General',
-                        submittedAt: r.createdAt,
-                        status: r.status,
-                        lockedBy: null,
-                        raw: r
-                    }))
-                ];
-
-                setMyLockedTasks(lockedCount);
-
-                combined.sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
-                setTasks(combined.slice(0, 5));
-                
-                setLoading(false);
-            } catch (err) {
-                console.error('Failed to fetch dashboard data:', err);
-                setLoading(false);
-            }
-        };
-
         fetchDashboardData();
     }, []);
+
+    useEffect(() => {
+        if (!socket) return;
+
+        const handleRealtimeUpdate = () => {
+            console.log('Dashboard: WebSocket update event received. Refreshing metrics.');
+            fetchDashboardData();
+        };
+
+        socket.on('new_dispute_raised', handleRealtimeUpdate);
+        socket.on('new_ticket_submitted', handleRealtimeUpdate);
+
+        return () => {
+            socket.off('new_dispute_raised', handleRealtimeUpdate);
+            socket.off('new_ticket_submitted', handleRealtimeUpdate);
+        };
+    }, [socket]);
 
     if (loading) return <div className="p-8 text-center text-gray-500">Loading metrics...</div>;
 

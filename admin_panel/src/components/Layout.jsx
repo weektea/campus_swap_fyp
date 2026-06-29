@@ -18,6 +18,7 @@ import {
     BrainCircuit
 } from 'lucide-react';
 import api from '../services/api';
+import { useSocket } from '../context/SocketContext';
 
 const Layout = ({ children }) => {
     const navigate = useNavigate();
@@ -37,22 +38,40 @@ const Layout = ({ children }) => {
 
     const [alerts, setAlerts] = useState({ items: [], total: 0 });
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    const socket = useSocket();
+
+    const fetchAlerts = async () => {
+        try {
+            const res = await api.get('/admin/alerts');
+            setAlerts({ items: res.data.alerts, total: res.data.total });
+        } catch (err) {
+            console.error('Failed to fetch alerts', err);
+        }
+    };
 
     React.useEffect(() => {
         if (!user) return;
-        const fetchAlerts = async () => {
-            try {
-                const res = await api.get('/admin/alerts');
-                setAlerts({ items: res.data.alerts, total: res.data.total });
-            } catch (err) {
-                console.error('Failed to fetch alerts', err);
-            }
-        };
-
         fetchAlerts();
         const interval = setInterval(fetchAlerts, 60000); // Check every minute
         return () => clearInterval(interval);
     }, [user]);
+
+    React.useEffect(() => {
+        if (!socket) return;
+
+        const handleNewAlert = () => {
+            console.log('Layout: WebSocket event received. Refreshing alerts.');
+            fetchAlerts();
+        };
+
+        socket.on('new_dispute_raised', handleNewAlert);
+        socket.on('new_ticket_submitted', handleNewAlert);
+
+        return () => {
+            socket.off('new_dispute_raised', handleNewAlert);
+            socket.off('new_ticket_submitted', handleNewAlert);
+        };
+    }, [socket]);
 
     // Close dropdown when clicking outside
     React.useEffect(() => {

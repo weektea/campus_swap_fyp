@@ -77,6 +77,10 @@ const Transaction = sequelize.define('Transaction', {
         type: DataTypes.STRING,
         allowNull: true,
     },
+    awarded_carbon_points: {
+        type: DataTypes.FLOAT,
+        allowNull: true,
+    },
 }, {
     timestamps: true,
 });

@@ -10,6 +10,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:campus_swap/features/location/domain/entities/safe_zone.dart';
 import 'package:campus_swap/features/location/presentation/pages/safe_zone_map_page.dart';
+import 'package:campus_swap/core/services/socket_service.dart';
 
 class ChatDetailPage extends StatefulWidget {
   final String sellerName;
@@ -32,6 +33,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
   @override
   void dispose() {
+    SocketService().socket?.off('receive_new_message');
     _timer?.cancel();
     _controller.dispose();
     super.dispose();
@@ -46,6 +48,22 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     _fetchMessages();
     _fetchZones();
     _timer = Timer.periodic(const Duration(seconds: 3), (_) => _fetchMessages(silent: true));
+
+    // Connect WebSocket listener for real-time messages
+    SocketService().socket?.on('receive_new_message', (data) {
+      if (mounted && data != null && widget.otherUserId != null) {
+        final senderId = data['sender_id']?.toString();
+        final receiverId = data['receiver_id']?.toString();
+        if (senderId == widget.otherUserId.toString() || receiverId == widget.otherUserId.toString()) {
+          setState(() {
+            final id = data['id'];
+            if (id == null || !_messages.any((m) => m['id'] == id)) {
+              _messages.add(data);
+            }
+          });
+        }
+      }
+    });
   }
 
   Future<void> _fetchZones() async {

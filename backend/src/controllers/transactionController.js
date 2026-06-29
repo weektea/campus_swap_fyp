@@ -1,5 +1,6 @@
-import { Transaction, Product, User, Review, Category, SubCategory } from '../models/index.js';
+import { Transaction, Product, User, Review, Category, SubCategory, Dispute } from '../models/index.js';
 import { createNotification } from './notificationController.js';
+import { emitToUser, emitToAdmins } from '../config/socket.js';
 
 export const createTransaction = async (req, res) => {
     try {
@@ -98,14 +99,19 @@ export const getUserTransactions = async (req, res) => {
                 {
                     model: Review,
                     as: 'reviews', // Need to check association alias
-                    required: false,
-                    where: { reviewer_id: user_id } // Only get reviews by THIS user for this transaction
+                    required: false
                 }
             ],
             order: [['createdAt', 'DESC']]
         });
         const maskedTransactions = transactions.map(tx => {
             const txObj = tx.toJSON();
+            
+            // Filter reviews in memory to match reviewer_id = user_id (avoid Sequelize query filtering gotcha)
+            if (txObj.reviews) {
+                txObj.reviews = txObj.reviews.filter(r => r.reviewer_id === user_id);
+            }
+
             if (txObj.review_status !== 'PUBLISHED') {
                 if (type === 'buying') {
                     txObj.rating_from_seller = null;
@@ -317,10 +323,6 @@ export const updateTransactionStatus = async (req, res) => {
                 { where: { id: transaction.product_id } }
             );
             
-            transaction.completed_at = new Date();
-            transaction.review_status = 'PENDING_REVIEWS';
-            await transaction.save();
-            
             // Calculate Carbon Savings
             const product = await Product.findByPk(transaction.product_id, {
                 include: [
@@ -328,11 +330,20 @@ export const updateTransactionStatus = async (req, res) => {
                     { model: SubCategory, as: 'subcategoryModel' }
                 ]
             });
+            
+            let co2Saved = 0.0;
             if (product) {
                  const catName = product.categoryModel ? product.categoryModel.name : product.category;
                  const subCatName = product.subcategoryModel ? product.subcategoryModel.name : null;
-                 const co2Saved = getCarbonValue(catName, subCatName, product);
-                 
+                 co2Saved = getCarbonValue(catName, subCatName, product);
+            }
+
+            transaction.completed_at = new Date();
+            transaction.review_status = 'PENDING_REVIEWS';
+            transaction.awarded_carbon_points = co2Saved;
+            await transaction.save();
+            
+            if (product) {
                  if (transaction.buyer_id === transaction.seller_id) {
                      // Self-trade: only increment once to prevent double-counting
                      await User.increment(
@@ -405,6 +416,50 @@ export const updateTransactionStatus = async (req, res) => {
                 transaction.id
             );
         }
+        // If disputed, create a Dispute entry automatically
+        if (status === 'Disputed') {
+            // Save pre-dispute status
+            transaction.pre_dispute_status = oldStatus;
+            await transaction.save();
+
+            // Check if a dispute already exists
+            const existingDispute = await Dispute.findOne({ where: { transaction_id: transaction.id } });
+            if (!existingDispute) {
+                const dispute = await Dispute.create({
+                    transaction_id: transaction.id,
+                    complainant_id: requesterId || transaction.seller_id,
+                    reason: 'Fraud',
+                    description: `Seller reported an issue/declined payment proof during the confirmation stage.`,
+                    evidence_urls: transaction.payment_proof_url ? [transaction.payment_proof_url] : [],
+                    status: 'New'
+                });
+
+                // Notify Buyer
+                await createNotification(
+                    transaction.buyer_id,
+                    'Transaction Disputed',
+                    `Seller declined your payment proof. A dispute has been opened for moderation.`,
+                    'Transaction',
+                    dispute.id
+                );
+
+                // Notify Seller
+                await createNotification(
+                    transaction.seller_id,
+                    'Dispute Opened',
+                    `You have reported an issue with the payment proof. A dispute has been opened for moderation.`,
+                    'Transaction',
+                    dispute.id
+                );
+
+                // Emit new dispute event to admin room
+                emitToAdmins('new_dispute_raised', dispute);
+            }
+        }
+
+        // Emit status update to specific buyer and seller sockets
+        emitToUser(transaction.buyer_id, 'transaction_status_updated', { transaction_id: transaction.id, status: transaction.status });
+        emitToUser(transaction.seller_id, 'transaction_status_updated', { transaction_id: transaction.id, status: transaction.status });
 
         res.json(transaction);
     } catch (error) {

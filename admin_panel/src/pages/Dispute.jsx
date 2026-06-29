@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Flame, Info, CheckCircle } from 'lucide-react';
 import api from '../services/api';
+import { useSocket } from '../context/SocketContext';
 
 const getStatusBadgeStyle = (status) => {
     switch (status) {
@@ -34,6 +35,28 @@ const Dispute = () => {
     const [actionOnLoser, setActionOnLoser] = useState('none'); // none, warn, ban
     
     const [currentUser, setCurrentUser] = useState(null);
+    const socket = useSocket();
+
+    const getImageUrl = (url) => {
+        if (!url) return '';
+        if (url.startsWith('http://') || url.startsWith('https://')) return url;
+        return `http://localhost:3000${url.startsWith('/') ? '' : '/'}${url}`;
+    };
+
+    const formatChatTimestamp = (createdAtStr) => {
+        if (!createdAtStr) return '';
+        const date = new Date(createdAtStr);
+        const now = new Date();
+        const isPreviousDay = date.getDate() !== now.getDate() ||
+                              date.getMonth() !== now.getMonth() ||
+                              date.getFullYear() !== now.getFullYear();
+        const timeStr = date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+        if (isPreviousDay) {
+            const dateStr = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+            return `${timeStr}, ${dateStr}`;
+        }
+        return timeStr;
+    };
 
     useEffect(() => {
         const userStr = localStorage.getItem('user');
@@ -44,10 +67,36 @@ const Dispute = () => {
     useEffect(() => {
         if (selectedDispute) {
             fetchMessages(selectedDispute.id);
-            const interval = setInterval(() => fetchMessages(selectedDispute.id), 5000);
+            const interval = setInterval(() => fetchMessages(selectedDispute.id), 3000);
             return () => clearInterval(interval);
         }
     }, [selectedDispute]);
+
+    useEffect(() => {
+        if (!socket) return;
+
+        const handleNewMessage = (data) => {
+            if (selectedDispute && data && data.reference_id === selectedDispute.id.toString()) {
+                setMessages(prev => {
+                    if (prev.some(m => m.id === data.id)) return prev;
+                    return [...prev, data];
+                });
+            }
+        };
+
+        const handleNewDispute = () => {
+            console.log('Dispute: WebSocket new dispute event. Reloading list.');
+            fetchDisputes();
+        };
+
+        socket.on('receive_new_message', handleNewMessage);
+        socket.on('new_dispute_raised', handleNewDispute);
+
+        return () => {
+            socket.off('receive_new_message', handleNewMessage);
+            socket.off('new_dispute_raised', handleNewDispute);
+        };
+    }, [socket, selectedDispute]);
 
     const pendingDisputes = allDisputes.filter(d => d.status !== 'Resolved' && d.status !== 'Dismissed');
     const historyDisputes = allDisputes.filter(d => d.status === 'Resolved' || d.status === 'Dismissed');
@@ -284,11 +333,11 @@ const Dispute = () => {
                                                      <div 
                                                          key={i} 
                                                          style={{ width: '80px', height: '80px', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border)', cursor: 'zoom-in', transition: 'transform 0.2s' }}
-                                                         onClick={() => setLightboxImage(`http://localhost:3000${url}`)}
+                                                         onClick={() => setLightboxImage(getImageUrl(url))}
                                                          onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'}
                                                          onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
                                                      >
-                                                         <img src={`http://localhost:3000${url}`} alt={`Evidence ${i+1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                         <img src={getImageUrl(url)} alt={`Evidence ${i+1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                                      </div>
                                                  ))}
                                              </div>
@@ -304,7 +353,7 @@ const Dispute = () => {
                                           <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '1.5rem', background: '#f8fafc', padding: '12px', borderRadius: '12px' }}>
                                               {selectedDispute.transaction.product.image_urls && selectedDispute.transaction.product.image_urls.length > 0 ? (
                                                   <img 
-                                                      src={`http://localhost:3000${selectedDispute.transaction.product.image_urls[0]}`} 
+                                                      src={getImageUrl(selectedDispute.transaction.product.image_urls[0])} 
                                                       alt="Product" 
                                                       style={{ width: '64px', height: '64px', objectFit: 'cover', borderRadius: '8px', border: '1px solid var(--border)' }} 
                                                   />
@@ -398,10 +447,20 @@ const Dispute = () => {
                                                              lineHeight: 1.4,
                                                              boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
                                                          }}>
-                                                             {msg.content}
+                                                             <div>{msg.content}</div>
+                                                             {msg.attachment_url && (
+                                                                 <div style={{ marginTop: '8px', maxWidth: '240px', maxHeight: '180px', overflow: 'hidden', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.1)' }}>
+                                                                     <img 
+                                                                         src={getImageUrl(msg.attachment_url)} 
+                                                                         alt="Attachment" 
+                                                                         style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'zoom-in' }}
+                                                                         onClick={() => setLightboxImage(getImageUrl(msg.attachment_url))}
+                                                                     />
+                                                                 </div>
+                                                             )}
                                                          </div>
                                                          <span style={{ fontSize: '0.65rem', color: '#94a3b8', marginTop: '2px' }}>
-                                                             {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                             {formatChatTimestamp(msg.createdAt)}
                                                          </span>
                                                      </div>
                                                  );
@@ -487,58 +546,110 @@ const Dispute = () => {
                                                   ></textarea>
                                               </div>
  
-                                              {/* Moderator Triage (Hide if already escalated) */}
-                                              {!['Escalated', 'Escalated to Admin'].includes(selectedDispute.status) && (
-                                                  <div style={{ marginBottom: '2rem', paddingBottom: '1.5rem', borderBottom: '1px solid var(--border)' }}>
-                                                      <h4 style={{ margin: '0 0 12px 0', color: 'var(--text-muted)' }}>Moderator Triage</h4>
-                                                      <select className="input" value={modAction} onChange={(e) => setModAction(e.target.value)} style={{ width: '100%', marginBottom: '12px' }}>
-                                                          <option value="Investigate">Keep Investigating</option>
-                                                          {currentUser?.role !== 'admin' && (
-                                                              <option value="Escalate">Escalate to Admin</option>
-                                                          )}
-                                                          <option value="Dismiss">Dismiss (Invalid)</option>
-                                                      </select>
-                                                      <button className="btn btn-outline" style={{ width: '100%' }} onClick={handleModTriage}>
-                                                          Apply Triage Action
-                                                      </button>
-                                                  </div>
-                                              )}
- 
-                                              {/* Admin Actions */}
-                                              <div style={{ opacity: currentUser?.role === 'admin' ? 1 : 0.4, pointerEvents: currentUser?.role === 'admin' ? 'auto' : 'none' }}>
-                                                  <h4 style={{ margin: '0 0 12px 0', color: 'var(--danger)' }}>Admin Arbitration</h4>
-                                                  
-                                                  <div style={{ marginBottom: '1.2rem' }}>
-                                                      <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-muted)', fontSize: '0.875rem' }}>Action on Loser</label>
-                                                      <select className="input" value={actionOnLoser} onChange={(e) => setActionOnLoser(e.target.value)} style={{ width: '100%', marginBottom: 0, appearance: 'auto' }}>
-                                                          <option value="none">No Action</option>
-                                                          <option value="warn">Warn (Reputation Penalty)</option>
-                                                          <option value="ban">Ban (Deactivate Account)</option>
-                                                      </select>
-                                                  </div>
- 
-                                                  <div className="flex gap-4">
-                                                      <button 
-                                                          className="flex-1 btn" 
-                                                          style={{ background: '#2563eb', padding: '1rem 0', display: 'flex', flexDirection: 'column' }}
-                                                          onClick={() => handleAdminArbitrate('Buyer')}
-                                                          disabled={!['Escalated', 'Escalated to Admin'].includes(selectedDispute.status)}
-                                                      >
-                                                          <div>Favor Buyer</div>
-                                                          <div style={{ fontSize: '0.7rem', fontWeight: 'normal', opacity: 0.8 }}>(Refund)</div>
-                                                      </button>
-                                                      <button 
-                                                          className="flex-1 btn" 
-                                                          style={{ background: '#16a34a', padding: '1rem 0', display: 'flex', flexDirection: 'column' }}
-                                                          onClick={() => handleAdminArbitrate('Seller')}
-                                                          disabled={!['Escalated', 'Escalated to Admin'].includes(selectedDispute.status)}
-                                                      >
-                                                          <div>Favor Seller</div>
-                                                          <div style={{ fontSize: '0.7rem', fontWeight: 'normal', opacity: 0.8 }}>(Release Funds)</div>
-                                                      </button>
-                                                  </div>
-                                              </div>
-                                         </>
+                                              <div style={{ marginBottom: '2rem', paddingBottom: '1.5rem', borderBottom: '1px solid var(--border)' }}>
+                                                   <h4 style={{ margin: '0 0 12px 0', color: 'var(--text-muted)' }}>Dispute Management</h4>
+                                                   
+                                                   {/* 1. Dismiss Dispute Button */}
+                                                   <button 
+                                                       className="btn btn-outline" 
+                                                       style={{ width: '100%', marginBottom: '12px', borderColor: '#475569', color: '#475569' }} 
+                                                       onClick={async () => {
+                                                           if (!window.confirm("Dismiss this dispute and restore the transaction status?")) return;
+                                                           try {
+                                                               await api.put(`/disputes/${selectedDispute.id}/triage`, {
+                                                                   action: 'Dismiss',
+                                                                   mod_notes: notes
+                                                               });
+                                                               alert('Dispute dismissed and status restored!');
+                                                               setNotes('');
+                                                               setSelectedDispute(null);
+                                                               fetchDisputes();
+                                                           } catch (err) {
+                                                               alert(err.response?.data?.error || 'Failed to dismiss dispute');
+                                                           }
+                                                       }}
+                                                   >
+                                                       Dismiss Dispute (Restore Status)
+                                                   </button>
+
+                                                   {/* General Triage options if not escalated yet */}
+                                                   {!['Escalated', 'Escalated to Admin'].includes(selectedDispute.status) && (
+                                                       <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+                                                           <button 
+                                                               className="flex-1 btn btn-outline" 
+                                                               style={{ fontSize: '0.8rem', padding: '6px' }}
+                                                               onClick={async () => {
+                                                                   try {
+                                                                       await api.put(`/disputes/${selectedDispute.id}/triage`, {
+                                                                           action: 'Investigate',
+                                                                           mod_notes: notes
+                                                                       });
+                                                                       alert('Dispute status set to Investigating.');
+                                                                       fetchDisputes();
+                                                                   } catch (err) {
+                                                                       alert(err.response?.data?.error || 'Failed to triage');
+                                                                   }
+                                                               }}
+                                                           >
+                                                               Mark Investigating
+                                                           </button>
+                                                           {currentUser?.role !== 'admin' && (
+                                                               <button 
+                                                                   className="flex-1 btn" 
+                                                                   style={{ fontSize: '0.8rem', padding: '6px', background: '#f59e0b', color: 'white' }}
+                                                                   onClick={async () => {
+                                                                       try {
+                                                                           await api.put(`/disputes/${selectedDispute.id}/triage`, {
+                                                                               action: 'Escalate',
+                                                                               mod_notes: notes
+                                                                           });
+                                                                           alert('Dispute escalated to Admin.');
+                                                                           fetchDisputes();
+                                                                       } catch (err) {
+                                                                           alert(err.response?.data?.error || 'Failed to triage');
+                                                                       }
+                                                                   }}
+                                                               >
+                                                                   Escalate to Admin
+                                                               </button>
+                                                           )}
+                                                       </div>
+                                                   )}
+                                               </div>
+
+                                               {/* Admin Actions */}
+                                               <div style={{ opacity: currentUser?.role === 'admin' ? 1 : 0.4, pointerEvents: currentUser?.role === 'admin' ? 'auto' : 'none' }}>
+                                                   <h4 style={{ margin: '0 0 12px 0', color: 'var(--danger)' }}>Admin Arbitration</h4>
+                                                   
+                                                   <div style={{ marginBottom: '1.2rem' }}>
+                                                       <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-muted)', fontSize: '0.875rem' }}>Action on Loser</label>
+                                                       <select className="input" value={actionOnLoser} onChange={(e) => setActionOnLoser(e.target.value)} style={{ width: '100%', marginBottom: 0, appearance: 'auto' }}>
+                                                           <option value="none">No Action</option>
+                                                           <option value="warn">Warn (Reputation Penalty)</option>
+                                                           <option value="ban">Ban (Deactivate Account)</option>
+                                                       </select>
+                                                   </div>
+
+                                                   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                                       <button 
+                                                           className="btn" 
+                                                           style={{ background: '#2563eb', width: '100%', padding: '10px 0' }}
+                                                           onClick={() => handleAdminArbitrate('Buyer')}
+                                                           disabled={!['Escalated', 'Escalated to Admin'].includes(selectedDispute.status)}
+                                                       >
+                                                           Arbitrate for Buyer (Cancel & Rollback Points)
+                                                       </button>
+                                                       <button 
+                                                           className="btn" 
+                                                           style={{ background: '#16a34a', width: '100%', padding: '10px 0' }}
+                                                           onClick={() => handleAdminArbitrate('Seller')}
+                                                           disabled={!['Escalated', 'Escalated to Admin'].includes(selectedDispute.status)}
+                                                       >
+                                                           Arbitrate for Seller (Complete & Award Points)
+                                                       </button>
+                                                   </div>
+                                               </div>
+                                          </>
                                      )}
                                  </div>
                              </div>

@@ -113,7 +113,7 @@ const UserDetail = () => {
                         <div>{user.reputation_score} / 5.0 ({user.total_reviews} reviews)</div>
 
                         <div style={{ color: 'var(--text-muted)', fontWeight: 'bold' }}>Carbon Saved</div>
-                        <div>{user.total_carbon_saved} kg</div>
+                        <div>{user.total_carbon_saved} kg CO2e</div>
                     </div>
                 </div>
 

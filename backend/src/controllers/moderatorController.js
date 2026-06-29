@@ -238,8 +238,31 @@ export const getSystemMetrics = async (req, res) => {
         const totalProducts = await Product.count();
         const totalTransactions = await Transaction.count({ where: { status: 'Completed' } });
         
-        // MVP: roughly 5.2 kg CO2 saved per item reused
-        const co2Saved = totalTransactions * 5.2;
+        // Sum carbon offset based on transaction snapshots (fallback to dynamic database factor or 2.5 if null)
+        const completedTransactions = await Transaction.findAll({
+            where: { status: 'Completed' },
+            include: [{
+                model: Product,
+                as: 'product',
+                include: [
+                    { model: Category, as: 'categoryModel' },
+                    { model: SubCategory, as: 'subcategoryModel' }
+                ]
+            }]
+        });
+
+        let co2Saved = 0.0;
+        completedTransactions.forEach(t => {
+            if (t.awarded_carbon_points !== null && t.awarded_carbon_points !== undefined) {
+                co2Saved += parseFloat(t.awarded_carbon_points);
+            } else if (t.product) {
+                const catName = t.product.categoryModel ? t.product.categoryModel.name : (t.product.category || 'Others');
+                const subCatName = t.product.subcategoryModel ? t.product.subcategoryModel.name : null;
+                co2Saved += getCarbonValue(catName, subCatName, t.product);
+            } else {
+                co2Saved += 2.5; // fallback
+            }
+        });
 
         res.json({
             total_users: totalUsers,

@@ -216,7 +216,7 @@ const MLModels = () => {
                             <span style={{ color: 'var(--text-muted)' }}>Current Accuracy</span>
                             <div className="flex items-center gap-2">
                                 <div style={{ width: '60px', height: '24px' }}>
-                                    <ResponsiveContainer width="100%" height="100%">
+                                    <ResponsiveContainer width={60} height={24}>
                                         <LineChart data={imageChartData}>
                                             <YAxis domain={['auto', 'auto']} hide />
                                             <Line type="monotone" dataKey="accuracy" stroke="#16a34a" strokeWidth={2} dot={false} />
@@ -289,7 +289,7 @@ const MLModels = () => {
                             <span style={{ color: 'var(--text-muted)' }}>Click-Through Rate (CTR)</span>
                             <div className="flex items-center gap-2">
                                 <div style={{ width: '60px', height: '24px' }}>
-                                    <ResponsiveContainer width="100%" height="100%">
+                                    <ResponsiveContainer width={60} height={24}>
                                         <LineChart data={feedHistory}>
                                             <YAxis domain={['auto', 'auto']} hide />
                                             <Line type="monotone" dataKey="ctr" stroke="#8b5cf6" strokeWidth={2} dot={false} />
@@ -455,7 +455,7 @@ const MLModels = () => {
                             <div className="card flex-1" style={{ flex: '1.5' }}>
                                 <h3 style={{ fontSize: '1.125rem', margin: '0 0 16px 0', fontWeight: 'bold' }}>User Activity Heatmap (Student Hourly Interaction Peak)</h3>
                                 <div style={{ height: '220px', width: '100%' }}>
-                                    <ResponsiveContainer width="100%" height="100%">
+                                    <ResponsiveContainer width="100%" height={220}>
                                         <BarChart data={mlDashboardData.activity_heatmap} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                                             <XAxis dataKey="hour" stroke="#9ca3af" fontSize={10} tickLine={false} />
                                             <YAxis stroke="#9ca3af" fontSize={10} tickLine={false} />

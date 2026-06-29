@@ -17,12 +17,14 @@ import Categories from './pages/Categories';
 import Reviews from './pages/Reviews';
 import MLModels from './pages/MLModels';
 import PrivateRoute from './components/PrivateRoute';
+import { SocketProvider } from './context/SocketContext';
 
 function App() {
   return (
-    <Router>
-      <Routes>
-        <Route path="/login" element={<Login />} />
+    <SocketProvider>
+      <Router>
+        <Routes>
+          <Route path="/login" element={<Login />} />
 
         {/* Protected Dashboard Routes wrapped in Layout */}
         <Route path="/dashboard" element={
@@ -141,6 +143,7 @@ function App() {
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </Router>
+   </SocketProvider>
   );
 }
 

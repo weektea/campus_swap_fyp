@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:campus_swap/core/api/api_client.dart';
 import 'package:campus_swap/core/session/user_session.dart';
 import 'package:campus_swap/features/auth/presentation/pages/login_page.dart';
+import 'package:campus_swap/core/services/socket_service.dart';
 import 'package:campus_swap/features/profile/presentation/pages/my_listings_page.dart';
 import 'package:campus_swap/features/profile/presentation/pages/my_purchases_page.dart';
 import 'package:campus_swap/features/profile/presentation/pages/saved_items_page.dart';
@@ -342,8 +343,8 @@ class _ProfilePageState extends State<ProfilePage> {
                         children: [
                            _loadingStats 
                               ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                              : Text("$_co2Saved kg", style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
-                          Text("CO2 Saved", style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 12)),
+                              : Text("$_co2Saved kg CO2e", style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+                          Text("Carbon Saved", style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 12)),
                         ],
                       ),
                     ],
@@ -379,6 +380,7 @@ class _ProfilePageState extends State<ProfilePage> {
             const SizedBox(height: 24),
             _buildMenuItem(context, Icons.logout, 'Logout', () {
               // Clear session
+              SocketService().disconnect();
               UserSession().clear();
               Navigator.pushAndRemoveUntil(
                 context, 

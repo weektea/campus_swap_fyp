@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Lock, CheckCircle } from 'lucide-react';
 import api from '../services/api';
+import { useSocket } from '../context/SocketContext';
 
 const getStatusBadgeStyle = (status) => {
     switch (status) {
@@ -29,6 +30,28 @@ const Tickets = () => {
     const [replyContent, setReplyContent] = useState('');
     const [action, setAction] = useState('Resolved'); // Resolved, Escalated
     const [currentUser, setCurrentUser] = useState(null);
+    const socket = useSocket();
+
+    const getImageUrl = (url) => {
+        if (!url) return '';
+        if (url.startsWith('http://') || url.startsWith('https://')) return url;
+        return `http://localhost:3000${url.startsWith('/') ? '' : '/'}${url}`;
+    };
+
+    const formatChatTimestamp = (createdAtStr) => {
+        if (!createdAtStr) return '';
+        const date = new Date(createdAtStr);
+        const now = new Date();
+        const isPreviousDay = date.getDate() !== now.getDate() ||
+                              date.getMonth() !== now.getMonth() ||
+                              date.getFullYear() !== now.getFullYear();
+        const timeStr = date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+        if (isPreviousDay) {
+            const dateStr = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+            return `${timeStr}, ${dateStr}`;
+        }
+        return timeStr;
+    };
 
     useEffect(() => {
         const userStr = localStorage.getItem('user');
@@ -39,11 +62,37 @@ const Tickets = () => {
     useEffect(() => {
         if (selectedTicket) {
             fetchMessages(selectedTicket.realId);
-            // Poll for new messages every 5 seconds
-            const interval = setInterval(() => fetchMessages(selectedTicket.realId), 5000);
+            // Poll for new messages every 3 seconds
+            const interval = setInterval(() => fetchMessages(selectedTicket.realId), 3000);
             return () => clearInterval(interval);
         }
     }, [selectedTicket]);
+
+    useEffect(() => {
+        if (!socket) return;
+
+        const handleNewMessage = (data) => {
+            if (selectedTicket && data && data.reference_id === selectedTicket.realId.toString()) {
+                setMessages(prev => {
+                    if (prev.some(m => m.id === data.id)) return prev;
+                    return [...prev, data];
+                });
+            }
+        };
+
+        const handleNewTicket = () => {
+            console.log('Tickets: WebSocket new ticket event. Reloading list.');
+            fetchTickets();
+        };
+
+        socket.on('receive_new_message', handleNewMessage);
+        socket.on('new_ticket_submitted', handleNewTicket);
+
+        return () => {
+            socket.off('receive_new_message', handleNewMessage);
+            socket.off('new_ticket_submitted', handleNewTicket);
+        };
+    }, [socket, selectedTicket]);
 
     const pendingTickets = allTickets.filter(t => t.status !== 'Resolved');
     const historyTickets = allTickets.filter(t => t.status === 'Resolved');
@@ -311,10 +360,20 @@ const Tickets = () => {
                                                              lineHeight: 1.4,
                                                              boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
                                                          }}>
-                                                             {msg.content}
+                                                             <div>{msg.content}</div>
+                                                             {msg.attachment_url && (
+                                                                 <div style={{ marginTop: '8px', maxWidth: '240px', maxHeight: '180px', overflow: 'hidden', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.1)' }}>
+                                                                     <img 
+                                                                         src={getImageUrl(msg.attachment_url)} 
+                                                                         alt="Attachment" 
+                                                                         style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'pointer' }}
+                                                                         onClick={() => window.open(getImageUrl(msg.attachment_url), '_blank')}
+                                                                     />
+                                                                 </div>
+                                                             )}
                                                          </div>
                                                          <span style={{ fontSize: '0.65rem', color: '#94a3b8', marginTop: '2px' }}>
-                                                             {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                             {formatChatTimestamp(msg.createdAt)}
                                                          </span>
                                                      </div>
                                                  );

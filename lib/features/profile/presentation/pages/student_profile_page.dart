@@ -227,7 +227,7 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
                       _buildSectionHeader('Trading & Platform Metrics', Icons.analytics_outlined),
                       _buildDataRow('Reputation Score', '${_userData!['reputation_score'] ?? '5.0'} / 5.0 (${_userData!['total_reviews'] ?? 0} reviews)'),
                       _buildDataRow('Active Listings', '$_activeListingsCount items'),
-                      _buildDataRow('Total Carbon Saved', '${_userData!['total_carbon_saved'] ?? '0.0'} kg CO2'),
+                      _buildDataRow('Total Carbon Saved', '${_userData!['total_carbon_saved'] ?? '0.0'} kg CO2e'),
                       
                       const SizedBox(height: 40),
                     ],

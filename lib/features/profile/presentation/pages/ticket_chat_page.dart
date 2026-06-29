@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:campus_swap/core/api/api_client.dart';
 import 'package:campus_swap/core/session/user_session.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:campus_swap/core/services/socket_service.dart';
 
 class TicketChatPage extends StatefulWidget {
   final String referenceId;
@@ -31,12 +33,59 @@ class _TicketChatPageState extends State<TicketChatPage> {
   bool _isSending = false;
   final ImagePicker _picker = ImagePicker();
   String _currentStatus = '';
+  Timer? _pollTimer;
+
+  @override
+  void dispose() {
+    SocketService().socket?.off('receive_new_message');
+    _pollTimer?.cancel();
+    _msgController.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
     super.initState();
     _currentStatus = widget.status;
     _fetchMessages();
+    _pollTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
+      _fetchMessagesSilently();
+    });
+
+    // Listen to real-time support ticket/dispute chat messages
+    SocketService().socket?.on('receive_new_message', (data) {
+      if (mounted && data != null) {
+        final refId = data['reference_id']?.toString();
+        if (refId == widget.referenceId.toString()) {
+          setState(() {
+            final id = data['id'];
+            if (id == null || !_messages.any((m) => m['id'] == id)) {
+              _messages.add(data);
+              _scrollToBottom();
+            }
+          });
+        }
+      }
+    });
+  }
+
+  Future<void> _fetchMessagesSilently() async {
+    try {
+      final res = await _apiClient.get('/tickets/thread/${widget.referenceId}');
+      _fetchStatus();
+      if (mounted && res is List) {
+        final bool countChanged = res.length != _messages.length;
+        setState(() {
+          _messages = res;
+        });
+        if (countChanged) {
+          _scrollToBottom();
+        }
+      }
+    } catch (e) {
+      // Silently ignore background polling errors
+    }
   }
 
   Future<void> _fetchStatus() async {
@@ -128,11 +177,37 @@ class _TicketChatPageState extends State<TicketChatPage> {
     });
   }
 
-  @override
-  void dispose() {
-    _msgController.dispose();
-    _scrollController.dispose();
-    super.dispose();
+  String _formatTimestamp(String? createdAtStr) {
+    if (createdAtStr == null) return '';
+    try {
+      final dt = DateTime.parse(createdAtStr).toLocal();
+      final now = DateTime.now();
+      final isPreviousDay = dt.day != now.day || dt.month != now.month || dt.year != now.year;
+      
+      final hour = dt.hour > 12 ? dt.hour - 12 : (dt.hour == 0 ? 12 : dt.hour);
+      final minute = dt.minute.toString().padLeft(2, '0');
+      final ampm = dt.hour >= 12 ? 'PM' : 'AM';
+      final timeStr = '$hour:$minute $ampm';
+      
+      if (isPreviousDay) {
+        final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        final dateStr = '${months[dt.month - 1]} ${dt.day}';
+        return '$timeStr, $dateStr';
+      }
+      return timeStr;
+    } catch (e) {
+      return '';
+    }
+  }
+
+  String _getAttachmentUrl(String? path) {
+    if (path == null) return '';
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      return path;
+    }
+    final baseUrl = ApiClient.baseUrl.replaceAll('/api', '');
+    final cleanPath = path.startsWith('/') ? path : '/$path';
+    return '$baseUrl$cleanPath';
   }
 
   Widget _buildMessageBubble(dynamic msg) {
@@ -177,13 +252,24 @@ class _TicketChatPageState extends State<TicketChatPage> {
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(8),
                   child: Image.network(
-                    '${ApiClient.baseUrl.replaceAll('/api', '')}${msg['attachment_url']}',
+                    _getAttachmentUrl(msg['attachment_url']),
                     fit: BoxFit.cover,
                     errorBuilder: (c, e, s) => const Icon(Icons.broken_image, color: Colors.grey),
                   ),
                 ),
               ),
             ],
+            const SizedBox(height: 4),
+            Align(
+              alignment: Alignment.bottomRight,
+              child: Text(
+                _formatTimestamp(msg['createdAt']),
+                style: TextStyle(
+                  fontSize: 10,
+                  color: isMe ? Colors.white70 : Colors.grey[500],
+                ),
+              ),
+            ),
           ],
         ),
       ),

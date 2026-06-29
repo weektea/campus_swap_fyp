@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:campus_swap/core/session/user_session.dart';
 import 'package:campus_swap/features/auth/presentation/pages/login_page.dart';
 import 'package:campus_swap/core/theme/theme_provider.dart';
+import 'package:campus_swap/core/services/socket_service.dart';
 import 'package:campus_swap/features/profile/presentation/pages/help_page.dart';
 import 'package:campus_swap/core/api/api_client.dart';
 import 'package:campus_swap/features/profile/presentation/pages/change_password_page.dart';
@@ -71,6 +72,7 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   void _logout() {
+    SocketService().disconnect();
     UserSession().clear();
     Navigator.pushAndRemoveUntil(
       context, 

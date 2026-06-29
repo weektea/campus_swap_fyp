@@ -19,7 +19,7 @@ class HelpPage extends StatelessWidget {
             _buildFaqItem("How do I sell an item?", "Go to the Sell tab, take a photo, and our AI will help you list it."),
             _buildFaqItem("Is payment secure?", "Yes! We use an Escrow system. Money is held until you meet and confirm the item."),
             _buildFaqItem("Where should I meet?", "We recommend the Student Center or Library for safe public meetups."),
-            _buildFaqItem("How is my Carbon Footprint calculated?", "We estimate 2.5kg of CO2 saved for every item you reuse instead of buying new."),
+            _buildFaqItem("How is my Carbon Footprint calculated?", "We estimate the carbon saved (in kg CO2e) for every item you reuse instead of buying new, based on category settings configured by the administrator."),
 
             const SizedBox(height: 32),
             Center(
