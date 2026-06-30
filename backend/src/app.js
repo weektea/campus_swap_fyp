@@ -451,6 +451,19 @@ if (process.env.NODE_ENV !== 'test') {
                         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='Transactions' AND column_name='awarded_carbon_points') THEN
                             ALTER TABLE "Transactions" ADD COLUMN "awarded_carbon_points" DOUBLE PRECISION;
                         END IF;
+
+                        -- 7. Ensure status column exists in Users table
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='Users' AND column_name='status') THEN
+                            ALTER TABLE "Users" ADD COLUMN "status" VARCHAR(255) DEFAULT 'active';
+                            UPDATE "Users" SET "status" = 'deactivated' WHERE "is_active" = FALSE AND "deactivation_reason" = 'Deactivated by user';
+                            UPDATE "Users" SET "status" = 'suspended' WHERE "is_active" = FALSE AND ("deactivation_reason" IS NULL OR "deactivation_reason" != 'Deactivated by user');
+                            UPDATE "Users" SET "status" = 'active' WHERE "is_active" = TRUE OR "is_active" IS NULL;
+                        END IF;
+
+                        -- 8. Ensure type column exists in SupportTickets table
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='SupportTickets' AND column_name='type') THEN
+                            ALTER TABLE "SupportTickets" ADD COLUMN "type" VARCHAR(255) DEFAULT 'SUPPORT';
+                        END IF;
                     END $$;
                 `);
                 console.log('SavedItems and Users table pre-sync migrations executed successfully');

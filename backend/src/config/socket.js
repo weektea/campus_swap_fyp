@@ -52,6 +52,10 @@ export const initSocket = (httpServer) => {
         if (role === 'admin' || role === 'moderator') {
             socket.join('admins');
             console.log(`Socket.io: Staff user ${userId} joined admin room: ${socket.id}`);
+            if (role === 'admin') {
+                socket.join('strictly_admins');
+                console.log(`Socket.io: Staff user ${userId} joined strictly_admins room: ${socket.id}`);
+            }
         }
 
         socket.on('disconnect', () => {
@@ -84,6 +88,11 @@ export const emitToUser = (userId, event, data) => {
 export const emitToAdmins = (event, data) => {
     if (!io) return;
     io.to('admins').emit(event, data);
+};
+
+export const emitToStrictlyAdmins = (event, data) => {
+    if (!io) return;
+    io.to('strictly_admins').emit(event, data);
 };
 
 export const getIo = () => io;

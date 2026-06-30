@@ -80,6 +80,11 @@ const User = sequelize.define('User', {
         type: DataTypes.ENUM('Public', 'Private', 'Friends Only'),
         defaultValue: 'Public', // From UC04
     },
+    status: {
+        type: DataTypes.ENUM('active', 'deactivated', 'suspended'),
+        defaultValue: 'active',
+        allowNull: false,
+    },
     show_full_name: {
         type: DataTypes.BOOLEAN,
         defaultValue: false,

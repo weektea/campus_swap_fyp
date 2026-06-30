@@ -1,7 +1,8 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { User, Transaction, Dispute, Report, Product } from '../models/index.js';
+import { User, Transaction, Dispute, Report, Product, ActivityLog, SupportTicket } from '../models/index.js';
 import { Op } from 'sequelize';
+import { emitToAdmins, emitToStrictlyAdmins } from '../config/socket.js';
 
 export const validateUsernameFormat = (username) => {
     if (!username) {
@@ -157,22 +158,45 @@ export const login = async (req, res) => {
             return res.status(400).json({ error: 'Invalid ID/email/username or password' });
         }
 
-        // Security check: Is user banned?
-        if (user.is_active === false) {
-            return res.status(403).json({ 
-                error: 'Account Suspended', 
-                reason: user.deactivation_reason || 'Violation of community guidelines',
-                unban_date: user.deactivated_until 
-            });
-        }
-
-        // 2. Check Password
+        // 2. Check Password first (as per Self-Service Reactivation requirement)
         const isMatch = await bcrypt.compare(password, user.password_hash);
         if (!isMatch) {
             return res.status(400).json({ error: 'Invalid ID/email/username or password' });
         }
 
-        // 3. Generate Token
+        // 3. Check status if password matches
+        if (user.status === 'deactivated' || user.is_active === false) {
+            if (user.status === 'deactivated' || user.deactivation_reason === 'Deactivated by user') {
+                // Generate a secure short-term token for reactivation
+                const reactivationToken = jwt.sign(
+                    { id: user.id, email: user.email, role: user.role },
+                    process.env.JWT_SECRET || 'secret_key_dev',
+                    { expiresIn: '1h' }
+                );
+                return res.status(403).json({
+                    errorCode: 'ACCOUNT_DEACTIVATED',
+                    message: 'Your account is deactivated.',
+                    token: reactivationToken
+                });
+            } else {
+                // Generate a secure short-term token for submitting appeals
+                const appealToken = jwt.sign(
+                    { id: user.id, email: user.email, role: user.role },
+                    process.env.JWT_SECRET || 'secret_key_dev',
+                    { expiresIn: '1h' }
+                );
+                return res.status(403).json({
+                    errorCode: 'ACCOUNT_SUSPENDED',
+                    error: 'Account Suspended',
+                    message: 'Your account is suspended. Please contact support to file an appeal.',
+                    token: appealToken,
+                    reason: user.deactivation_reason || 'Violation of community guidelines',
+                    unban_date: user.deactivated_until 
+                });
+            }
+        }
+
+        // 4. Generate Long-term Token
         const token = jwt.sign(
             { id: user.id, email: user.email, role: user.role },
             process.env.JWT_SECRET || 'secret_key_dev',
@@ -264,7 +288,7 @@ export const getUserProfile = async (req, res) => {
                 'role', 'total_carbon_saved', 'carbon_saved_buyer', 'carbon_saved_seller', 
                 'items_reused', 'reputation_score', 'total_reviews', 'privacy_setting', 
                 'show_full_name', 'show_phone_number',
-                'bio', 'faculty', 'year_of_study', 'createdAt', 'is_active'
+                'bio', 'faculty', 'year_of_study', 'createdAt', 'is_active', 'university_id'
             ]
         });
         
@@ -291,6 +315,7 @@ export const getUserProfile = async (req, res) => {
             user.email = null;
             user.faculty = null;
             user.year_of_study = null;
+            user.setDataValue('university_id', null);
         }
         
         res.json({ user });
@@ -461,5 +486,158 @@ export const reportUser = async (req, res) => {
     } catch (error) {
         console.error('Report User Error:', error);
         res.status(500).json({ error: 'Failed to report user' });
+    }
+};
+
+export const reactivateUser = async (req, res) => {
+    try {
+        const authHeader = req.headers['authorization'];
+        const token = authHeader && authHeader.split(' ')[1];
+        if (!token) {
+            return res.status(401).json({ error: 'Access denied. No token provided.' });
+        }
+
+        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret_key_dev');
+        const user = await User.findByPk(decoded.id);
+
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        if (user.is_active === true) {
+            return res.status(400).json({ error: 'Account is already active' });
+        }
+
+        // Suggestion 1: Check admin deactivation reason to prevent self-reactivation if admin banned
+        if (user.deactivation_reason !== 'Deactivated by user') {
+            return res.status(403).json({ 
+                error: 'Your account has been suspended by an administrator. Please contact support.' 
+            });
+        }
+
+        // 1. Reactivate user status
+        user.is_active = true;
+        user.deactivation_reason = null;
+        await user.save();
+
+        // 2. Cascade Reactivation: Restore listings that were suspended during deactivation
+        await Product.update(
+            { status: 'Available' },
+            { where: { seller_id: user.id, status: 'Suspended' } }
+        );
+
+        // Suggestion 2: Audit Logging
+        await ActivityLog.create({
+            user_id: user.id,
+            action: 'ACCOUNT_REACTIVATED'
+        });
+
+        // 3. Issue a standard long-term login token (30d)
+        const userToken = jwt.sign(
+            { id: user.id, email: user.email, role: user.role },
+            process.env.JWT_SECRET || 'secret_key_dev',
+            { expiresIn: '30d' }
+        );
+
+        res.json({
+            message: 'Account reactivated successfully',
+            token: userToken,
+            user: {
+                id: user.id,
+                email: user.email,
+                username: user.username,
+                full_name: user.full_name,
+                role: user.role
+            }
+        });
+    } catch (error) {
+        console.error('Reactivate User Error:', error);
+        res.status(500).json({ error: 'Reactivation failed' });
+    }
+};
+
+export const submitSuspensionAppeal = async (req, res) => {
+    try {
+        const authHeader = req.headers['authorization'];
+        const token = authHeader && authHeader.split(' ')[1];
+        if (!token) {
+            return res.status(401).json({ error: 'Access denied. No token provided.' });
+        }
+
+        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret_key_dev');
+        const user = await User.findByPk(decoded.id);
+
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        if (user.status !== 'suspended' && user.is_active === true) {
+            return res.status(400).json({ error: 'Your account is not suspended' });
+        }
+
+        const { description } = req.body;
+        if (!description || description.trim() === '') {
+            return res.status(400).json({ error: 'Appeal description/reason is required' });
+        }
+
+        // Create support ticket as suspension appeal
+        const ticket = await SupportTicket.create({
+            user_id: user.id,
+            category: 'Account',
+            subject: 'Suspended Account Reactivation Appeal',
+            description: `Suspended Account Reactivation Appeal: ${description.trim()}`,
+            status: 'Open',
+            type: 'SUSPENSION_APPEAL'
+        });
+
+        // Emit new ticket event to strictly admins room
+        emitToStrictlyAdmins('new_ticket_submitted', ticket);
+
+        res.status(201).json({
+            message: 'Appeal submitted successfully',
+            ticket
+        });
+    } catch (error) {
+        console.error('Submit Suspension Appeal Error:', error);
+        res.status(500).json({ error: 'Failed to submit appeal' });
+    }
+};
+
+export const submitPublicAppeal = async (req, res) => {
+    try {
+        const { student_id, description } = req.body;
+        if (!student_id || !description || description.trim() === '') {
+            return res.status(400).json({ error: 'Student ID and appeal reason are required' });
+        }
+
+        const user = await User.findOne({ where: { university_id: student_id.trim().toUpperCase() } });
+        if (!user) {
+            return res.status(404).json({ error: 'User not found with this Student ID' });
+        }
+
+        if (user.status !== 'suspended' && user.is_active === true) {
+            return res.status(400).json({ error: 'This account is not suspended' });
+        }
+
+        // Create support ticket
+        const ticket = await SupportTicket.create({
+            user_id: user.id,
+            category: 'Account',
+            subject: 'Suspended Account Reactivation Appeal',
+            description: `Suspended Account Reactivation Appeal: [Public Appeal from ${student_id.trim().toUpperCase()}] ${description.trim()}`,
+            status: 'Open',
+            type: 'SUSPENSION_APPEAL'
+        });
+
+        // Emit new ticket event to strictly admins room
+        emitToStrictlyAdmins('new_ticket_submitted', ticket);
+
+        res.status(201).json({
+            message: 'Appeal submitted successfully',
+            ticket
+        });
+    } catch (error) {
+        console.error('Submit Public Appeal Error:', error);
+        res.status(500).json({ error: 'Failed to submit appeal' });
     }
 };

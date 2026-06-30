@@ -148,6 +148,10 @@ export const claimTicket = async (req, res) => {
         const ticket = await SupportTicket.findByPk(ticketId);
         if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
 
+        if (ticket.type === 'SUSPENSION_APPEAL' && req.user.role === 'moderator') {
+            return res.status(403).json({ error: 'Only Administrators can claim/handle suspension appeals.' });
+        }
+
         // Pessimistic Locking
         if (ticket.lockedByModeratorId && ticket.lockedByModeratorId !== moderatorId) {
             return res.status(409).json({ error: 'Ticket is currently being handled by another moderator.' });
@@ -180,6 +184,10 @@ export const resolveTicket = async (req, res) => {
         
         const ticket = await SupportTicket.findByPk(ticketId);
         if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
+
+        if (ticket.type === 'SUSPENSION_APPEAL' && req.user.role === 'moderator') {
+            return res.status(403).json({ error: 'Only Administrators can claim/handle suspension appeals.' });
+        }
 
         // Check lock ownership
         if (ticket.lockedByModeratorId && ticket.lockedByModeratorId !== req.user.id) {
@@ -220,7 +228,10 @@ export const getDashboardData = async (req, res) => {
             include: ['transaction', 'complainant'] 
         });
         const tickets = await SupportTicket.findAll({ 
-            where: { status: ['Open', 'In-Progress'] },
+            where: { 
+                status: ['Open', 'In-Progress'],
+                type: { [Op.ne]: 'SUSPENSION_APPEAL' }
+            },
             include: ['student', 'handler'] 
         });
 

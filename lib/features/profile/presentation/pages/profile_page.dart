@@ -30,8 +30,7 @@ class _ProfilePageState extends State<ProfilePage> {
   bool _isUploading = false;
   double _reputationScore = 5.0;
   int _totalReviews = 0;
-  bool _showFullNamePublic = false;
-  bool _showPhonePublic = false;
+
 
   @override
   void initState() {
@@ -79,12 +78,7 @@ class _ProfilePageState extends State<ProfilePage> {
                   if (userData['total_reviews'] != null) {
                       _totalReviews = int.tryParse(userData['total_reviews'].toString()) ?? 0;
                   }
-                  if (userData['show_full_name'] != null) {
-                      _showFullNamePublic = userData['show_full_name'];
-                  }
-                  if (userData['show_phone_number'] != null) {
-                      _showPhonePublic = userData['show_phone_number'];
-                  }
+
               });
           }
       } catch (e) {
@@ -164,137 +158,93 @@ class _ProfilePageState extends State<ProfilePage> {
         padding: const EdgeInsets.all(24),
         child: Column(
           children: [
-            const SizedBox(height: 20),
+            const SizedBox(height: 10),
+            
+            // Row 1: The CircleAvatar (just the image)
             GestureDetector(
               onTap: _pickAndUploadAvatar,
-              child: Stack(
-                children: [
-                    CircleAvatar(
-                      radius: 50,
-                      backgroundColor: Colors.teal,
-                      backgroundImage: session.avatarUrl != null 
-                          ? NetworkImage('${ApiClient.baseUrl.replaceAll('/api', '')}${session.avatarUrl}') 
-                          : null,
-                      child: _isUploading 
-                        ? const CircularProgressIndicator(color: Colors.white)
-                        : (session.avatarUrl == null ? const Icon(Icons.person, size: 50, color: Colors.white) : null),
-                    ),
-                    Positioned(
-                        bottom: 0,
-                        right: 0,
-                        child: Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: const BoxDecoration(
-                                color: Colors.white,
-                                shape: BoxShape.circle,
-                            ),
-                            child: const Icon(Icons.camera_alt, size: 16, color: Colors.grey),
-                        ),
-                    )
-                ],
+              child: CircleAvatar(
+                radius: 45,
+                backgroundColor: Colors.teal,
+                backgroundImage: session.avatarUrl != null 
+                    ? NetworkImage('${ApiClient.baseUrl.replaceAll('/api', '')}${session.avatarUrl}') 
+                    : null,
+                child: _isUploading 
+                  ? const CircularProgressIndicator(color: Colors.white)
+                  : (session.avatarUrl == null ? const Icon(Icons.person, size: 45, color: Colors.white) : null),
               ),
             ),
-            const SizedBox(height: 16),
-            Text(
-              session.fullName ?? (session.username != null ? '@${session.username}' : 'Guest User'), 
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            const SizedBox(height: 8),
+            
+            // Row 2: Full Name + Verified/Not Verified Badge
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  session.fullName ?? (session.username != null ? '@${session.username}' : 'Guest User'), 
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.green[100],
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Text(
+                    'Verified', 
+                    style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 11),
+                  ),
+                ),
+              ],
             ),
+            const SizedBox(height: 4),
+            
+            // Row 3: @username
             if (session.username != null) ...[
-              const SizedBox(height: 4),
               Text(
                 '@${session.username}',
-                style: const TextStyle(fontSize: 16, color: Colors.teal, fontWeight: FontWeight.w500),
+                style: const TextStyle(fontSize: 14, color: Colors.grey, fontWeight: FontWeight.w500),
               ),
+              const SizedBox(height: 6),
             ],
-            const SizedBox(height: 4),
-            Text(
-              session.email ?? 'Not Logged In',
-              style: const TextStyle(fontSize: 14, color: Colors.grey),
-            ),
+            
+            // Row 4: Rating + View Profile side-by-side
             if (session.isLoggedIn) ...[
-              const SizedBox(height: 12),
-              OutlinedButton(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const StudentProfilePage()),
-                  ).then((_) => _fetchUserProfile()); // Refresh on return in case settings updated
-                },
-                style: OutlinedButton.styleFrom(
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                  side: BorderSide(color: Colors.teal.shade300),
-                ),
-                child: Text('View Profile', style: TextStyle(color: Colors.teal.shade700)),
-              ),
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.grey[50],
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.grey.shade200),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.shield_outlined, size: 14, color: Colors.blueGrey[600]),
-                    const SizedBox(width: 6),
-                    Text(
-                      'Name: ${_showFullNamePublic ? "Show" : "Hide"} • Phone: ${_showPhonePublic ? "Show" : "Hide"}',
-                      style: TextStyle(fontSize: 11, color: Colors.grey[800], fontWeight: FontWeight.w500),
-                    ),
-                    const SizedBox(width: 6),
-                    GestureDetector(
-                      onTap: () {
-                        showDialog(
-                          context: context,
-                          builder: (context) => AlertDialog(
-                            title: const Text('Privacy Status Info'),
-                            content: const Text(
-                              'Go to Settings (top right gear icon) to toggle whether your Full Name and Phone Number are visible to other students on your profile.'
-                            ),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(context),
-                                child: const Text('Got it'),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                      child: Tooltip(
-                        message: 'Configure in Settings',
-                        child: Icon(Icons.info_outline, size: 15, color: Colors.grey[500]),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-            if (session.isLoggedIn) ...[
-              const SizedBox(height: 8),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.star_rounded, size: 20, color: Colors.amber),
-                  const SizedBox(width: 4),
-                  Text(
-                    '${_reputationScore.toStringAsFixed(1)} ($_totalReviews)',
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.star_rounded, size: 20, color: Colors.amber),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${_reputationScore.toStringAsFixed(1)} ($_totalReviews)',
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(width: 16),
+                  OutlinedButton(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const StudentProfilePage()),
+                      ).then((_) => _fetchUserProfile());
+                    },
+                    style: OutlinedButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                      side: BorderSide(color: Colors.teal.shade300),
+                    ),
+                    child: Text('View Profile', style: TextStyle(color: Colors.teal.shade700, fontSize: 13)),
                   ),
                 ],
               ),
             ],
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.green[100],
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Text('Verified', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
-            ),
-            const SizedBox(height: 32),
+            const SizedBox(height: 16),
             
             // Sustainability Impact Card (FYP Requirement)
             GestureDetector(

@@ -19,6 +19,7 @@ class PublicProfilePage extends StatefulWidget {
 class _PublicProfilePageState extends State<PublicProfilePage> {
   Map<String, dynamic>? _userProfile;
   List<Product> _listings = [];
+  List<dynamic> _reviews = [];
   bool _isLoading = true;
 
   @override
@@ -48,9 +49,18 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
             _listings = _listings.where((p) => p.status == 'Available').toList();
         }
 
+        // 3. Fetch Reviews
+        try {
+            final reviewsRes = await apiClient.get('/reviews/user/${widget.userId}');
+            if (reviewsRes is List) {
+                _reviews = reviewsRes;
+            }
+        } catch (e) {
+            debugPrint("Error fetching reviews in public profile: $e");
+        }
+
         if (mounted) setState(() => _isLoading = false);
     } catch (e) {
-        // print("Error fetching public profile: $e");
         if (mounted) setState(() => _isLoading = false);
     }
   }
@@ -154,14 +164,16 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
                           ),
                            if (_userProfile!['full_name'] != null)
                              _buildInfoRow('Full Name', _userProfile!['full_name']),
+                           if (_userProfile!['university_id'] != null)
+                             _buildInfoRow('Student ID', _userProfile!['university_id']),
                            if (_userProfile!['email'] != null)
                              _buildInfoRow('Email', _userProfile!['email']),
                            if (_userProfile!['phone_number'] != null)
                              _buildInfoRow('Phone Number', _userProfile!['phone_number']),
-                          if (_userProfile!['faculty'] != null)
-                            _buildInfoRow('Faculty', _userProfile!['faculty']),
-                          if (_userProfile!['year_of_study'] != null)
-                            _buildInfoRow('Year of Study', 'Year ${_userProfile!['year_of_study']}'),
+                           if (_userProfile!['faculty'] != null)
+                             _buildInfoRow('Faculty', _userProfile!['faculty']),
+                           if (_userProfile!['year_of_study'] != null)
+                             _buildInfoRow('Year of Study', 'Year ${_userProfile!['year_of_study']}'),
                           
                           if (_userProfile!['email'] == null && _userProfile!['phone_number'] == null && _userProfile!['faculty'] == null && _userProfile!['year_of_study'] == null)
                             Padding(
@@ -178,6 +190,125 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
                               ),
                             ),
                         ],
+                        
+                        const Divider(),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8.0),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.rate_review_outlined, color: Colors.teal),
+                              const SizedBox(width: 8),
+                              Text(
+                                "Reviews",
+                                style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.teal.shade800),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8.0),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.star_rounded, color: Colors.amber, size: 28),
+                              const SizedBox(width: 8),
+                              Text(
+                                '${_userProfile?['reputation_score'] ?? '5.0'} / 5.0',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                '(${_reviews.length} reviews)',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 14,
+                                  color: Colors.grey.shade600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        if (_reviews.isEmpty)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 16.0),
+                            child: Center(
+                              child: Text(
+                                'No reviews yet.',
+                                style: GoogleFonts.outfit(color: Colors.grey.shade500, fontStyle: FontStyle.italic),
+                              ),
+                            ),
+                          )
+                        else
+                          ListView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: _reviews.length,
+                            itemBuilder: (context, index) {
+                              final r = _reviews[index];
+                              final reviewer = r['reviewer'] ?? {};
+                              final reviewerName = reviewer['username'] ?? 'Anonymous';
+                              final rating = r['rating'] ?? 5;
+                              final comment = r['comment'] ?? 'No comment provided.';
+                              final transaction = r['transaction'] ?? {};
+                              final product = transaction['product'] ?? {};
+                              final productTitle = product['title'] ?? 'Unknown Item';
+                              
+                              return Card(
+                                margin: const EdgeInsets.only(bottom: 12),
+                                elevation: 0,
+                                color: Colors.grey.shade50,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  side: BorderSide(color: Colors.grey.shade200),
+                                ),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16.0),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Text(
+                                            '@$reviewerName',
+                                            style: GoogleFonts.outfit(
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.teal,
+                                            ),
+                                          ),
+                                          Row(
+                                            children: List.generate(5, (starIndex) {
+                                              return Icon(
+                                                Icons.star_rounded,
+                                                size: 16,
+                                                color: starIndex < rating ? Colors.amber : Colors.grey.shade300,
+                                              );
+                                            }),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        comment,
+                                        style: GoogleFonts.outfit(fontSize: 14, color: Colors.black87),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        'Ref: $productTitle',
+                                        style: GoogleFonts.outfit(
+                                          fontSize: 12,
+                                          color: Colors.grey.shade600,
+                                          fontStyle: FontStyle.italic,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
                         
                         const Divider(),
                         const SizedBox(height: 16),

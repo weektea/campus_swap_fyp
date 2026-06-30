@@ -450,21 +450,30 @@
                     if (usersRes) users = await usersRes.json();
                 }
 
-                let rows = users.map(u => `
-                    <tr>
-                        <td><strong>${u.username}</strong></td>
-                        <td>${u.email}</td>
-                        <td><span class="badge bg-secondary">${u.role}</span></td>
-                        <td>${u.is_active ? '<span class="text-success">Active</span>' : '<span class="text-danger">Suspended</span>'}</td>
-                        <td>
-                            ${currentUser.role === 'admin' ? `
-                                <button class="btn btn-sm ${u.is_active ? 'btn-outline-danger' : 'btn-success'}" onclick="toggleUserStatus('${u.id}', ${u.is_active})">
-                                    ${u.is_active ? 'Ban' : 'Unban'}
-                                </button>
-                            ` : 'N/A'}
-                        </td>
-                    </tr>
-                `).join('');
+                let rows = users.map(u => {
+                    let statusLabel = '<span class="text-success">Active</span>';
+                    if (u.status === 'deactivated') {
+                        statusLabel = '<span class="text-muted">Deactivated</span>';
+                    } else if (u.status === 'suspended' || u.is_active === false) {
+                        statusLabel = '<span class="text-danger">Suspended</span>';
+                    }
+                    const isBanned = u.status === 'suspended' || !u.is_active;
+                    return `
+                        <tr>
+                            <td><strong>${u.username}</strong></td>
+                            <td>${u.email}</td>
+                            <td><span class="badge bg-secondary">${u.role}</span></td>
+                            <td>${statusLabel}</td>
+                            <td>
+                                ${currentUser.role === 'admin' ? `
+                                    <button class="btn btn-sm ${isBanned ? 'btn-success' : 'btn-outline-danger'}" onclick="toggleUserStatus('${u.id}', ${!isBanned})">
+                                        ${isBanned ? 'Unban / Reactivate' : 'Ban'}
+                                    </button>
+                                ` : 'N/A'}
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
 
                 container.innerHTML = `
                     <div class="card p-4">
@@ -685,27 +694,45 @@
                 if (!res) return;
                 const tickets = await res.json();
 
-                let rows = tickets.map(t => `
-                    <tr>
-                        <td><code>${t.id.substring(0, 8).toUpperCase()}</code></td>
-                        <td>${t.student ? t.student.username : 'Student'}</td>
-                        <td><strong>${t.subject}</strong></td>
-                        <td><span class="badge bg-info">${t.category}</span></td>
-                        <td><span class="badge bg-secondary">${t.status}</span></td>
-                        <td>
-                            <button class="btn btn-sm btn-primary" onclick="openThread('${t.id}', 'SupportTicket')">
-                                Handle Chat
-                            </button>
-                        </td>
-                    </tr>
-                `).join('');
+                const appeals = tickets.filter(t => t.type === 'SUSPENSION_APPEAL');
+                const standardTickets = tickets.filter(t => t.type !== 'SUSPENSION_APPEAL');
+
+                function renderTable(ticketList, title, isAppeals = false) {
+                    let rows = ticketList.map(t => `
+                        <tr>
+                            <td><code>${t.id.substring(0, 8).toUpperCase()}</code></td>
+                            <td>${t.student ? t.student.username : 'Student'}</td>
+                            <td><strong>${t.subject}</strong></td>
+                            <td><span class="badge bg-info">${t.category}</span></td>
+                            <td><span class="badge bg-secondary">${t.status}</span></td>
+                            <td>
+                                <button class="btn btn-sm btn-primary" onclick="openThread('${t.id}', 'SupportTicket')">
+                                    Handle Chat
+                                </button>
+                            </td>
+                        </tr>
+                    `).join('');
+
+                    const emptyMsg = isAppeals ? 'No pending suspension appeals.' : 'No standard support tickets.';
+
+                    return `
+                        <div class="card p-4 mb-4" style="${isAppeals && ticketList.length > 0 ? 'border: 2px solid #dc3545;' : ''}">
+                            <h5 class="card-title mb-3 d-flex align-items-center">
+                                ${isAppeals && ticketList.length > 0 ? '<span class="spinner-grow spinner-grow-sm text-danger me-2" role="status"></span>' : ''}
+                                ${title}
+                            </h5>
+                            <table class="table">
+                                <thead><tr><th>Ticket ID</th><th>Student</th><th>Subject</th><th>Category</th><th>Status</th><th>Actions</th></tr></thead>
+                                <tbody>${rows || `<tr><td colspan="6" class="text-center text-muted">${emptyMsg}</td></tr>`}</tbody>
+                            </table>
+                        </div>
+                    `;
+                }
 
                 container.innerHTML = `
-                    <div class="card p-4">
-                        <table class="table">
-                            <thead><tr><th>Ticket ID</th><th>Student</th><th>Subject</th><th>Category</th><th>Status</th><th>Actions</th></tr></thead>
-                            <tbody>${rows || '<tr><td colspan="6" class="text-center">No support tickets.</td></tr>'}</tbody>
-                        </table>
+                    <div class="d-flex flex-column">
+                        ${renderTable(appeals, '🚨 Urgent: Pending Suspension Appeals', true)}
+                        ${renderTable(standardTickets, '💬 Standard Support Tickets', false)}
                     </div>
                 `;
             } catch (e) {
@@ -771,6 +798,21 @@
                             <strong>Details:</strong> ${item.description || item.subject}<br>
                             <strong>Status:</strong> ${item.status} | <strong>Assigned to:</strong> ${item.lockedByModeratorId || 'None'}
                         `;
+                        const isAppeal = item.type === 'SUSPENSION_APPEAL';
+                        const replyInput = document.getElementById('replyInput');
+                        const sendBtn = replyInput?.nextElementSibling;
+                        if (replyInput) {
+                            if (isAppeal) {
+                                replyInput.disabled = true;
+                                replyInput.value = '';
+                                replyInput.placeholder = 'Chat disabled: Suspended users cannot log in to view or reply.';
+                                if (sendBtn) sendBtn.disabled = true;
+                            } else {
+                                replyInput.disabled = false;
+                                replyInput.placeholder = 'Type your reply here...';
+                                if (sendBtn) sendBtn.disabled = false;
+                            }
+                        }
                     }
                 }
 

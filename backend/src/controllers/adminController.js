@@ -668,6 +668,10 @@ export const manageUserRoleOrBan = async (req, res) => {
             user.is_active = is_active;
             if (is_active === false) {
                 suspendListings = true;
+                user.status = 'suspended';
+            } else {
+                user.status = 'active';
+                user.deactivation_reason = null;
             }
         }
         
@@ -704,6 +708,7 @@ export const deleteUser = async (req, res) => {
 
         // Soft delete / Deactivate instead of hard destroy
         user.is_active = false;
+        user.status = 'suspended'; // Admin deactivation strictly sets status to suspended
         user.deactivation_reason = 'Deactivated by Administrator';
         await user.save();
 

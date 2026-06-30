@@ -1,4 +1,4 @@
-import { Review, Transaction, User } from '../models/index.js';
+import { Review, Transaction, User, Product } from '../models/index.js';
 
 export const createReview = async (req, res) => {
     try {
@@ -118,26 +118,20 @@ export const getUserReviews = async (req, res) => {
             where: { reviewee_id: user_id },
             include: [
                 { model: User, as: 'reviewer', attributes: ['username', 'full_name'] },
-                { model: Transaction, as: 'transaction', attributes: ['review_status'] }
+                { 
+                    model: Transaction, 
+                    as: 'transaction', 
+                    attributes: ['review_status', 'product_id'],
+                    where: { review_status: 'PUBLISHED' },
+                    include: [
+                        { model: Product, as: 'product', attributes: ['title'] }
+                    ]
+                }
             ],
             order: [['createdAt', 'DESC']]
         });
 
-        // Mask reviews that are not yet PUBLISHED
-        const maskedReviews = reviews.map(r => {
-            const reviewObj = r.toJSON();
-            if (reviewObj.transaction && reviewObj.transaction.review_status !== 'PUBLISHED') {
-                return {
-                    ...reviewObj,
-                    rating: null,
-                    comment: 'Awaiting the other party to submit their review to unlock.',
-                    is_hidden: true
-                };
-            }
-            return reviewObj;
-        });
-
-        res.json(maskedReviews);
+        res.json(reviews);
     } catch (error) {
         console.error('Get Reviews Error:', error);
         res.status(500).json({ error: 'Failed to fetch reviews' });

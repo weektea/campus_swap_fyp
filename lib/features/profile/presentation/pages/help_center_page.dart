@@ -460,189 +460,218 @@ class _HelpCenterPageState extends State<HelpCenterPage> with SingleTickerProvid
         backgroundColor: primaryGreen,
         child: const Icon(Icons.headset_mic, color: Colors.white),
       ),
-      body: _isLoading ? const Center(child: CircularProgressIndicator()) : Column(
-        children: [
-          // Top section with search and grid
-          Container(
-            color: bgColor,
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Search Bar
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  decoration: BoxDecoration(
-                    color: isDark ? Colors.grey[850] : Colors.white,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.grey.withValues(alpha: 0.3)),
-                  ),
-                  child: const TextField(
-                    decoration: InputDecoration(
-                      icon: Icon(Icons.search, color: Colors.grey),
-                      hintText: 'Search for help...',
-                      border: InputBorder.none,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                
-                // Grid Options
-                GridView.count(
-                  crossAxisCount: 2,
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  crossAxisSpacing: 16,
-                  mainAxisSpacing: 16,
-                  childAspectRatio: 2.0,
+      body: _isLoading ? const Center(child: CircularProgressIndicator()) : NestedScrollView(
+        headerSliverBuilder: (BuildContext context, bool innerBoxIsScrolled) {
+          return [
+            SliverToBoxAdapter(
+              child: Container(
+                color: bgColor,
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildGridButton(Icons.receipt_long, 'Order FAQs'),
-                    _buildGridButton(Icons.person_outline, 'Account FAQs'),
-                    _buildGridButton(Icons.flag_outlined, 'Report User'),
-                    _buildGridButton(Icons.error_outline, 'Report App Issue'),
-                  ],
-                ),
-                const SizedBox(height: 32),
-                
-                const Text('My Support Tickets', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            _currentFilter = _currentFilter == 'Pending' ? 'All' : 'Pending';
-                          });
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: _currentFilter == 'Pending' ? primaryGreen.withValues(alpha: 0.1) : (isDark ? Colors.grey[850] : Colors.white),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: _currentFilter == 'Pending' ? primaryGreen : Colors.grey.withValues(alpha: 0.2),
-                              width: 2,
-                            ),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                '$_pendingCount Pending',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: _currentFilter == 'Pending' ? primaryGreen : (isDark ? Colors.white : Colors.black87),
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                'Active Tickets',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey[600],
-                                ),
-                              ),
-                            ],
-                          ),
+                    // Search Bar
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.grey[850] : Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.grey.withValues(alpha: 0.3)),
+                      ),
+                      child: const TextField(
+                        decoration: InputDecoration(
+                          icon: Icon(Icons.search, color: Colors.grey),
+                          hintText: 'Search for help...',
+                          border: InputBorder.none,
                         ),
                       ),
                     ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            _currentFilter = _currentFilter == 'Resolved' ? 'All' : 'Resolved';
-                          });
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: _currentFilter == 'Resolved' ? Colors.green.withValues(alpha: 0.1) : (isDark ? Colors.grey[850] : Colors.white),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: _currentFilter == 'Resolved' ? Colors.green : Colors.grey.withValues(alpha: 0.2),
-                              width: 2,
+                    const SizedBox(height: 24),
+                    
+                    // Grid Options
+                    GridView.count(
+                      crossAxisCount: 2,
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      crossAxisSpacing: 16,
+                      mainAxisSpacing: 16,
+                      childAspectRatio: 2.0,
+                      children: [
+                        _buildGridButton(Icons.receipt_long, 'Order FAQs'),
+                        _buildGridButton(Icons.person_outline, 'Account FAQs'),
+                        _buildGridButton(Icons.flag_outlined, 'Report User'),
+                        _buildGridButton(Icons.error_outline, 'Report App Issue'),
+                      ],
+                    ),
+                    const SizedBox(height: 32),
+                    
+                    const Text('My Support Tickets', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                _currentFilter = _currentFilter == 'Pending' ? 'All' : 'Pending';
+                              });
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: _currentFilter == 'Pending' ? primaryGreen.withValues(alpha: 0.1) : (isDark ? Colors.grey[850] : Colors.white),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: _currentFilter == 'Pending' ? primaryGreen : Colors.grey.withValues(alpha: 0.2),
+                                  width: 2,
+                                ),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '$_pendingCount Pending',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: _currentFilter == 'Pending' ? primaryGreen : (isDark ? Colors.white : Colors.black87),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Active Tickets',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey[600],
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                '$_resolvedCount Resolved',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: _currentFilter == 'Resolved' ? Colors.green : (isDark ? Colors.white : Colors.black87),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                _currentFilter = _currentFilter == 'Resolved' ? 'All' : 'Resolved';
+                              });
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: _currentFilter == 'Resolved' ? Colors.green.withValues(alpha: 0.1) : (isDark ? Colors.grey[850] : Colors.white),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: _currentFilter == 'Resolved' ? Colors.green : Colors.grey.withValues(alpha: 0.2),
+                                  width: 2,
                                 ),
                               ),
-                              const SizedBox(height: 4),
-                              Text(
-                                'History',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey[600],
-                                ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '$_resolvedCount Resolved',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: _currentFilter == 'Resolved' ? Colors.green : (isDark ? Colors.white : Colors.black87),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'History',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey[600],
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ],
+                            ),
                           ),
                         ),
-                      ),
+                      ],
                     ),
                   ],
                 ),
-              ],
-            ),
-          ),
-          
-          // Tab Bar
-          TabBar(
-            controller: _tabController,
-            labelColor: primaryGreen,
-            unselectedLabelColor: Colors.grey,
-            indicatorColor: primaryGreen,
-            tabs: const [
-              Tab(text: 'Reports'),
-              Tab(text: 'Disputes'),
-              Tab(text: 'Tickets'),
-            ],
-          ),
-          
-          // Tab Views
-          Expanded(
-            child: Container(
-              color: isDark ? theme.colorScheme.surface : const Color(0xFFF0F2F0),
-              child: TabBarView(
-                controller: _tabController,
-                children: [
-                  // Reports Tab
-                  ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _filteredReports.length,
-                    itemBuilder: (context, index) => _buildTicketCard(_filteredReports[index], 'Report'),
-                  ),
-                  
-                  // Disputes Tab
-                  ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _filteredDisputes.length,
-                    itemBuilder: (context, index) => _buildTicketCard(_filteredDisputes[index], 'Dispute'),
-                  ),
-                  
-                  // Tickets Tab
-                  ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _filteredTickets.length,
-                    itemBuilder: (context, index) => _buildTicketCard(_filteredTickets[index], 'SupportTicket'),
-                  ),
-                ],
               ),
             ),
+            SliverPersistentHeader(
+              pinned: true,
+              delegate: _SliverAppBarDelegate(
+                TabBar(
+                  controller: _tabController,
+                  labelColor: primaryGreen,
+                  unselectedLabelColor: Colors.grey,
+                  indicatorColor: primaryGreen,
+                  tabs: const [
+                    Tab(text: 'Reports'),
+                    Tab(text: 'Disputes'),
+                    Tab(text: 'Tickets'),
+                  ],
+                ),
+                bgColor: isDark ? theme.colorScheme.surface : Colors.white,
+              ),
+            ),
+          ];
+        },
+        body: Container(
+          color: isDark ? theme.colorScheme.surface : const Color(0xFFF0F2F0),
+          child: TabBarView(
+            controller: _tabController,
+            children: [
+              // Reports Tab
+              ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: _filteredReports.length,
+                itemBuilder: (context, index) => _buildTicketCard(_filteredReports[index], 'Report'),
+              ),
+              
+              // Disputes Tab
+              ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: _filteredDisputes.length,
+                itemBuilder: (context, index) => _buildTicketCard(_filteredDisputes[index], 'Dispute'),
+              ),
+              
+              // Tickets Tab
+              ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: _filteredTickets.length,
+                itemBuilder: (context, index) => _buildTicketCard(_filteredTickets[index], 'SupportTicket'),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
+  }
+}
+
+class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
+  _SliverAppBarDelegate(this._tabBar, {required this.bgColor});
+
+  final TabBar _tabBar;
+  final Color bgColor;
+
+  @override
+  double get minExtent => _tabBar.preferredSize.height;
+  @override
+  double get maxExtent => _tabBar.preferredSize.height;
+
+  @override
+  Widget build(
+      BuildContext context, double shrinkOffset, bool overlapsContent) {
+    return Container(
+      color: bgColor,
+      child: _tabBar,
+    );
+  }
+
+  @override
+  bool shouldRebuild(_SliverAppBarDelegate oldDelegate) {
+    return oldDelegate.bgColor != bgColor || oldDelegate._tabBar != _tabBar;
   }
 }

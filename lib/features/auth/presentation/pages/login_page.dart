@@ -5,6 +5,7 @@ import 'package:campus_swap/features/auth/presentation/pages/register_page.dart'
 import 'package:campus_swap/core/session/user_session.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:campus_swap/core/services/socket_service.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import 'package:campus_swap/features/auth/presentation/pages/forgot_password_page.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -102,8 +103,10 @@ class _LoginPageState extends State<LoginPage> {
         }
       } catch (e) {
         if (mounted) {
-          if (e is ApiException && e.message == 'Account Suspended') {
-            _showSuspendedBottomSheet(e.responseData);
+          if (e is ApiException && e.responseData?['errorCode'] == 'ACCOUNT_DEACTIVATED') {
+            _showReactivateDialog(e.responseData?['token']);
+          } else if (e is ApiException && (e.message == 'Account Suspended' || e.responseData?['errorCode'] == 'ACCOUNT_SUSPENDED')) {
+            _showSuspendedBottomSheet(e.responseData, e.responseData?['token']);
           } else {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text('Login Failed: ${e.toString()}')),
@@ -116,7 +119,7 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
-  void _showSuspendedBottomSheet(Map<String, dynamic>? data) {
+  void _showSuspendedBottomSheet(Map<String, dynamic>? data, String? appealToken) {
     final reason = data?['reason'] ?? 'Violation of community guidelines';
     String unbanDate = 'Permanent';
     if (data?['unban_date'] != null) {
@@ -197,10 +200,9 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                   onPressed: () {
                     Navigator.pop(context); // Close sheet
-                    // Add external url launch if needed, or snackbar for MVP
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Redirecting to support...')));
+                    _showAppealDialog(appealToken);
                   },
-                  child: const Text('Contact Support', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                  child: const Text('Contact Support & Appeal', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
                 ),
               ),
               const SizedBox(height: 8),
@@ -211,6 +213,196 @@ class _LoginPageState extends State<LoginPage> {
               const SizedBox(height: 16), // Padding for bottom notch
             ],
           ),
+        );
+      },
+    );
+  }
+
+  void _showAppealDialog(String? appealToken) {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        bool isSubmitting = false;
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Submit Suspension Appeal'),
+              content: isSubmitting
+                  ? Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const CircularProgressIndicator(),
+                        const SizedBox(height: 16),
+                        Text('Submitting your appeal...', style: GoogleFonts.outfit()),
+                      ],
+                    )
+                  : Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Provide details for your appeal. The administrators will review it as soon as possible.',
+                          style: TextStyle(fontSize: 14, color: Colors.black87),
+                        ),
+                        const SizedBox(height: 16),
+                        TextField(
+                          controller: controller,
+                          maxLines: 4,
+                          decoration: const InputDecoration(
+                            border: OutlineInputBorder(),
+                            labelText: 'Appeal Reason',
+                            hintText: 'Describe why your account should be reactivated...',
+                          ),
+                        ),
+                      ],
+                    ),
+              actions: isSubmitting
+                  ? []
+                  : [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Cancel'),
+                      ),
+                      ElevatedButton(
+                        onPressed: () async {
+                          if (controller.text.trim().isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Please enter an appeal reason')),
+                            );
+                            return;
+                          }
+                          setDialogState(() => isSubmitting = true);
+                          try {
+                            final apiClient = ApiClient();
+                            
+                            // Temporarily set token in UserSession so the ApiClient sends it in headers
+                            final originalToken = UserSession().token;
+                            UserSession().token = appealToken;
+
+                            await apiClient.post('/auth/appeal', {
+                              'description': controller.text.trim(),
+                              'type': 'SUSPENSION_APPEAL'
+                            });
+
+                            // Restore token
+                            UserSession().token = originalToken;
+
+                            if (context.mounted) {
+                              Navigator.pop(context); // Close dialog
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Appeal submitted successfully. Check back later!'),
+                                  backgroundColor: Colors.green,
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            if (context.mounted) {
+                              setDialogState(() => isSubmitting = false);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Appeal submission failed: $e'), backgroundColor: Colors.red),
+                              );
+                            }
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Theme.of(context).colorScheme.primary,
+                          foregroundColor: Colors.white,
+                        ),
+                        child: const Text('Submit Appeal'),
+                      ),
+                    ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showReactivateDialog(String? reactivationToken) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        bool isReactivating = false;
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Account Deactivated'),
+              content: isReactivating 
+                  ? Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const CircularProgressIndicator(),
+                        const SizedBox(height: 16),
+                        Text('Reactivating your account...', style: GoogleFonts.outfit()),
+                      ],
+                    )
+                  : const Text('Your account is currently deactivated. Would you like to reactivate it and restore your profile?'),
+              actions: isReactivating 
+                  ? [] 
+                  : [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Cancel'),
+                      ),
+                      ElevatedButton(
+                        onPressed: () async {
+                          setDialogState(() => isReactivating = true);
+                          final originalToken = UserSession().token;
+                          try {
+                            final apiClient = ApiClient();
+                            
+                            // Temporarily set token in UserSession so the ApiClient sends it in headers
+                            UserSession().token = reactivationToken;
+                            
+                            final reactivateResponse = await apiClient.put('/auth/users/reactivate', {});
+                            
+                            // Save new login credentials to session
+                            UserSession().token = reactivateResponse['token'] ?? reactivationToken;
+                            UserSession().userId = reactivateResponse['user']['id'];
+                            UserSession().email = reactivateResponse['user']['email'];
+                            UserSession().username = reactivateResponse['user']['username'];
+                            UserSession().fullName = reactivateResponse['user']['full_name'];
+                            UserSession().role = reactivateResponse['user']['role'];
+                            
+                            // Initialize dynamic real-time WebSocket connection
+                            SocketService().init();
+                            
+                            if (context.mounted) {
+                              Navigator.pop(context); // Close dialog
+                              Navigator.pushReplacement(
+                                context,
+                                MaterialPageRoute(builder: (context) => const HomePage()),
+                              );
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Account reactivated successfully. Welcome back!'),
+                                  backgroundColor: Colors.green,
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            UserSession().token = originalToken;
+                            if (context.mounted) {
+                              setDialogState(() => isReactivating = false);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Reactivation failed: $e'), backgroundColor: Colors.red),
+                              );
+                            }
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Theme.of(context).colorScheme.primary,
+                          foregroundColor: Colors.white,
+                        ),
+                        child: const Text('Yes, Reactivate'),
+                      ),
+                    ],
+            );
+          },
         );
       },
     );

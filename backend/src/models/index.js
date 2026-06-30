@@ -98,8 +98,12 @@ TicketMessage.belongsTo(Dispute, { foreignKey: 'reference_id', constraints: fals
 SupportTicket.hasMany(TicketMessage, { foreignKey: 'reference_id', constraints: false, scope: { reference_type: 'SupportTicket' }, as: 'messages' });
 TicketMessage.belongsTo(SupportTicket, { foreignKey: 'reference_id', constraints: false, as: 'support_ticket' });
 
+import ActivityLog from './ActivityLog.js';
+User.hasMany(ActivityLog, { foreignKey: 'user_id', as: 'activity_logs' });
+ActivityLog.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+
 export { 
     User, Product, Transaction, SavedItem, Message, Review, 
     Notification, UserInteraction, Category, SubCategory, 
-    Report, SupportTicket, Dispute, SafeMeetupZone, BackupLog, TicketMessage
+    Report, SupportTicket, Dispute, SafeMeetupZone, BackupLog, TicketMessage, ActivityLog
 };

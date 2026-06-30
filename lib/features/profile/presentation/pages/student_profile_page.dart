@@ -5,7 +5,8 @@ import 'package:campus_swap/core/session/user_session.dart';
 import 'package:campus_swap/features/profile/presentation/pages/edit_profile_page.dart';
 
 class StudentProfilePage extends StatefulWidget {
-  const StudentProfilePage({super.key});
+  final String? userId;
+  const StudentProfilePage({super.key, this.userId});
 
   @override
   State<StudentProfilePage> createState() => _StudentProfilePageState();
@@ -14,6 +15,7 @@ class StudentProfilePage extends StatefulWidget {
 class _StudentProfilePageState extends State<StudentProfilePage> {
   Map<String, dynamic>? _userData;
   int _activeListingsCount = 0;
+  List<dynamic> _reviews = [];
   bool _isLoading = true;
 
   @override
@@ -24,7 +26,8 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
 
   Future<void> _fetchProfileData() async {
     final session = UserSession();
-    if (!session.isLoggedIn) return;
+    final targetUserId = widget.userId ?? session.userId;
+    if (targetUserId == null) return;
     
     setState(() => _isLoading = true);
     
@@ -32,20 +35,29 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
       final apiClient = ApiClient();
       
       // 1. Fetch User Data
-      final resData = await apiClient.get('/auth/user/${session.userId}');
+      final resData = await apiClient.get('/auth/user/$targetUserId');
       if (resData != null && resData['user'] != null) {
         _userData = resData['user'];
       }
 
-      // 2. Fetch Active Listings Count (Assuming /products/seller/:id exists or similar)
-      // If we don't have a direct endpoint, we can use the search endpoint:
+      // 2. Fetch Active Listings Count
       try {
-        final listingsRes = await apiClient.get('/products/search?seller_id=${session.userId}');
+        final listingsRes = await apiClient.get('/products?seller_id=$targetUserId');
         if (listingsRes is List) {
           _activeListingsCount = listingsRes.where((p) => p['status'] == 'Available').length;
         }
       } catch (e) {
         debugPrint('Error fetching listings count: $e');
+      }
+
+      // 3. Fetch Reviews
+      try {
+        final reviewsRes = await apiClient.get('/reviews/user/$targetUserId');
+        if (reviewsRes is List) {
+          _reviews = reviewsRes;
+        }
+      } catch (e) {
+        debugPrint('Error fetching reviews: $e');
       }
 
       if (mounted) {
@@ -114,17 +126,18 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
       appBar: AppBar(
         title: Text('Student Profile', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.edit),
-            onPressed: () async {
-              await Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const EditProfilePage()),
-              );
-              // Refresh data when coming back
-              _fetchProfileData();
-            },
-          )
+          if (widget.userId == null || widget.userId == UserSession().userId)
+            IconButton(
+              icon: const Icon(Icons.edit),
+              onPressed: () async {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const EditProfilePage()),
+                );
+                // Refresh data when coming back
+                _fetchProfileData();
+              },
+            )
         ],
       ),
       body: _isLoading
@@ -229,6 +242,112 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
                       _buildDataRow('Active Listings', '$_activeListingsCount items'),
                       _buildDataRow('Total Carbon Saved', '${_userData!['total_carbon_saved'] ?? '0.0'} kg CO2e'),
                       
+                      const Divider(),
+                      _buildSectionHeader('Reviews', Icons.rate_review_outlined),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8.0),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.star_rounded, color: Colors.amber, size: 28),
+                            const SizedBox(width: 8),
+                            Text(
+                              '${_userData!['reputation_score'] ?? '5.0'} / 5.0',
+                              style: GoogleFonts.outfit(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              '(${_reviews.length} reviews)',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey.shade600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      if (_reviews.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 16.0),
+                          child: Center(
+                            child: Text(
+                              'No reviews yet.',
+                              style: TextStyle(color: Colors.grey.shade500, fontStyle: FontStyle.italic),
+                            ),
+                          ),
+                        )
+                      else
+                        ListView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: _reviews.length,
+                          itemBuilder: (context, index) {
+                            final r = _reviews[index];
+                            final reviewer = r['reviewer'] ?? {};
+                            final reviewerName = reviewer['username'] ?? 'Anonymous';
+                            final rating = r['rating'] ?? 5;
+                            final comment = r['comment'] ?? 'No comment provided.';
+                            final transaction = r['transaction'] ?? {};
+                            final product = transaction['product'] ?? {};
+                            final productTitle = product['title'] ?? 'Unknown Item';
+                            
+                            return Card(
+                              margin: const EdgeInsets.only(bottom: 12),
+                              elevation: 0,
+                              color: Colors.grey.shade50,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                side: BorderSide(color: Colors.grey.shade200),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(16.0),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text(
+                                          '@$reviewerName',
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.teal,
+                                          ),
+                                        ),
+                                        Row(
+                                          children: List.generate(5, (starIndex) {
+                                            return Icon(
+                                              Icons.star_rounded,
+                                              size: 16,
+                                              color: starIndex < rating ? Colors.amber : Colors.grey.shade300,
+                                            );
+                                          }),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      comment,
+                                      style: const TextStyle(fontSize: 14, color: Colors.black87),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      'Ref: $productTitle',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey.shade600,
+                                        fontStyle: FontStyle.italic,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
                       const SizedBox(height: 40),
                     ],
                   ),

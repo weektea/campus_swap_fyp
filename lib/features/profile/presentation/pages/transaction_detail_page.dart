@@ -315,6 +315,83 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
                   label: Text('Report Issue / Open Dispute', style: GoogleFonts.outfit(color: Colors.red, fontWeight: FontWeight.bold)),
                 ),
               ),
+            
+            if (status == 'Completed') ...[
+              const SizedBox(height: 24),
+              Text('Transaction Feedback', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.shade200),
+                ),
+                child: () {
+                  final isPublished = _transaction['review_status'] == 'PUBLISHED';
+                  final rating = isBuying 
+                      ? _transaction['rating_from_seller'] 
+                      : _transaction['rating_from_buyer'];
+                  final comment = isBuying 
+                      ? _transaction['seller_comment'] 
+                      : _transaction['buyer_comment'];
+
+                  if (isPublished) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Feedback from $otherPartyName',
+                              style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.teal),
+                            ),
+                            Row(
+                              children: List.generate(5, (starIndex) {
+                                final int starVal = rating is num ? rating.toInt() : 5;
+                                return Icon(
+                                  Icons.star_rounded,
+                                  size: 18,
+                                  color: starIndex < starVal ? Colors.amber : Colors.grey.shade300,
+                                );
+                              }),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          comment ?? 'No comment provided.',
+                          style: const TextStyle(fontSize: 14, color: Colors.black87),
+                        ),
+                      ],
+                    );
+                  } else {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.lock_outline, size: 18, color: Colors.amber.shade700),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Feedback Locked',
+                              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.amber.shade800),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Waiting for the counterparty to submit their review to unlock feedback.',
+                          style: TextStyle(fontSize: 13, color: Colors.grey.shade600, fontStyle: FontStyle.italic),
+                        ),
+                      ],
+                    );
+                  }
+                }(),
+              ),
+            ],
           ],
         ),
       ),

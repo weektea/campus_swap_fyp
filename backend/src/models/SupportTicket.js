@@ -27,6 +27,11 @@ const SupportTicket = sequelize.define('SupportTicket', {
         type: DataTypes.STRING,
         defaultValue: 'Open',
     },
+    type: {
+        type: DataTypes.STRING,
+        allowNull: true,
+        defaultValue: 'SUPPORT'
+    },
     reply_content: {
         type: DataTypes.TEXT,
         allowNull: true, // For storing moderator's final answer

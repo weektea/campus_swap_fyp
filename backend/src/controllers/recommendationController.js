@@ -1,4 +1,4 @@
-import { UserInteraction, Product, User, Report } from '../models/index.js';
+import { UserInteraction, Product, User, Report, Category, SubCategory } from '../models/index.js';
 import { Op } from 'sequelize';
 import sequelize from '../config/database.js';
 
@@ -132,7 +132,7 @@ export const getRecommendations = async (req, res) => {
         }
 
         // Preprocess text documents
-        const { Category: CategoryModel, SubCategory: SubCategoryModel } = await import('../models/index.js');
+
         const documents = availableProducts.map(p => {
             const catName = p.categoryModel ? p.categoryModel.name : (p.category || '');
             const subcatName = p.subcategoryModel ? p.subcategoryModel.name : '';
