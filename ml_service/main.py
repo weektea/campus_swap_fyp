@@ -5,6 +5,7 @@ import shutil
 import os
 import uuid
 import threading
+import time
 from model_vision import predict_image, fine_tune_model, FLAT_CLASSES
 
 app = FastAPI(title="Campus Swap ML Microservice")
@@ -73,20 +74,57 @@ async def feedback(
         
     return {"message": "Feedback saved for continuous learning", "saved_path": file_path}
 
+@app.on_event("startup")
+def startup_event():
+    def watch_model_files():
+        model_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "custom_model.pth")
+        classes_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "custom_model_classes.json")
+        
+        last_modified = None
+        if os.path.exists(model_path):
+            last_modified = os.path.getmtime(model_path)
+            
+        print(f"[ML-HOT-SWAP] File Watcher thread active. Watching {model_path} for updates.")
+        
+        while True:
+            time.sleep(5)
+            try:
+                if os.path.exists(model_path) and os.path.exists(classes_path):
+                    current_mtime = os.path.getmtime(model_path)
+                    if last_modified is None:
+                        last_modified = current_mtime
+                    elif current_mtime > last_modified:
+                        print(f"[ML-HOT-SWAP] New weights modification detected (mtime: {current_mtime} > {last_modified}). Loading new model instance...")
+                        # Brief sleep to ensure writing has fully finished
+                        time.sleep(1)
+                        from model_vision import live_model_container
+                        success = live_model_container.load_model(model_path, classes_path)
+                        if success:
+                            last_modified = current_mtime
+            except Exception as e:
+                print(f"[ML-HOT-SWAP] Watcher thread error: {e}")
+                
+    watcher_thread = threading.Thread(target=watch_model_files, daemon=True)
+    watcher_thread.start()
+
 @app.post("/train/image-model")
 async def train_model():
-    # Run fine-tuning in a background thread to not block the API
+    print("[ML-SHADOW-TRAINING] Shadow Training triggered in background.")
     def train_task():
-        success = fine_tune_model(DATASET_DIR)
+        from model_vision import fetch_categories_from_api, fine_tune_model, FLAT_CLASSES
+        # Fetch dynamic categories from the database API to find updates
+        fetch_categories_from_api()
+        print(f"[ML-SHADOW-TRAINING] Background worker initiating Shadow Training with {len(FLAT_CLASSES)} subcategories.")
+        success = fine_tune_model(DATASET_DIR, FLAT_CLASSES)
         if success:
-            print("Background training completed successfully.")
+            print("[ML-SHADOW-TRAINING] Background Shadow Training completed successfully. Hot swap will execute shortly.")
         else:
-            print("Background training failed.")
+            print("[ML-SHADOW-TRAINING] Background Shadow Training failed.")
             
-    thread = threading.Thread(target=train_task)
+    thread = threading.Thread(target=train_task, daemon=True)
     thread.start()
     
-    return {"message": "Model training started in the background."}
+    return {"message": "Shadow Training started in the background."}
 
 @app.get("/admin/ml-metrics")
 async def get_ml_metrics():

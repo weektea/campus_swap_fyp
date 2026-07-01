@@ -3,6 +3,7 @@ import 'package:campus_swap/core/api/api_client.dart';
 import 'package:campus_swap/features/home/domain/entities/product.dart';
 import 'package:campus_swap/features/product/presentation/pages/product_details_page.dart';
 import 'package:campus_swap/features/home/presentation/widgets/product_card.dart';
+import 'package:campus_swap/features/home/presentation/widgets/product_list_row.dart';
 import 'package:campus_swap/features/home/presentation/widgets/category_chip.dart';
 import 'package:campus_swap/features/chat/presentation/pages/chat_page.dart';
 import 'package:campus_swap/features/product/presentation/pages/sell_page.dart';
@@ -30,9 +31,158 @@ class HomePageState extends State<HomePage> {
 
   @override
   void dispose() {
+    _scrollController.dispose();
     _searchController.dispose();
     NotificationService().stopPolling();
     super.dispose();
+  }
+
+  final ScrollController _scrollController = ScrollController();
+
+  List<Product> _newestProducts = [];
+  int _newestPage = 1;
+  bool _newestHasMore = true;
+  bool _isLoadingNewest = false;
+  bool _isLoadingMoreNewest = false;
+
+  void _onScroll() {
+    if (_selectedTab != 'Newest') return;
+    if (!_scrollController.hasClients) return;
+    
+    final maxScroll = _scrollController.position.maxScrollExtent;
+    final currentScroll = _scrollController.position.pixels;
+    if (maxScroll - currentScroll <= 200) {
+      _fetchNextPageNewest();
+    }
+  }
+
+  String getTimeframe(DateTime date, DateTime now) {
+    final localDate = date.toLocal(); // TimeZone Guard
+    final dateOnly = DateTime(localDate.year, localDate.month, localDate.day);
+    final todayOnly = DateTime(now.year, now.month, now.day);
+    final difference = todayOnly.difference(dateOnly).inDays;
+
+    if (difference == 0) {
+      return 'Today';
+    } else if (difference == 1) {
+      return 'Yesterday';
+    } else if (difference < 7) {
+      return 'This Week';
+    } else if (difference < 30) {
+      return 'This Month';
+    } else {
+      return 'Older';
+    }
+  }
+
+  List<dynamic> get _newestListItems {
+    final List<dynamic> items = [];
+    String? currentFrame;
+    final now = DateTime.now();
+    
+    // Pagination Boundary Guard: Sequential evaluation of the combined list
+    // guarantees that we never insert duplicate timeline text dividers.
+    for (final product in _newestProducts) {
+      final frame = getTimeframe(product.postedAt, now);
+      if (frame != currentFrame) {
+        currentFrame = frame;
+        items.add(frame);
+      }
+      items.add(product);
+    }
+    
+    if (_isLoadingMoreNewest) {
+      items.add(const _LoadingMoreMarker());
+    }
+    
+    return items;
+  }
+
+  Future<void> _fetchFirstPageNewest() async {
+    if (mounted) {
+      setState(() {
+        _isLoadingNewest = true;
+        _newestProducts = [];
+        _newestPage = 1;
+        _newestHasMore = true;
+      });
+    }
+    
+    try {
+      final apiClient = ApiClient();
+      const limit = 10;
+      
+      String endpoint = '/items/newest?limit=$limit&page=1';
+      if (UserSession().isLoggedIn) {
+        endpoint += '&exclude_reported_by=${UserSession().userId}';
+      }
+      
+      final response = await apiClient.get(endpoint);
+      if (response is List && mounted) {
+        final List<Product> newProducts = response.map((data) => Product.fromJson(data)).toList();
+        setState(() {
+          _newestProducts = newProducts;
+          if (newProducts.length < limit) {
+            _newestHasMore = false;
+          }
+          _isLoadingNewest = false;
+        });
+      } else if (mounted) {
+        setState(() {
+          _isLoadingNewest = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoadingNewest = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _fetchNextPageNewest() async {
+    if (_isLoadingNewest || _isLoadingMoreNewest || !_newestHasMore) return;
+    
+    if (mounted) {
+      setState(() {
+        _isLoadingMoreNewest = true;
+      });
+    }
+    
+    try {
+      final apiClient = ApiClient();
+      const limit = 10;
+      final page = _newestPage + 1;
+      
+      String endpoint = '/items/newest?limit=$limit&page=$page';
+      if (UserSession().isLoggedIn) {
+        endpoint += '&exclude_reported_by=${UserSession().userId}';
+      }
+      
+      final response = await apiClient.get(endpoint);
+      if (response is List && mounted) {
+        final List<Product> newProducts = response.map((data) => Product.fromJson(data)).toList();
+        setState(() {
+          if (newProducts.isEmpty || newProducts.length < limit) {
+            _newestHasMore = false;
+          }
+          _newestProducts.addAll(newProducts);
+          _newestPage = page;
+          _isLoadingMoreNewest = false;
+        });
+      } else if (mounted) {
+        setState(() {
+          _isLoadingMoreNewest = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoadingMoreNewest = false;
+        });
+      }
+    }
   }
 
   int _selectedIndex = 0;
@@ -209,6 +359,7 @@ class HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onScroll);
     _fetchCategories();
     _fetchProducts();
     _fetchRecommendations();
@@ -344,8 +495,19 @@ class HomePageState extends State<HomePage> {
   Widget _buildHomeView() {
     return SafeArea(
       child: RefreshIndicator(
-        onRefresh: _fetchProducts,
+        onRefresh: () async {
+          if (_selectedTab == 'Newest') {
+            await _fetchFirstPageNewest();
+          } else if (_selectedTab == 'For You') {
+            await _fetchRecommendations();
+          } else if (_selectedTab == 'Popular') {
+            await _fetchTrending();
+          } else {
+            await _fetchProducts();
+          }
+        },
         child: CustomScrollView(
+          controller: _scrollController,
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
             // Custom Header
@@ -620,9 +782,15 @@ class HomePageState extends State<HomePage> {
                     return GestureDetector(
                       onTap: () {
                         setState(() => _selectedTab = tab);
+                        if (_scrollController.hasClients) {
+                          _scrollController.animateTo(
+                            0,
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeOut,
+                          );
+                        }
                         if (tab == 'Newest') {
-                            _sortBy = 'newest';
-                            _fetchProducts();
+                            _fetchFirstPageNewest();
                         } else if (tab == 'All Listings') {
                             _sortBy = 'newest'; 
                             _fetchProducts(); 
@@ -686,144 +854,267 @@ class HomePageState extends State<HomePage> {
               ),
             if (_selectedTab == 'For You') const SliverToBoxAdapter(child: SizedBox(height: 12)),
 
-            // Product Grid
-            if (_isLoading)
-              const SliverFillRemaining(
-                child: Center(child: CircularProgressIndicator()),
-              )
-            else if (_gridProducts.isEmpty) ...[
-              SliverFillRemaining(
-                child: Center(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 32.0),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.search_off_rounded,
-                          size: 64,
-                          color: Colors.grey[400],
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          (_searchController.text.isNotEmpty ||
-                                  _selectedCategoryIndex != 0 ||
-                                  _selectedSubCategoryId != null ||
-                                  _minPrice != null ||
-                                  _maxPrice != null ||
-                                  _selectedCondition != null ||
-                                  _selectedListingType != 'All')
-                              ? 'No items match your criteria'
-                              : 'No items found',
-                          style: GoogleFonts.outfit(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.grey[800],
+            // Product Grid / List
+            if (_selectedTab == 'Newest') ...[
+              if (_isLoadingNewest)
+                const SliverFillRemaining(
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else if (_newestProducts.isEmpty)
+                SliverFillRemaining(
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 32.0),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.search_off_rounded,
+                            size: 64,
+                            color: Colors.grey[400],
                           ),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          (_searchController.text.isNotEmpty ||
-                                  _selectedCategoryIndex != 0 ||
-                                  _selectedSubCategoryId != null ||
-                                  _minPrice != null ||
-                                  _maxPrice != null ||
-                                  _selectedCondition != null ||
-                                  _selectedListingType != 'All')
-                              ? 'Try adjusting your search query, price range, or category filter.'
-                              : 'Be the first to list an item for sale or rent!',
-                          style: GoogleFonts.outfit(
-                            fontSize: 14,
-                            color: Colors.grey[600],
+                          const SizedBox(height: 16),
+                          Text(
+                            'No items found',
+                            style: GoogleFonts.outfit(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.grey[800],
+                            ),
+                            textAlign: TextAlign.center,
                           ),
-                          textAlign: TextAlign.center,
-                        ),
-                        if (_searchController.text.isNotEmpty ||
-                            _selectedCategoryIndex != 0 ||
-                            _selectedSubCategoryId != null ||
-                            _minPrice != null ||
-                            _maxPrice != null ||
-                            _selectedCondition != null ||
-                            _selectedListingType != 'All') ...[
-                          const SizedBox(height: 24),
-                          ElevatedButton.icon(
-                            onPressed: () {
-                              setState(() {
-                                _searchController.clear();
-                                _selectedCategoryIndex = 0;
-                                _selectedSubCategoryId = null;
-                                _minPrice = null;
-                                _maxPrice = null;
-                                _selectedCondition = null;
-                                _selectedListingType = 'All';
-                              });
-                              _fetchProducts();
-                            },
-                            icon: const Icon(Icons.clear_all_rounded, color: Colors.white),
-                            label: Text(
-                              'Clear Filters',
-                              style: GoogleFonts.outfit(fontWeight: FontWeight.bold),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Be the first to list an item for sale or rent!',
+                            style: GoogleFonts.outfit(
+                              fontSize: 14,
+                              color: Colors.grey[600],
                             ),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Theme.of(context).colorScheme.primary,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            ),
+                            textAlign: TextAlign.center,
                           ),
                         ],
-                      ],
+                      ),
+                    ),
+                  ),
+                )
+              else
+                SliverPadding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                        final item = _newestListItems[index];
+                        if (item is String) {
+                          return _buildTimelineDivider(item);
+                        } else if (item is Product) {
+                          final product = item;
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
+                            child: ProductListRow(
+                              product: product,
+                              isFavorite: _savedProductIds.contains(product.id),
+                              onFavoriteToggle: () => _toggleFavorite(product.id),
+                              onTap: () {
+                                Navigator.push(context, MaterialPageRoute(
+                                  builder: (_) => ProductDetailsPage(
+                                    product: product,
+                                    initialIsSaved: _savedProductIds.contains(product.id),
+                                  )
+                                )).then((result) {
+                                  _fetchSavedItems();
+                                  _fetchTrending();
+                                  if (result == 'reported') {
+                                    _fetchFirstPageNewest();
+                                  }
+                                });
+                              },
+                            ).animate().fadeIn(duration: 300.ms).slideY(begin: 0.05, end: 0),
+                          );
+                        } else if (item is _LoadingMoreMarker) {
+                          return const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 20.0),
+                            child: Center(
+                              child: CircularProgressIndicator(),
+                            ),
+                          );
+                        }
+                        return const SizedBox.shrink();
+                      },
+                      childCount: _newestListItems.length,
                     ),
                   ),
                 ),
-              )
-            ]
-            else
-              SliverPadding(
-                padding: const EdgeInsets.all(20),
-                sliver: SliverGrid(
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    childAspectRatio: 0.70, // Slightly taller for better cards
-                    crossAxisSpacing: 16,
-                    mainAxisSpacing: 16,
+            ] else ...[
+              if (_isLoading)
+                const SliverFillRemaining(
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else if (_gridProducts.isEmpty) ...[
+                SliverFillRemaining(
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 32.0),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.search_off_rounded,
+                            size: 64,
+                            color: Colors.grey[400],
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            (_searchController.text.isNotEmpty ||
+                                    _selectedCategoryIndex != 0 ||
+                                    _selectedSubCategoryId != null ||
+                                    _minPrice != null ||
+                                    _maxPrice != null ||
+                                    _selectedCondition != null ||
+                                    _selectedListingType != 'All')
+                                ? 'No items match your criteria'
+                                : 'No items found',
+                            style: GoogleFonts.outfit(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.grey[800],
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            (_searchController.text.isNotEmpty ||
+                                    _selectedCategoryIndex != 0 ||
+                                    _selectedSubCategoryId != null ||
+                                    _minPrice != null ||
+                                    _maxPrice != null ||
+                                    _selectedCondition != null ||
+                                    _selectedListingType != 'All')
+                                ? 'Try adjusting your search query, price range, or category filter.'
+                                : 'Be the first to list an item for sale or rent!',
+                            style: GoogleFonts.outfit(
+                              fontSize: 14,
+                              color: Colors.grey[600],
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          if (_searchController.text.isNotEmpty ||
+                              _selectedCategoryIndex != 0 ||
+                              _selectedSubCategoryId != null ||
+                              _minPrice != null ||
+                              _maxPrice != null ||
+                              _selectedCondition != null ||
+                              _selectedListingType != 'All') ...[
+                            const SizedBox(height: 24),
+                            ElevatedButton.icon(
+                              onPressed: () {
+                                setState(() {
+                                  _searchController.clear();
+                                  _selectedCategoryIndex = 0;
+                                  _selectedSubCategoryId = null;
+                                  _minPrice = null;
+                                  _maxPrice = null;
+                                  _selectedCondition = null;
+                                  _selectedListingType = 'All';
+                                });
+                                _fetchProducts();
+                              },
+                              icon: const Icon(Icons.clear_all_rounded, color: Colors.white),
+                              label: Text(
+                                'Clear Filters',
+                                style: GoogleFonts.outfit(fontWeight: FontWeight.bold),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Theme.of(context).colorScheme.primary,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
                   ),
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      final product = _gridProducts[index];
-                      return ProductCard(
-                        product: product,
-                        isFavorite: _savedProductIds.contains(product.id),
-                        onFavoriteToggle: () => _toggleFavorite(product.id),
-                        onTap: () {
-                          Navigator.push(context, MaterialPageRoute(
-                            builder: (_) => ProductDetailsPage(
-                              product: product,
-                              initialIsSaved: _savedProductIds.contains(product.id),
-                            )
-                          )).then((result) {
-                            _fetchSavedItems();
-                            _fetchTrending();
-                            if (result == 'reported') {
-                              _fetchProducts();
-                              _fetchRecommendations();
-                            }
-                          });
-                        },
-                      ).animate().fadeIn(duration: 500.ms, delay: (50 * index).ms).scale(begin: const Offset(0.9, 0.9));
-                    },
-                    childCount: _gridProducts.length,
+                )
+              ]
+              else
+                SliverPadding(
+                  padding: const EdgeInsets.all(20),
+                  sliver: SliverGrid(
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      childAspectRatio: 0.70, // Slightly taller for better cards
+                      crossAxisSpacing: 16,
+                      mainAxisSpacing: 16,
+                    ),
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                        final product = _gridProducts[index];
+                        return ProductCard(
+                          product: product,
+                          isFavorite: _savedProductIds.contains(product.id),
+                          onFavoriteToggle: () => _toggleFavorite(product.id),
+                          onTap: () {
+                            Navigator.push(context, MaterialPageRoute(
+                              builder: (_) => ProductDetailsPage(
+                                product: product,
+                                initialIsSaved: _savedProductIds.contains(product.id),
+                              )
+                            )).then((result) {
+                              _fetchSavedItems();
+                              _fetchTrending();
+                              if (result == 'reported') {
+                                _fetchProducts();
+                                _fetchRecommendations();
+                              }
+                            });
+                          },
+                        ).animate().fadeIn(duration: 500.ms, delay: (50 * index).ms).scale(begin: const Offset(0.9, 0.9));
+                      },
+                      childCount: _gridProducts.length,
+                    ),
                   ),
                 ),
-              ),
+            ],
           ],
         ),
       ),
     );
   }
 
-
+  Widget _buildTimelineDivider(String label) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Expanded(
+            child: Container(
+              margin: const EdgeInsets.only(left: 32.0, right: 16.0),
+              height: 1,
+              color: Colors.grey[300],
+            ),
+          ),
+          Text(
+            label,
+            style: GoogleFonts.outfit(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey[500],
+              letterSpacing: 0.5,
+            ),
+          ),
+          Expanded(
+            child: Container(
+              margin: const EdgeInsets.only(left: 16.0, right: 32.0),
+              height: 1,
+              color: Colors.grey[300],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   void _showSortDialog() {
       showModalBottomSheet(
@@ -997,4 +1288,8 @@ class HomePageState extends State<HomePage> {
           }
       );
   }
+}
+
+class _LoadingMoreMarker {
+  const _LoadingMoreMarker();
 }

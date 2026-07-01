@@ -500,6 +500,7 @@ if (process.env.NODE_ENV !== 'test') {
 // Routes
 import authRoutes from './routes/authRoutes.js';
 import productRoutes from './routes/productRoutes.js';
+import itemRoutes from './routes/itemRoutes.js';
 import transactionRoutes from './routes/transactionRoutes.js';
 import savedRoutes from './routes/savedRoutes.js';
 import messageRoutes from './routes/messageRoutes.js';
@@ -516,6 +517,7 @@ import zoneRoutes from './routes/zoneRoutes.js';
 
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productRoutes);
+app.use('/api/items', itemRoutes);
 app.use('/api/transactions', transactionRoutes);
 app.use('/api/saved', savedRoutes);
 app.use('/api/messages', messageRoutes);

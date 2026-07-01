@@ -16,5 +16,14 @@
         "latency": "47ms",
         "dataset_size": 2401,
         "classes": "31 Sub-Categories"
+    },
+    {
+        "version": "v1.0.3",
+        "accuracy": "99.2%",
+        "precision": "99.1%",
+        "recall": "99.2%",
+        "latency": "46ms",
+        "dataset_size": 2408,
+        "classes": "32 Sub-Categories"
     }
 ]
