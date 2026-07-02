@@ -27,6 +27,9 @@ class _EditListingPageState extends State<EditListingPage> {
   final List<String> _conditions = ['New', 'Like New', 'Good', 'Fair', 'Poor'];
   final List<String> _statuses = ['Available', 'Reserved', 'Suspended']; // Removed Sold to prevent manual sold marking without transaction
   
+  final List<String> _paymentMethods = ['Cash', 'TNG', 'Bank Transfer'];
+  late List<String> _selectedPaymentMethods;
+  
   bool _isSubmitting = false;
 
   @override
@@ -47,6 +50,11 @@ class _EditListingPageState extends State<EditListingPage> {
 
     _selectedStatus = widget.product.status;
     if (!_statuses.contains(_selectedStatus)) _selectedStatus = 'Available';
+
+    _selectedPaymentMethods = List<String>.from(widget.product.acceptedPaymentMethods);
+    if (_selectedPaymentMethods.isEmpty) {
+      _selectedPaymentMethods = ['Cash', 'TNG', 'Bank Transfer'];
+    }
   }
 
   @override
@@ -85,8 +93,8 @@ class _EditListingPageState extends State<EditListingPage> {
                                   child: CachedNetworkImage(
                                       imageUrl: url, 
                                       fit: BoxFit.cover,
-                                      placeholder: (context, url) => Container(color: Colors.grey[200]),
-                                      errorWidget: (context, url, error) => Container(color: Colors.grey[200], child: const Icon(Icons.broken_image)),
+                                      placeholder: (context, url) => Container(color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1E1E1E) : Colors.grey[200]),
+                                      errorWidget: (context, url, error) => Container(color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1E1E1E) : Colors.grey[200], child: const Icon(Icons.broken_image)),
                                   ),
                               ),
                           )
@@ -94,7 +102,7 @@ class _EditListingPageState extends State<EditListingPage> {
                   ),
               ),
             const SizedBox(height: 16),
-            Text('Note: Image editing is coming in a future update.', style: GoogleFonts.outfit(color: Colors.grey, fontSize: 12)),
+            Text('Note: Image editing is coming in a future update.', style: GoogleFonts.outfit(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12)),
             const SizedBox(height: 24),
 
 
@@ -118,17 +126,17 @@ class _EditListingPageState extends State<EditListingPage> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.grey[200],
+                color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1E1E1E) : Colors.grey[200],
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.category, size: 20, color: Colors.grey),
+                  Icon(Icons.category, size: 20, color: Theme.of(context).colorScheme.onSurfaceVariant),
                   const SizedBox(width: 8),
                   Expanded(
-                      child: Text('Category: ${widget.product.category}', style: GoogleFonts.outfit(color: Colors.grey[800]), overflow: TextOverflow.ellipsis),
+                      child: Text('Category: ${widget.product.category}', style: GoogleFonts.outfit(color: Theme.of(context).colorScheme.onSurfaceVariant), overflow: TextOverflow.ellipsis),
                   ),
-                  const Icon(Icons.lock, size: 16, color: Colors.grey),
+                  Icon(Icons.lock, size: 16, color: Theme.of(context).colorScheme.onSurfaceVariant),
                 ],
               ),
             ),
@@ -215,6 +223,32 @@ class _EditListingPageState extends State<EditListingPage> {
               ),
               style: GoogleFonts.outfit(),
             ),
+            const SizedBox(height: 16),
+            Text('Accepted Payment Methods', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 16)),
+            const SizedBox(height: 8),
+            ..._paymentMethods.map((method) {
+                return CheckboxListTile(
+                    title: Text(method, style: GoogleFonts.outfit(fontSize: 14)),
+                    value: _selectedPaymentMethods.contains(method),
+                    dense: true,
+                    controlAffinity: ListTileControlAffinity.leading,
+                    contentPadding: EdgeInsets.zero,
+                    activeColor: Theme.of(context).colorScheme.primary,
+                    onChanged: (bool? checked) {
+                        setState(() {
+                            if (checked == true) {
+                                _selectedPaymentMethods.add(method);
+                            } else {
+                                if (_selectedPaymentMethods.length > 1) {
+                                    _selectedPaymentMethods.remove(method);
+                                } else {
+                                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('At least one payment method must be accepted.')));
+                                }
+                            }
+                        });
+                    },
+                );
+            }),
             const SizedBox(height: 32),
             ElevatedButton(
               onPressed: _updateItem, 
@@ -267,6 +301,7 @@ class _EditListingPageState extends State<EditListingPage> {
         'description': _descController.text,
         'condition': _selectedCondition, 
         'type': _listingType,
+        'accepted_payment_methods': _selectedPaymentMethods,
       };
 
       if (_listingType == 'Sale') {

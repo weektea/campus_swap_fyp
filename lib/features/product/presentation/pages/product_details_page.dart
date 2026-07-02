@@ -211,7 +211,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
             leading: Padding(
               padding: const EdgeInsets.all(8.0),
               child: CircleAvatar(
-                backgroundColor: Colors.white.withValues(alpha: 0.8),
+                backgroundColor: theme.colorScheme.surface.withValues(alpha: 0.8),
                 child: BackButton(color: theme.colorScheme.onSurface),
               ),
             ),
@@ -219,7 +219,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
               Padding(
                 padding: const EdgeInsets.all(8.0),
                 child: CircleAvatar(
-                  backgroundColor: Colors.white.withValues(alpha: 0.8),
+                  backgroundColor: theme.colorScheme.surface.withValues(alpha: 0.8),
                   child: IconButton(
                     icon: Icon(Icons.share, color: theme.colorScheme.onSurface),
                     onPressed: () async {
@@ -233,7 +233,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                 Padding(
                   padding: const EdgeInsets.all(8.0),
                   child: CircleAvatar(
-                    backgroundColor: Colors.white.withValues(alpha: 0.8),
+                    backgroundColor: theme.colorScheme.surface.withValues(alpha: 0.8),
                     child: IconButton(
                       icon: Icon(
                         _isSaved ? Icons.favorite : Icons.favorite_border,
@@ -247,7 +247,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                 Padding(
                   padding: const EdgeInsets.all(8.0),
                   child: CircleAvatar(
-                    backgroundColor: Colors.white.withValues(alpha: 0.8),
+                    backgroundColor: theme.colorScheme.surface.withValues(alpha: 0.8),
                     child: PopupMenuButton<String>(
                       icon: Icon(Icons.more_vert, color: theme.colorScheme.onSurface),
                       onSelected: (value) {
@@ -306,13 +306,13 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                           decoration: BoxDecoration(
-                            color: Colors.grey.withValues(alpha: 0.1),
+                            color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1E1E1E) : Colors.grey.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Text(
                             widget.product.subCategoryName,
                             style: GoogleFonts.outfit(
-                              color: Colors.grey[800],
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
                               fontSize: 12,
                             ),
                           ),
@@ -321,11 +321,11 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                       const Spacer(),
                       Row(
                         children: [
-                           Icon(Icons.schedule, size: 14, color: Colors.grey[600]),
+                           Icon(Icons.schedule, size: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
                            const SizedBox(width: 4),
                            Text(
                              _timeAgo(widget.product.postedAt),
-                             style: GoogleFonts.outfit(color: Colors.grey[600], fontSize: 12),
+                             style: GoogleFonts.outfit(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12),
                            )
                         ],
                       )
@@ -371,7 +371,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                                if (widget.product.type == 'Rent') 
                                  Padding(
                                    padding: const EdgeInsets.only(left: 4.0),
-                                   child: Text('/ day', style: GoogleFonts.outfit(color: Colors.grey, fontSize: 16)),
+                                   child: Text('/ day', style: GoogleFonts.outfit(color: theme.colorScheme.onSurfaceVariant, fontSize: 16)),
                                  ),
                              ],
                            ),
@@ -458,26 +458,33 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                     child: Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.grey.withValues(alpha: 0.1)),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.03),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        )
-                      ],
+                      border: Border.all(color: Theme.of(context).brightness == Brightness.dark ? Theme.of(context).colorScheme.outlineVariant : Colors.grey.withValues(alpha: 0.1)),
+                      boxShadow: Theme.of(context).brightness == Brightness.dark 
+                          ? [] 
+                          : [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.03),
+                                blurRadius: 10,
+                                offset: const Offset(0, 4),
+                              )
+                            ],
                     ),
                     child: Row(
                       children: [
                         CircleAvatar(
                           radius: 24,
                           backgroundColor: theme.colorScheme.secondary.withValues(alpha: 0.1),
-                          child: Text(
-                            widget.product.sellerName[0].toUpperCase(),
-                            style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: theme.colorScheme.secondary),
-                          )
+                          backgroundImage: widget.product.sellerAvatar.isNotEmpty
+                              ? NetworkImage(widget.product.sellerAvatar)
+                              : null,
+                          child: widget.product.sellerAvatar.isEmpty
+                              ? Text(
+                                  widget.product.sellerName[0].toUpperCase(),
+                                  style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: theme.colorScheme.secondary),
+                                )
+                              : null,
                         ),
                         const SizedBox(width: 16),
                         Expanded(
@@ -486,7 +493,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                             children: [
                               Text(
                                   "Seller",
-                                  style: GoogleFonts.outfit(color: Colors.grey[500], fontSize: 12)
+                                  style: GoogleFonts.outfit(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12)
                               ),
                               Row(
                                 children: [
@@ -502,7 +509,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                                   const Icon(Icons.star_rounded, size: 16, color: Colors.amber),
                                   Text(
                                     '${widget.product.sellerReputation.toStringAsFixed(1)} (${widget.product.sellerTotalReviews})',
-                                    style: GoogleFonts.outfit(fontSize: 14, color: Colors.grey[700], fontWeight: FontWeight.bold),
+                                    style: GoogleFonts.outfit(fontSize: 14, color: Theme.of(context).colorScheme.onSurface, fontWeight: FontWeight.bold),
                                   ),
                                 ],
                               ),
@@ -510,7 +517,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                           ),
                         ),
                         const Spacer(),
-                        const Icon(Icons.chevron_right, color: Colors.grey)
+                        Icon(Icons.chevron_right, color: Theme.of(context).colorScheme.onSurfaceVariant)
                       ],
                     ),
                   ),
@@ -544,9 +551,9 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                                         width: 110,
                                         margin: const EdgeInsets.only(right: 12),
                                         decoration: BoxDecoration(
-                                            color: Colors.white,
+                                            color: Theme.of(context).colorScheme.surfaceContainerHighest,
                                             borderRadius: BorderRadius.circular(12),
-                                            border: Border.all(color: Colors.grey.shade200)
+                                            border: Border.all(color: Theme.of(context).brightness == Brightness.dark ? Theme.of(context).colorScheme.outlineVariant : Colors.grey.shade200)
                                         ),
                                         child: Column(
                                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -586,7 +593,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                   const SizedBox(height: 8),
                   Text(
                     widget.product.description,
-                    style: GoogleFonts.outfit(color: Colors.grey[700], height: 1.6, fontSize: 15),
+                    style: GoogleFonts.outfit(color: Theme.of(context).colorScheme.onSurfaceVariant, height: 1.6, fontSize: 15),
                   ).animate().fadeIn(duration: 500.ms, delay: 400.ms),
                   
                   const SizedBox(height: 32),
@@ -616,9 +623,9 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                                         width: 110,
                                         margin: const EdgeInsets.only(right: 12),
                                         decoration: BoxDecoration(
-                                            color: Colors.white,
+                                            color: Theme.of(context).colorScheme.surfaceContainerHighest,
                                             borderRadius: BorderRadius.circular(12),
-                                            border: Border.all(color: Colors.grey.shade200)
+                                            border: Border.all(color: Theme.of(context).brightness == Brightness.dark ? Theme.of(context).colorScheme.outlineVariant : Colors.grey.shade200)
                                         ),
                                         child: Column(
                                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -664,14 +671,16 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
       bottomNavigationBar: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 20,
-              offset: const Offset(0, -5),
-            )
-          ],
+          color: Theme.of(context).colorScheme.surface,
+          boxShadow: Theme.of(context).brightness == Brightness.dark 
+              ? [] 
+              : [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 20,
+                    offset: const Offset(0, -5),
+                  )
+                ],
         ),
         child: SafeArea(
           child: _buildBottomBar(context, theme),
@@ -710,7 +719,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                     icon: const Icon(Icons.delete_outline),
                     label: Text('Remove', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red[50],
+                      backgroundColor: Theme.of(context).brightness == Brightness.dark ? Colors.red.withValues(alpha: 0.2) : Colors.red[50],
                       foregroundColor: Colors.red,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -730,6 +739,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                      Navigator.push(context, MaterialPageRoute(builder: (_) => ChatDetailPage(
                          sellerName: widget.product.sellerName,
                          otherUserId: widget.product.sellerId,
+                         otherUserAvatar: widget.product.sellerAvatar,
                          initialMessage: "Hi ${widget.product.sellerName}, I'm interested in your listing: [ ${widget.product.title} ] for RM ${widget.product.price.toStringAsFixed(2)}!",
                          relatedProduct: widget.product,
                      )));
@@ -902,18 +912,27 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
       context: context,
       isScrollControlled: true, // Allow full height for keyboard
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (context) => StatefulBuilder(
-        builder: (context, setModalState) {
-          if (!_hasFetchedLocations) {
-            _fetchCampusLocations(setModalState);
-          }
+      builder: (context) {
+        String? selectedPaymentMethod;
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            if (widget.product.acceptedPaymentMethods.isNotEmpty) {
+                selectedPaymentMethod ??= widget.product.acceptedPaymentMethods.first;
+            }
+            if (!_hasFetchedLocations) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (!_hasFetchedLocations) {
+                        _fetchCampusLocations(setModalState);
+                    }
+                });
+            }
 
-          int rentDays = 0;
-          double totalRentCost = 0.0;
-          if (isRent && _rentStartDate != null && _rentEndDate != null) {
-            rentDays = _rentEndDate!.difference(_rentStartDate!).inDays + 1; // Inclusive
-            totalRentCost = rentDays * widget.product.rentalPricePerDay;
-          }
+            int rentDays = 0;
+            double totalRentCost = 0.0;
+            if (isRent && _rentStartDate != null && _rentEndDate != null) {
+              rentDays = _rentEndDate!.difference(_rentStartDate!).inDays + 1; // Inclusive
+              totalRentCost = rentDays * widget.product.rentalPricePerDay;
+            }
 
           return Padding(
             padding: EdgeInsets.only(
@@ -954,6 +973,42 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                             )).toList(),
                             onChanged: (val) {
                                 if (val != null) setModalState(() => _selectedLocation = val);
+                            }
+                        ),
+                    ),
+                ),
+
+                const SizedBox(height: 16),
+                Text("Select Payment Method", style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey.shade300),
+                        borderRadius: BorderRadius.circular(12)
+                    ),
+                    child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                            value: selectedPaymentMethod,
+                            isExpanded: true,
+                            items: widget.product.acceptedPaymentMethods.map((method) => DropdownMenuItem(
+                                value: method,
+                                child: Row(
+                                    children: [
+                                        Icon(
+                                            method == 'Cash' 
+                                                ? Icons.money_outlined 
+                                                : (method == 'TNG' ? Icons.account_balance_wallet_outlined : Icons.account_balance_outlined), 
+                                            color: Theme.of(context).colorScheme.primary, 
+                                            size: 18
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(method, style: GoogleFonts.outfit()),
+                                    ],
+                                )
+                            )).toList(),
+                            onChanged: (val) {
+                                if (val != null) setModalState(() => selectedPaymentMethod = val);
                             }
                         ),
                     ),
@@ -1071,6 +1126,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                         isRent ? totalRentCost : widget.product.price,
                         rentStartDate: _rentStartDate,
                         rentEndDate: _rentEndDate,
+                        paymentMethod: selectedPaymentMethod,
                       ); 
                     },
                     style: ElevatedButton.styleFrom(
@@ -1087,12 +1143,13 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
               ],
             ),
           );
-        }
-      )
-    );
-  }
+        },
+      );
+    },
+  );
+}
 
-  void _buyNow(BuildContext context, double finalPrice, {DateTime? rentStartDate, DateTime? rentEndDate}) async {
+  void _buyNow(BuildContext context, double finalPrice, {DateTime? rentStartDate, DateTime? rentEndDate, String? paymentMethod}) async {
       setState(() => _isBuying = true);
       try {
         final apiClient = ApiClient();
@@ -1102,7 +1159,8 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
             'seller_id': widget.product.sellerId, 
             'product_id': widget.product.id,
             'amount': finalPrice, // Use dynamically calculated price
-            'meetup_location': _selectedLocation // Use selected location
+            'meetup_location': _selectedLocation, // Use selected location
+            'selected_payment_method': paymentMethod ?? 'Cash'
         };
 
         if (widget.product.type == 'Rent' && rentStartDate != null && rentEndDate != null) {

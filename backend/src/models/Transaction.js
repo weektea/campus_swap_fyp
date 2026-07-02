@@ -81,6 +81,15 @@ const Transaction = sequelize.define('Transaction', {
         type: DataTypes.FLOAT,
         allowNull: true,
     },
+    platform_fee: {
+        type: DataTypes.DECIMAL(10, 2),
+        defaultValue: 0.00,
+        allowNull: false,
+    },
+    selected_payment_method: {
+        type: DataTypes.STRING,
+        allowNull: true,
+    },
 }, {
     timestamps: true,
 });

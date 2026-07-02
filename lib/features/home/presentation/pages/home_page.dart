@@ -599,7 +599,11 @@ class HomePageState extends State<HomePage> {
                     controller: _searchController,
                     decoration: InputDecoration(
                       hintText: 'Search books, electronics...',
-                      hintStyle: GoogleFonts.outfit(color: Colors.grey[400]),
+                      hintStyle: GoogleFonts.outfit(
+                        color: Theme.of(context).brightness == Brightness.dark 
+                            ? Colors.white.withValues(alpha: 0.38) 
+                            : Colors.grey[400],
+                      ),
                       prefixIcon: const Icon(Icons.search_rounded),
                       suffixIcon: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -619,7 +623,9 @@ class HomePageState extends State<HomePage> {
                         borderSide: BorderSide.none,
                       ),
                       filled: true,
-                      fillColor: Colors.white, 
+                      fillColor: Theme.of(context).brightness == Brightness.dark 
+                          ? const Color(0xFF1E1E1E) 
+                          : Colors.white, 
                       contentPadding: const EdgeInsets.symmetric(vertical: 16),
                     ),
                     style: GoogleFonts.outfit(),
@@ -690,10 +696,14 @@ class HomePageState extends State<HomePage> {
                             margin: const EdgeInsets.only(right: 8),
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                             decoration: BoxDecoration(
-                              color: isSelected ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.15) : Colors.grey[50],
+                              color: isSelected 
+                                  ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.15) 
+                                  : (Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1E1E1E) : Colors.grey[50]),
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
-                                color: isSelected ? Theme.of(context).colorScheme.primary : Colors.grey[200]!,
+                                color: isSelected 
+                                    ? Theme.of(context).colorScheme.primary 
+                                    : (Theme.of(context).brightness == Brightness.dark ? const Color(0xFF2C2C2C) : Colors.grey[200]!),
                                 width: 1,
                               ),
                             ),
@@ -702,7 +712,9 @@ class HomePageState extends State<HomePage> {
                                 'All',
                                 style: GoogleFonts.outfit(
                                   fontSize: 13,
-                                  color: isSelected ? Theme.of(context).colorScheme.primary : Colors.grey[600],
+                                  color: isSelected 
+                                      ? Theme.of(context).colorScheme.primary 
+                                      : Theme.of(context).colorScheme.onSurfaceVariant,
                                   fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                                 ),
                               ),
@@ -728,10 +740,14 @@ class HomePageState extends State<HomePage> {
                           margin: const EdgeInsets.only(right: 8),
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                           decoration: BoxDecoration(
-                            color: isSelected ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.15) : Colors.grey[50],
+                            color: isSelected 
+                                ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.15) 
+                                : (Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1E1E1E) : Colors.grey[50]),
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                              color: isSelected ? Theme.of(context).colorScheme.primary : Colors.grey[200]!,
+                              color: isSelected 
+                                  ? Theme.of(context).colorScheme.primary 
+                                  : (Theme.of(context).brightness == Brightness.dark ? const Color(0xFF2C2C2C) : Colors.grey[200]!),
                               width: 1,
                             ),
                           ),
@@ -742,7 +758,9 @@ class HomePageState extends State<HomePage> {
                                   subcatName,
                                   style: GoogleFonts.outfit(
                                     fontSize: 13,
-                                    color: isSelected ? Theme.of(context).colorScheme.primary : Colors.grey[800],
+                                    color: isSelected 
+                                        ? Theme.of(context).colorScheme.primary 
+                                        : Theme.of(context).colorScheme.onSurface,
                                     fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                                   ),
                                 ),
@@ -751,7 +769,9 @@ class HomePageState extends State<HomePage> {
                                   '($productCount)',
                                   style: GoogleFonts.outfit(
                                     fontSize: 11,
-                                    color: isSelected ? Theme.of(context).colorScheme.primary : Colors.grey[500],
+                                    color: isSelected 
+                                        ? Theme.of(context).colorScheme.primary 
+                                        : Theme.of(context).colorScheme.onSurfaceVariant,
                                     fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                                   ),
                                 ),
@@ -804,14 +824,18 @@ class HomePageState extends State<HomePage> {
                         margin: const EdgeInsets.only(right: 12),
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                         decoration: BoxDecoration(
-                          color: isSelected ? Theme.of(context).colorScheme.primary : Colors.grey[100],
+                          color: isSelected 
+                              ? Theme.of(context).colorScheme.primary 
+                              : (Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1E1E1E) : Colors.grey[100]),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Center(
                           child: Text(
                             tab,
                             style: GoogleFonts.outfit(
-                              color: isSelected ? Colors.white : Colors.grey[700],
+                              color: isSelected 
+                                  ? Colors.white.withValues(alpha: 0.87) 
+                                  : Theme.of(context).colorScheme.onSurfaceVariant,
                               fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
                               fontSize: 14,
                             ),
@@ -833,18 +857,36 @@ class HomePageState extends State<HomePage> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                     decoration: BoxDecoration(
-                      color: Colors.amber.withValues(alpha: 0.12),
+                      color: Theme.of(context).brightness == Brightness.dark 
+                          ? Colors.amber.withValues(alpha: 0.08) 
+                          : Colors.amber.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.amber.shade300, width: 1),
+                      border: Border.all(
+                        color: Theme.of(context).brightness == Brightness.dark 
+                            ? Colors.amber.shade700.withValues(alpha: 0.5) 
+                            : Colors.amber.shade300, 
+                        width: 1,
+                      ),
                     ),
                     child: Row(
                       children: [
-                        Icon(Icons.info_outline_rounded, color: Colors.amber.shade700, size: 18),
+                        Icon(
+                          Icons.info_outline_rounded, 
+                          color: Theme.of(context).brightness == Brightness.dark 
+                              ? Colors.amber.shade200 
+                              : Colors.amber.shade700, 
+                          size: 18,
+                        ),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
                             'For You shows personalised picks — search, sort & filter apply to All Listings tab.',
-                            style: GoogleFonts.outfit(fontSize: 12, color: Colors.amber.shade800),
+                            style: GoogleFonts.outfit(
+                              fontSize: 12, 
+                              color: Theme.of(context).brightness == Brightness.dark 
+                                  ? Colors.amber.shade200 
+                                  : Colors.amber.shade800,
+                            ),
                           ),
                         ),
                       ],
@@ -871,7 +913,9 @@ class HomePageState extends State<HomePage> {
                           Icon(
                             Icons.search_off_rounded,
                             size: 64,
-                            color: Colors.grey[400],
+                            color: Theme.of(context).brightness == Brightness.dark 
+                                ? Colors.white.withValues(alpha: 0.38) 
+                                : Colors.grey[400],
                           ),
                           const SizedBox(height: 16),
                           Text(
@@ -879,7 +923,7 @@ class HomePageState extends State<HomePage> {
                             style: GoogleFonts.outfit(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
-                              color: Colors.grey[800],
+                              color: Theme.of(context).colorScheme.onSurface,
                             ),
                             textAlign: TextAlign.center,
                           ),
@@ -888,7 +932,7 @@ class HomePageState extends State<HomePage> {
                             'Be the first to list an item for sale or rent!',
                             style: GoogleFonts.outfit(
                               fontSize: 14,
-                              color: Colors.grey[600],
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
                             ),
                             textAlign: TextAlign.center,
                           ),

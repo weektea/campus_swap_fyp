@@ -163,9 +163,9 @@ class _MyTransactionsPageState extends State<MyTransactionsPage> with SingleTick
             return Container(
                 margin: const EdgeInsets.only(bottom: 16),
                 decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: Theme.of(context).colorScheme.surface,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.grey.withValues(alpha: 0.2), width: 1),
+                    border: Border.all(color: Theme.of(context).brightness == Brightness.dark ? Theme.of(context).colorScheme.outlineVariant : Colors.grey.withValues(alpha: 0.2), width: 1),
                 ),
                 child: Column(
                   children: [
@@ -181,8 +181,8 @@ class _MyTransactionsPageState extends State<MyTransactionsPage> with SingleTick
                                width: 72, height: 72,
                                child: productImg.isNotEmpty 
                                  ? Image.network('${ApiClient.baseUrl.replaceAll('/api', '')}$productImg', fit: BoxFit.cover, 
-                                      errorBuilder: (c,o,s) => Container(color: Colors.grey[200], child: const Icon(Icons.error))) 
-                                 : Container(color: Colors.grey[200]),
+                                      errorBuilder: (c,o,s) => Container(color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1E1E1E) : Colors.grey[200], child: const Icon(Icons.error))) 
+                                 : Container(color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1E1E1E) : Colors.grey[200]),
                              ),
                            ),
                            const SizedBox(width: 16),
@@ -221,8 +221,8 @@ class _MyTransactionsPageState extends State<MyTransactionsPage> with SingleTick
                                       _fetchAllTransactions();
                                   },
                                   style: OutlinedButton.styleFrom(
-                                      foregroundColor: Colors.black87,
-                                      side: BorderSide(color: Colors.grey.withValues(alpha: 0.3)),
+                                      foregroundColor: Theme.of(context).colorScheme.onSurface,
+                                      side: BorderSide(color: Theme.of(context).brightness == Brightness.dark ? Theme.of(context).colorScheme.outline : Colors.grey.withValues(alpha: 0.3)),
                                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
                                   ),
                                   child: Text('View Progress', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 14)),
@@ -252,7 +252,7 @@ class _MyTransactionsPageState extends State<MyTransactionsPage> with SingleTick
                                         _fetchAllTransactions();
                                     },
                                     style: ElevatedButton.styleFrom(
-                                        backgroundColor: const Color(0xFF0D503C), // Matching RateExperiencePage button
+                                        backgroundColor: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF004D40) : const Color(0xFF0D503C), // Matching RateExperiencePage button
                                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
                                     ),
                                     child: Text('Rate Experience', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),

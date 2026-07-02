@@ -15,10 +15,11 @@ import 'package:campus_swap/core/services/socket_service.dart';
 class ChatDetailPage extends StatefulWidget {
   final String sellerName;
   final String? otherUserId; // Needed for API
+  final String? otherUserAvatar;
   final String? initialMessage; // Contextual smart greeting
   final Product? relatedProduct;
 
-  const ChatDetailPage({super.key, required this.sellerName, this.otherUserId, this.initialMessage, this.relatedProduct});
+  const ChatDetailPage({super.key, required this.sellerName, this.otherUserId, this.otherUserAvatar, this.initialMessage, this.relatedProduct});
 
   @override
   State<ChatDetailPage> createState() => _ChatDetailPageState();
@@ -30,6 +31,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   bool _isLoading = true;
   Timer? _timer;
   List<SafeZone> _allZones = [];
+  String? _loadedAvatarUrl;
 
   @override
   void dispose() {
@@ -48,6 +50,10 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     _fetchMessages();
     _fetchZones();
     _timer = Timer.periodic(const Duration(seconds: 3), (_) => _fetchMessages(silent: true));
+    _loadedAvatarUrl = widget.otherUserAvatar;
+    if (_loadedAvatarUrl == null && widget.otherUserId != null) {
+      _fetchOtherUserAvatar();
+    }
 
     // Connect WebSocket listener for real-time messages
     SocketService().socket?.on('receive_new_message', (data) {
@@ -83,6 +89,20 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     } catch (e) {
       debugPrint('Error fetching zones in chat: $e');
     }
+  }
+
+  Future<void> _fetchOtherUserAvatar() async {
+    try {
+      final apiClient = ApiClient();
+      final res = await apiClient.get('/auth/user/${widget.otherUserId}');
+      if (res != null && res['user'] != null && res['user']['profile_image_url'] != null) {
+        if (mounted) {
+          setState(() {
+            _loadedAvatarUrl = res['user']['profile_image_url'].toString();
+          });
+        }
+      }
+    } catch (_) {}
   }
 
   Future<void> _fetchMessages({bool silent = false}) async {
@@ -196,11 +216,18 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
             },
             child: Row(
               children: [
-                 CircleAvatar(
-                     radius: 16,
-                     backgroundColor: Colors.grey[200],
-                     child: Text(widget.sellerName[0].toUpperCase(), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                 ),
+                  CircleAvatar(
+                      radius: 16,
+                      backgroundColor: Colors.grey[200],
+                      backgroundImage: _loadedAvatarUrl != null
+                          ? NetworkImage(_loadedAvatarUrl!.startsWith('http') 
+                              ? _loadedAvatarUrl! 
+                              : '${ApiClient.baseUrl.replaceAll('/api', '')}$_loadedAvatarUrl')
+                          : null,
+                      child: _loadedAvatarUrl == null
+                          ? Text(widget.sellerName.isNotEmpty ? widget.sellerName[0].toUpperCase() : '?', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold))
+                          : null,
+                  ),
                  const SizedBox(width: 8),
                  Text(widget.sellerName, style: const TextStyle(fontSize: 18)),
               ],
@@ -223,7 +250,9 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
           Container(
              width: double.infinity,
              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-             color: Colors.amber[100],
+             color: Theme.of(context).brightness == Brightness.dark 
+                 ? Colors.amber.withValues(alpha: 0.08) 
+                 : Colors.amber[100],
              child: Row(
                children: [
                  const Icon(Icons.security, color: Colors.orange, size: 20),
@@ -231,7 +260,12 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                  Expanded(
                    child: Text(
                      "Safety Tip: Always meet in well-lit, public Safe Zones on campus.",
-                     style: TextStyle(color: Colors.orange[900], fontSize: 13, fontWeight: FontWeight.w500),
+                     style: TextStyle(
+                         color: Theme.of(context).brightness == Brightness.dark 
+                             ? Colors.amber.shade200 
+                             : Colors.orange[900], 
+                         fontSize: 13, 
+                         fontWeight: FontWeight.w500),
                    ),
                  ),
                ],
@@ -242,17 +276,19 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                onTap: () {
                    Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailsPage(product: widget.relatedProduct!)));
                },
-               child: Container(
-                  margin: const EdgeInsets.all(12),
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                     color: Colors.white,
-                     borderRadius: BorderRadius.circular(12),
-                     boxShadow: [
-                        BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8, offset: const Offset(0, 2))
-                     ],
-                     border: Border.all(color: Colors.grey.withValues(alpha: 0.1)),
-                  ),
+                child: Container(
+                   margin: const EdgeInsets.all(12),
+                   padding: const EdgeInsets.all(8),
+                   decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: Theme.of(context).brightness == Brightness.dark 
+                          ? [] 
+                          : [
+                              BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8, offset: const Offset(0, 2))
+                            ],
+                      border: Border.all(color: Theme.of(context).brightness == Brightness.dark ? Theme.of(context).colorScheme.outlineVariant : Colors.grey.withValues(alpha: 0.1)),
+                   ),
                   child: Row(
                      children: [
                         ClipRRect(
@@ -264,7 +300,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                                   height: 50,
                                   fit: BoxFit.cover,
                                 )
-                              : Container(width: 50, height: 50, color: Colors.grey[200]),
+                              : Container(width: 50, height: 50, color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1E1E1E) : Colors.grey[200]),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
@@ -347,13 +383,16 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                    messageContent = Column(
                       crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                       children: [
-                         Text(textContent, style: TextStyle(color: isMe ? Colors.white : Colors.black87, fontSize: 15, fontWeight: FontWeight.bold)),
+                         Text(textContent, style: TextStyle(
+                             color: isMe ? Theme.of(context).colorScheme.onPrimary : Theme.of(context).colorScheme.onSurface, 
+                             fontSize: 15, 
+                             fontWeight: FontWeight.bold)),
                          const SizedBox(height: 8),
                          Container(
                             height: 120,
                             width: 200,
                             decoration: BoxDecoration(
-                               color: Colors.grey[200],
+                               color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1E1E1E) : Colors.grey[200],
                                borderRadius: BorderRadius.circular(12),
                             ),
                             clipBehavior: Clip.antiAlias,
@@ -392,14 +431,19 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                              },
                              icon: const Icon(Icons.map, size: 16),
                              label: const Text('Open Maps', style: TextStyle(fontSize: 12)),
-                             style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: Theme.of(context).colorScheme.primary, minimumSize: const Size(200, 32)),
+                             style: ElevatedButton.styleFrom(
+                                 backgroundColor: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF2C2C2C) : Colors.white, 
+                                 foregroundColor: Theme.of(context).colorScheme.primary, 
+                                 minimumSize: const Size(200, 32)),
                          )
                       ]
                    );
                 } else {
                    messageContent = Text(
                       textContent,
-                      style: TextStyle(color: isMe ? Colors.white : Colors.black87, fontSize: 15),
+                      style: TextStyle(
+                          color: isMe ? Colors.white.withValues(alpha: 0.87) : (Theme.of(context).brightness == Brightness.dark ? Colors.white.withValues(alpha: 0.87) : Colors.black87), 
+                          fontSize: 15),
                    );
                 }
 
@@ -409,7 +453,9 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                     margin: const EdgeInsets.symmetric(vertical: 4),
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                     decoration: BoxDecoration(
-                      color: isMe ? Theme.of(context).colorScheme.primary : Colors.grey[200],
+                      color: isMe 
+                          ? (Theme.of(context).brightness == Brightness.dark ? const Color(0xFF004D40) : Theme.of(context).colorScheme.primary) 
+                          : (Theme.of(context).brightness == Brightness.dark ? const Color(0xFF333333) : Colors.grey[200]),
                       borderRadius: BorderRadius.only(
                         topLeft: const Radius.circular(16),
                         topRight: const Radius.circular(16),
@@ -424,7 +470,11 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                         const SizedBox(height: 4),
                         Text(
                           _formatTime(isoTime),
-                          style: TextStyle(color: isMe ? Colors.white70 : Colors.black54, fontSize: 11),
+                          style: TextStyle(
+                              color: isMe 
+                                  ? Colors.white.withValues(alpha: 0.6) 
+                                  : (Theme.of(context).brightness == Brightness.dark ? Colors.white.withValues(alpha: 0.6) : Colors.black54), 
+                              fontSize: 11),
                         ),
                       ],
                     ),
@@ -439,10 +489,10 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                                 child: Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                                     decoration: BoxDecoration(
-                                        color: Colors.blueGrey[50], 
+                                        color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1E1E1E) : Colors.blueGrey[50], 
                                         borderRadius: BorderRadius.circular(12)
                                     ),
-                                    child: Text(_formatDate(isoTime), style: TextStyle(color: Colors.blueGrey[600], fontSize: 12, fontWeight: FontWeight.bold))
+                                    child: Text(_formatDate(isoTime), style: TextStyle(color: Theme.of(context).brightness == Brightness.dark ? Theme.of(context).colorScheme.onSurfaceVariant : Colors.blueGrey[600], fontSize: 12, fontWeight: FontWeight.bold))
                                 ),
                             ),
                             messageBubble,
@@ -566,10 +616,10 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                                               }
                                           }
                                       },
-                                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF006940)),
+                                  style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF004D40) : const Color(0xFF006940)),
                                   child: isSubmitting
                                       ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                                      : const Text('Submit', style: TextStyle(color: Colors.white)),
+                                      : Text('Submit', style: TextStyle(color: Theme.of(context).brightness == Brightness.dark ? Colors.white.withValues(alpha: 0.87) : Colors.white)),
                               ),
                           ],
                       );

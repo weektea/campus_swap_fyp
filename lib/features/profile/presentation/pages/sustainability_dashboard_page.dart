@@ -274,9 +274,31 @@ class _SustainabilityDashboardPageState extends State<SustainabilityDashboardPag
                   final co2 = double.tryParse(l['co2'].toString()) ?? 0.0;
 
                   return ListTile(
-                      leading: CircleAvatar(
-                          backgroundColor: _getRankColor(rank as int),
-                          child: Text("#$rank", style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                      leading: SizedBox(
+                          width: 68,
+                          child: Row(
+                              children: [
+                                  Text(
+                                      "#$rank", 
+                                      style: GoogleFonts.outfit(
+                                          fontWeight: FontWeight.bold, 
+                                          fontSize: 14,
+                                          color: _getRankColor(rank as int)
+                                      )
+                                  ),
+                                  const SizedBox(width: 8),
+                                  CircleAvatar(
+                                      radius: 14,
+                                      backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                                      backgroundImage: l['profile_image_url'] != null
+                                          ? NetworkImage('${ApiClient.baseUrl.replaceAll('/api', '')}${l['profile_image_url']}')
+                                          : null,
+                                      child: l['profile_image_url'] == null
+                                          ? Text(l['name'].toString().isNotEmpty ? l['name'].toString()[0].toUpperCase() : '?', style: TextStyle(color: Theme.of(context).colorScheme.primary, fontSize: 10, fontWeight: FontWeight.bold))
+                                          : null,
+                                  ),
+                              ],
+                          )
                       ),
                       title: Text(name, style: GoogleFonts.outfit(fontWeight: isMe ? FontWeight.bold : FontWeight.normal, color: isMe ? Colors.green.shade700 : Colors.black87)),
                       trailing: Text("${co2.toStringAsFixed(1)} kg CO2e", style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Colors.green.shade600)),

@@ -42,9 +42,9 @@ class ProductCard extends StatelessWidget {
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          side: BorderSide(color: Colors.grey[200]!, width: 1),
+          side: BorderSide(color: Theme.of(context).brightness == Brightness.dark ? Theme.of(context).colorScheme.outlineVariant : Colors.grey[200]!, width: 1),
         ),
-        color: Colors.white,
+        color: Theme.of(context).cardTheme.color,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -59,20 +59,20 @@ class ProductCard extends StatelessWidget {
                           imageUrl: product.imageUrl,
                           fit: BoxFit.cover,
                           placeholder: (context, url) => Container(
-                            color: Colors.grey[100],
+                            color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1E1E1E) : Colors.grey[100],
                             child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
                           ),
                           errorWidget: (context, url, error) => Container(
-                            color: Colors.grey[200],
+                            color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF2C2C2C) : Colors.grey[200],
                             child: const Icon(Icons.broken_image, color: Colors.grey),
                           ),
                         )
                       : Container(
-                        color: Colors.grey[200],
+                        color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1E1E1E) : Colors.grey[200],
                         child: Center(
                           child: Icon(
                             Icons.image_not_supported_outlined,
-                            color: Colors.grey[400],
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
                             size: 40,
                           ),
                         ),
@@ -104,30 +104,32 @@ class ProductCard extends StatelessWidget {
                   Positioned(
                     top: 8,
                     right: 8,
-                    child: Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.1),
-                            blurRadius: 4,
-                            offset: const Offset(0, 2),
-                          )
-                        ],
-                      ),
-                      child: IconButton(
-                        padding: EdgeInsets.zero,
-                        icon: Icon(
-                          isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded, 
-                          size: 18, 
-                          color: isFavorite ? Colors.red : const Color(0xFF1E293B)
+                      child: Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF2C2C2C) : Colors.white,
+                          shape: BoxShape.circle,
+                          boxShadow: Theme.of(context).brightness == Brightness.dark 
+                              ? [] 
+                              : [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.1),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
+                                  )
+                                ],
                         ),
-                        onPressed: onFavoriteToggle,
+                        child: IconButton(
+                          padding: EdgeInsets.zero,
+                          icon: Icon(
+                            isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded, 
+                            size: 18, 
+                            color: isFavorite ? Colors.red : (Theme.of(context).brightness == Brightness.dark ? Colors.white70 : const Color(0xFF1E293B))
+                          ),
+                          onPressed: onFavoriteToggle,
+                        ),
                       ),
-                    ),
                   ),
                 ],
               ),
@@ -150,7 +152,7 @@ class ProductCard extends StatelessWidget {
                       style: GoogleFonts.outfit(
                         fontWeight: FontWeight.w500,
                         fontSize: 15,
-                        color: const Color(0xFF0F172A),
+                        color: Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
                     
@@ -169,7 +171,7 @@ class ProductCard extends StatelessWidget {
                                     ? 'RM ${product.rentalPricePerDay.toStringAsFixed(2)}'
                                     : 'RM ${product.price.toStringAsFixed(0)}',
                                 style: GoogleFonts.outfit(
-                                  color: const Color(0xFF0F172A),
+                                  color: Theme.of(context).colorScheme.onSurface,
                                   fontWeight: FontWeight.bold,
                                   fontSize: 18,
                                 ),
@@ -178,7 +180,7 @@ class ProductCard extends StatelessWidget {
                                 TextSpan(
                                   text: ' /day',
                                   style: GoogleFonts.outfit(
-                                    color: Colors.grey[600],
+                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                                     fontSize: 12,
                                   ),
                                 ),
@@ -190,13 +192,13 @@ class ProductCard extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
-                            color: Colors.grey[100],
+                            color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF2C2C2C) : Colors.grey[100],
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Text(
                             product.condition,
                             style: GoogleFonts.outfit(
-                              color: const Color(0xFF475569),
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
                               fontSize: 10,
                               fontWeight: FontWeight.w500,
                             ),
@@ -206,7 +208,7 @@ class ProductCard extends StatelessWidget {
                     ),
                     
                     const Spacer(),
-                    Divider(color: Colors.grey[200], height: 1),
+                    Divider(color: Theme.of(context).brightness == Brightness.dark ? Theme.of(context).colorScheme.outlineVariant : Colors.grey[200], height: 1),
                     const SizedBox(height: 8),
                     
                     // Bottom Row: Avatar, Name, Location, Time
@@ -215,10 +217,15 @@ class ProductCard extends StatelessWidget {
                         CircleAvatar(
                           radius: 10,
                           backgroundColor: primaryColor.withValues(alpha: 0.1),
-                          child: Text(
-                             product.sellerName.isNotEmpty ? product.sellerName[0].toUpperCase() : '?',
-                             style: TextStyle(fontSize: 10, color: primaryColor, fontWeight: FontWeight.bold),
-                          )
+                          backgroundImage: product.sellerAvatar.isNotEmpty
+                              ? NetworkImage(product.sellerAvatar)
+                              : null,
+                          child: product.sellerAvatar.isEmpty
+                              ? Text(
+                                 product.sellerName.isNotEmpty ? product.sellerName[0].toUpperCase() : '?',
+                                 style: TextStyle(fontSize: 10, color: primaryColor, fontWeight: FontWeight.bold),
+                               )
+                              : null,
                         ),
                         const SizedBox(width: 6),
                         Expanded(
@@ -233,7 +240,7 @@ class ProductCard extends StatelessWidget {
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: GoogleFonts.outfit(
-                                        color: const Color(0xFF334155),
+                                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                                         fontSize: 12,
                                         fontWeight: FontWeight.w500,
                                       ),
@@ -243,7 +250,7 @@ class ProductCard extends StatelessWidget {
                                   const Icon(Icons.star_rounded, size: 12, color: Colors.amber),
                                   Text(
                                     product.sellerReputation.toStringAsFixed(1),
-                                    style: GoogleFonts.outfit(fontSize: 10, color: Colors.grey[600]),
+                                    style: GoogleFonts.outfit(fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant),
                                   ),
                                 ],
                               ),
@@ -253,7 +260,7 @@ class ProductCard extends StatelessWidget {
                         Text(
                           _formatTimeAgo(product.postedAt),
                           style: GoogleFonts.outfit(
-                            color: Colors.grey[400],
+                            color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
                             fontSize: 10,
                           ),
                         ),

@@ -22,6 +22,8 @@ class Product {
   final String status;
   final double sellerReputation;
   final int sellerTotalReviews;
+  final List<String> acceptedPaymentMethods;
+  final String sellerAvatar;
 
   const Product({
     required this.id,
@@ -45,6 +47,8 @@ class Product {
     this.status = 'Available',
     this.sellerReputation = 5.0,
     this.sellerTotalReviews = 0,
+    this.acceptedPaymentMethods = const ['Cash', 'TNG', 'Bank Transfer'],
+    this.sellerAvatar = '',
   });
 
   factory Product.fromJson(Map<String, dynamic> json) {
@@ -57,6 +61,17 @@ class Product {
       }
       return path;
     }).toList();
+    
+    var payMethods = json['accepted_payment_methods'] as List? ?? [];
+    List<String> paymentMethods = payMethods.map((p) => p.toString()).toList();
+    if (paymentMethods.isEmpty) {
+      paymentMethods = ['Cash', 'TNG', 'Bank Transfer'];
+    }
+    
+    String avatar = json['seller']?['profile_image_url'] ?? '';
+    if (avatar.startsWith('/uploads')) {
+      avatar = '$baseHost$avatar';
+    }
     
     return Product(
       id: json['id'] as String,
@@ -81,6 +96,8 @@ class Product {
       status: json['status'] as String? ?? 'Available',
       sellerReputation: double.tryParse(json['seller']?['reputation_score']?.toString() ?? '5.0') ?? 5.0,
       sellerTotalReviews: int.tryParse(json['seller']?['total_reviews']?.toString() ?? '0') ?? 0,
+      acceptedPaymentMethods: paymentMethods,
+      sellerAvatar: avatar,
     );
   }
 }

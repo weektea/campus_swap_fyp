@@ -115,6 +115,11 @@ const User = sequelize.define('User', {
         type: DataTypes.BOOLEAN,
         defaultValue: true,
     },
+    accumulated_balance_due: {
+        type: DataTypes.DECIMAL(10, 2),
+        defaultValue: 0.00,
+        allowNull: false,
+    },
     deactivated_until: {
         type: DataTypes.DATE,
         allowNull: true,

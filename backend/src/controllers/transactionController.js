@@ -1,15 +1,18 @@
-import { Transaction, Product, User, Review, Category, SubCategory, Dispute } from '../models/index.js';
+import { Transaction, Product, User, Review, Category, SubCategory, Dispute, UserInteraction } from '../models/index.js';
 import { createNotification } from './notificationController.js';
 import { emitToUser, emitToAdmins } from '../config/socket.js';
 
 export const createTransaction = async (req, res) => {
     try {
-        const { buyer_id, seller_id, product_id, meetup_location, scheduled_at } = req.body;
+        const { buyer_id, seller_id, product_id, meetup_location, scheduled_at, selected_payment_method } = req.body;
         let amount = req.body.amount;
 
         // Validate
         if (!buyer_id || !seller_id || !product_id || amount === undefined || amount === null) {
             return res.status(400).json({ error: 'Missing required transaction details' });
+        }
+        if (!selected_payment_method) {
+            return res.status(400).json({ error: 'Selected payment method is required' });
         }
 
         // Check Product Availability
@@ -19,6 +22,22 @@ export const createTransaction = async (req, res) => {
         }
         if (product.status !== 'Available') {
             return res.status(400).json({ error: 'Product is no longer available' });
+        }
+
+        // Validate selected payment method
+        let acceptedMethods = product.accepted_payment_methods;
+        if (typeof acceptedMethods === 'string') {
+            try {
+                acceptedMethods = JSON.parse(acceptedMethods);
+            } catch (e) {
+                acceptedMethods = ['Cash', 'TNG', 'Bank Transfer'];
+            }
+        }
+        if (!Array.isArray(acceptedMethods)) {
+            acceptedMethods = ['Cash', 'TNG', 'Bank Transfer'];
+        }
+        if (!acceptedMethods.includes(selected_payment_method)) {
+            return res.status(400).json({ error: `Selected payment method is not accepted by the seller. Accepted methods: ${acceptedMethods.join(', ')}` });
         }
 
         // UC17 Rental Constraints
@@ -59,7 +78,8 @@ export const createTransaction = async (req, res) => {
             scheduled_at,
             rental_start_date,
             rental_end_date,
-            status: 'Pending'
+            status: 'Pending',
+            selected_payment_method
         });
 
         // Notify Seller
@@ -152,6 +172,11 @@ export const getTransactionById = async (req, res) => {
         }
 
         const txObj = transaction.toJSON();
+        txObj.item_price = parseFloat(txObj.amount);
+        txObj.platform_fee = parseFloat(txObj.platform_fee || 0);
+        txObj.total_amount_paid_by_buyer = txObj.item_price;
+        txObj.total_payment = txObj.item_price;
+
         if (txObj.review_status !== 'PUBLISHED') {
             if (reqUserId === String(txObj.buyer_id)) {
                 txObj.rating_from_seller = null;
@@ -341,28 +366,48 @@ export const updateTransactionStatus = async (req, res) => {
             transaction.completed_at = new Date();
             transaction.review_status = 'PENDING_REVIEWS';
             transaction.awarded_carbon_points = co2Saved;
+            
+            // Calculate 2% Platform Fee (based on transaction.amount)
+            const platformFee = parseFloat((parseFloat(transaction.amount) * 0.02).toFixed(2));
+            transaction.platform_fee = platformFee;
             await transaction.save();
             
             if (product) {
                  if (transaction.buyer_id === transaction.seller_id) {
-                     // Self-trade: only increment once to prevent double-counting
-                     await User.increment(
-                         { items_reused: 1, total_carbon_saved: co2Saved, carbon_saved_buyer: co2Saved, carbon_saved_seller: co2Saved },
-                         { where: { id: transaction.buyer_id } }
-                     );
-                 } else {
-                     // Update Buyer
-                     await User.increment(
-                         { items_reused: 1, total_carbon_saved: co2Saved, carbon_saved_buyer: co2Saved },
-                         { where: { id: transaction.buyer_id } }
-                     );
-                     
-                     // Update Seller
-                     await User.increment(
-                         { items_reused: 1, total_carbon_saved: co2Saved, carbon_saved_seller: co2Saved },
-                         { where: { id: transaction.seller_id } }
-                     );
-                 }
+                      // Self-trade: only increment once to prevent double-counting
+                      await User.increment(
+                          { items_reused: 1, total_carbon_saved: co2Saved, carbon_saved_buyer: co2Saved, carbon_saved_seller: co2Saved, accumulated_balance_due: platformFee },
+                          { where: { id: transaction.buyer_id } }
+                      );
+                  } else {
+                      // Update Buyer
+                      await User.increment(
+                          { items_reused: 1, total_carbon_saved: co2Saved, carbon_saved_buyer: co2Saved },
+                          { where: { id: transaction.buyer_id } }
+                      );
+                      
+                      // Update Seller (increment accumulated_balance_due by platformFee)
+                      await User.increment(
+                          { items_reused: 1, total_carbon_saved: co2Saved, carbon_saved_seller: co2Saved, accumulated_balance_due: platformFee },
+                          { where: { id: transaction.seller_id } }
+                      );
+                  }
+            }
+
+            // Log interaction: 'buy' for Buyer (Idempotency assured)
+            try {
+                await UserInteraction.findOrCreate({
+                    where: {
+                        user_id: transaction.buyer_id,
+                        product_id: transaction.product_id,
+                        interaction_type: 'buy'
+                    },
+                    defaults: {
+                        weight: 10
+                    }
+                });
+            } catch (interactionError) {
+                console.error('Failed to log buy interaction:', interactionError);
             }
 
             // Notify Buyer that Seller completed it

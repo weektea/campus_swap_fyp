@@ -8,7 +8,7 @@ export const getLeaderboard = async (req, res) => {
             where: {
                 role: 'student'
             },
-            attributes: ['id', 'username', 'full_name', 'email', 'total_carbon_saved'],
+            attributes: ['id', 'username', 'full_name', 'email', 'total_carbon_saved', 'profile_image_url'],
             order: [['total_carbon_saved', 'DESC']],
             limit: 10
         });
@@ -19,6 +19,7 @@ export const getLeaderboard = async (req, res) => {
                 id: u.id,
                 name: u.username || u.email || 'Unknown User',
                 co2: u.total_carbon_saved,
+                profile_image_url: u.profile_image_url,
                 rank: index + 1
             };
         });

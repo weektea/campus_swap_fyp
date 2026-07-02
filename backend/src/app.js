@@ -464,6 +464,26 @@ if (process.env.NODE_ENV !== 'test') {
                         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='SupportTickets' AND column_name='type') THEN
                             ALTER TABLE "SupportTickets" ADD COLUMN "type" VARCHAR(255) DEFAULT 'SUPPORT';
                         END IF;
+
+                        -- 9. Ensure platform_fee column exists in Transactions table
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='Transactions' AND column_name='platform_fee') THEN
+                            ALTER TABLE "Transactions" ADD COLUMN "platform_fee" DECIMAL(10, 2) DEFAULT 0.00;
+                        END IF;
+
+                        -- 10. Ensure accumulated_balance_due column exists in Users table
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='Users' AND column_name='accumulated_balance_due') THEN
+                            ALTER TABLE "Users" ADD COLUMN "accumulated_balance_due" DECIMAL(10, 2) DEFAULT 0.00;
+                        END IF;
+
+                        -- 11. Ensure accepted_payment_methods column exists in Products table
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='Products' AND column_name='accepted_payment_methods') THEN
+                            ALTER TABLE "Products" ADD COLUMN "accepted_payment_methods" JSON DEFAULT '["Cash", "TNG", "Bank Transfer"]'::json;
+                        END IF;
+
+                        -- 12. Ensure selected_payment_method column exists in Transactions table
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='Transactions' AND column_name='selected_payment_method') THEN
+                            ALTER TABLE "Transactions" ADD COLUMN "selected_payment_method" VARCHAR(255);
+                        END IF;
                     END $$;
                 `);
                 console.log('SavedItems and Users table pre-sync migrations executed successfully');

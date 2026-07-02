@@ -40,16 +40,18 @@ class ProductListRow extends StatelessWidget {
       child: Container(
         height: 124,
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: Theme.of(context).cardTheme.color,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.grey[200]!, width: 1),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.02),
-              blurRadius: 8,
-              offset: const Offset(0, 4),
-            ),
-          ],
+          border: Border.all(color: Theme.of(context).brightness == Brightness.dark ? Theme.of(context).colorScheme.outlineVariant : Colors.grey[200]!, width: 1),
+          boxShadow: Theme.of(context).brightness == Brightness.dark 
+              ? [] 
+              : [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.02),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
         ),
         child: Row(
           children: [
@@ -70,22 +72,22 @@ class ProductListRow extends StatelessWidget {
                             imageUrl: product.imageUrl,
                             fit: BoxFit.cover,
                             placeholder: (context, url) => Container(
-                              color: Colors.grey[100],
+                              color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1E1E1E) : Colors.grey[100],
                               child: const Center(
                                 child: CircularProgressIndicator(strokeWidth: 2),
                               ),
                             ),
                             errorWidget: (context, url, error) => Container(
-                              color: Colors.grey[200],
+                              color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF2C2C2C) : Colors.grey[200],
                               child: const Icon(Icons.broken_image, color: Colors.grey),
                             ),
                           )
                         : Container(
-                            color: Colors.grey[200],
+                            color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1E1E1E) : Colors.grey[200],
                             child: Center(
                               child: Icon(
                                 Icons.image_not_supported_outlined,
-                                color: Colors.grey[400],
+                                color: Theme.of(context).colorScheme.onSurfaceVariant,
                                 size: 36,
                               ),
                             ),
@@ -144,7 +146,7 @@ class ProductListRow extends StatelessWidget {
                           child: Icon(
                             isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
                             size: 20,
-                            color: isFavorite ? Colors.red : const Color(0xFF1E293B),
+                            color: isFavorite ? Colors.red : (Theme.of(context).brightness == Brightness.dark ? Colors.white70 : const Color(0xFF1E293B)),
                           ),
                         ),
                       ],
@@ -159,7 +161,7 @@ class ProductListRow extends StatelessWidget {
                       style: GoogleFonts.outfit(
                         fontWeight: FontWeight.w600,
                         fontSize: 15,
-                        color: const Color(0xFF0F172A),
+                        color: Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -177,7 +179,7 @@ class ProductListRow extends StatelessWidget {
                                     ? 'RM ${product.rentalPricePerDay.toStringAsFixed(2)}'
                                     : 'RM ${product.price.toStringAsFixed(0)}',
                                 style: GoogleFonts.outfit(
-                                  color: const Color(0xFF0F172A),
+                                  color: Theme.of(context).colorScheme.onSurface,
                                   fontWeight: FontWeight.bold,
                                   fontSize: 16,
                                 ),
@@ -186,7 +188,7 @@ class ProductListRow extends StatelessWidget {
                                 TextSpan(
                                   text: ' /day',
                                   style: GoogleFonts.outfit(
-                                    color: Colors.grey[600],
+                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                                     fontSize: 11,
                                   ),
                                 ),
@@ -198,13 +200,13 @@ class ProductListRow extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
-                            color: Colors.grey[100],
+                            color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF2C2C2C) : Colors.grey[100],
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
                             product.condition,
                             style: GoogleFonts.outfit(
-                              color: const Color(0xFF475569),
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
                               fontSize: 9,
                               fontWeight: FontWeight.w500,
                             ),
@@ -217,7 +219,7 @@ class ProductListRow extends StatelessWidget {
                     // Divider
                     Container(
                       height: 1,
-                      color: Colors.grey[100],
+                      color: Theme.of(context).brightness == Brightness.dark ? Theme.of(context).colorScheme.outlineVariant : Colors.grey[100],
                     ),
                     const SizedBox(height: 6),
 
@@ -227,16 +229,21 @@ class ProductListRow extends StatelessWidget {
                         CircleAvatar(
                           radius: 8,
                           backgroundColor: primaryColor.withValues(alpha: 0.1),
-                          child: Text(
-                            product.sellerName.isNotEmpty
-                                ? product.sellerName[0].toUpperCase()
-                                : '?',
-                            style: TextStyle(
-                              fontSize: 8,
-                              color: primaryColor,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
+                          backgroundImage: product.sellerAvatar.isNotEmpty
+                              ? NetworkImage(product.sellerAvatar)
+                              : null,
+                          child: product.sellerAvatar.isEmpty
+                              ? Text(
+                                product.sellerName.isNotEmpty
+                                    ? product.sellerName[0].toUpperCase()
+                                    : '?',
+                                style: TextStyle(
+                                  fontSize: 8,
+                                  color: primaryColor,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              )
+                              : null,
                         ),
                         const SizedBox(width: 6),
                         Expanded(
@@ -248,7 +255,7 @@ class ProductListRow extends StatelessWidget {
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: GoogleFonts.outfit(
-                                    color: const Color(0xFF334155),
+                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                                     fontSize: 11,
                                     fontWeight: FontWeight.w500,
                                   ),
@@ -261,7 +268,7 @@ class ProductListRow extends StatelessWidget {
                                 product.sellerReputation.toStringAsFixed(1),
                                 style: GoogleFonts.outfit(
                                   fontSize: 10,
-                                  color: Colors.grey[600],
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                                 ),
                               ),
                             ],
@@ -270,7 +277,7 @@ class ProductListRow extends StatelessWidget {
                         Text(
                           _formatTimeAgo(product.postedAt),
                           style: GoogleFonts.outfit(
-                            color: Colors.grey[400],
+                            color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
                             fontSize: 10,
                           ),
                         ),

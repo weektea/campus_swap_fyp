@@ -80,20 +80,20 @@ class AppTheme {
     textTheme: GoogleFonts.outfitTextTheme(ThemeData.dark().textTheme),
     scaffoldBackgroundColor: darkBackground,
     appBarTheme: AppBarTheme(
-      backgroundColor: Colors.black,
-      foregroundColor: Colors.white,
+      backgroundColor: darkBackground,
+      foregroundColor: Colors.white.withValues(alpha: 0.87),
       elevation: 0,
       centerTitle: true,
       titleTextStyle: GoogleFonts.outfit(
         fontWeight: FontWeight.bold,
         fontSize: 20,
-        color: Colors.white,
+        color: Colors.white.withValues(alpha: 0.87),
       ),
     ),
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
         backgroundColor: primaryColor,
-        foregroundColor: Colors.white,
+        foregroundColor: Colors.white.withValues(alpha: 0.87),
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
@@ -118,7 +118,8 @@ class AppTheme {
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       color: const Color(0xFF1E1E1E),
-      surfaceTintColor: const Color(0xFF1E1E1E),
+      surfaceTintColor: primaryColor,
+      shadowColor: Colors.transparent, // Disable shadows in dark mode to avoid blending into background
     ),
   );
 }

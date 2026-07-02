@@ -51,12 +51,18 @@ export const getRecommendations = async (req, res) => {
             const trendingQuery = await sequelize.query(`
                 SELECT ui.product_id, 
                        COUNT(CASE WHEN ui.interaction_type = 'view' THEN 1 END) as view_count,
+                       COUNT(CASE WHEN ui.interaction_type = 'message' THEN 1 END) as message_count,
                        COUNT(CASE WHEN ui.interaction_type = 'save' THEN 1 END) as save_count,
-                       SUM(ui.weight) as score
+                       SUM(CASE 
+                           WHEN ui.interaction_type = 'view' THEN 1
+                           WHEN ui.interaction_type = 'message' THEN 3
+                           WHEN ui.interaction_type = 'save' THEN 5
+                           ELSE 0 
+                       END) as score
                 FROM "UserInteractions" ui
                 JOIN "Products" p ON ui.product_id = p.id
                 WHERE p.status = 'Available'
-                  AND ui.interaction_type IN ('view', 'save')
+                  AND ui.interaction_type IN ('view', 'message', 'save')
                   AND p.seller_id != :user_id
                 GROUP BY ui.product_id
                 ORDER BY score DESC
@@ -81,7 +87,7 @@ export const getRecommendations = async (req, res) => {
                     include: [{
                         model: User,
                         as: 'seller',
-                        attributes: ['username', 'full_name', 'reputation_score']
+                        attributes: ['username', 'full_name', 'reputation_score', 'profile_image_url']
                     }]
                 });
                 
@@ -98,7 +104,7 @@ export const getRecommendations = async (req, res) => {
                         seller_id: { [Op.ne]: user_id },
                         ...(reportedIds.length > 0 ? { id: { [Op.notIn]: reportedIds } } : {})
                     },
-                    include: [{ model: User, as: 'seller', attributes: ['username', 'full_name', 'reputation_score'] }],
+                    include: [{ model: User, as: 'seller', attributes: ['username', 'full_name', 'reputation_score', 'profile_image_url'] }],
                     order: [['createdAt', 'DESC']],
                     limit: 10
                 });
@@ -117,7 +123,7 @@ export const getRecommendations = async (req, res) => {
             include: [{
                 model: User,
                 as: 'seller',
-                attributes: ['username', 'full_name', 'reputation_score']
+                attributes: ['username', 'full_name', 'reputation_score', 'profile_image_url']
             }, {
                 model: Category,
                 as: 'categoryModel'
@@ -236,34 +242,49 @@ export const getRecommendations = async (req, res) => {
     }
 };
 
-export const getTrendingProducts = async (req, res) => {
+export const getTrendingItems = async (req, res) => {
     try {
-        const { limit = 10 } = req.query;
+        const { limit = 10, category } = req.query;
 
-        // Sum weights of views and saves in UserInteractions per product
+        // Sum weights of views, messages, and saves in UserInteractions per product (excluding 'buy')
         // Favour active and available listings
+        const categoryFilter = category ? 'AND p.category = :category' : '';
         const trendingQuery = await sequelize.query(`
             SELECT ui.product_id, 
                    COUNT(CASE WHEN ui.interaction_type = 'view' THEN 1 END) as view_count,
+                   COUNT(CASE WHEN ui.interaction_type = 'message' THEN 1 END) as message_count,
                    COUNT(CASE WHEN ui.interaction_type = 'save' THEN 1 END) as save_count,
-                   SUM(ui.weight) as score
+                   SUM(CASE 
+                       WHEN ui.interaction_type = 'view' THEN 1
+                       WHEN ui.interaction_type = 'message' THEN 3
+                       WHEN ui.interaction_type = 'save' THEN 5
+                       ELSE 0 
+                   END) as score
             FROM "UserInteractions" ui
             JOIN "Products" p ON ui.product_id = p.id
             WHERE p.status = 'Available'
-              AND ui.interaction_type IN ('view', 'save')
+              AND ui.interaction_type IN ('view', 'message', 'save')
+              ${categoryFilter}
             GROUP BY ui.product_id
             ORDER BY score DESC
             LIMIT :limit
         `, {
-            replacements: { limit: parseInt(limit) },
+            replacements: { 
+                limit: parseInt(limit),
+                category: category || null
+            },
             type: sequelize.QueryTypes.SELECT
         });
 
         if (trendingQuery.length === 0) {
-            // Cold start fallback: return latest available items
+            // Cold start fallback: return latest available items (optionally filtered by category)
+            const fallbackWhere = { status: 'Available' };
+            if (category) {
+                fallbackWhere.category = category;
+            }
             const fallback = await Product.findAll({
-                where: { status: 'Available' },
-                include: [{ model: User, as: 'seller', attributes: ['username', 'full_name', 'reputation_score'] }],
+                where: fallbackWhere,
+                include: [{ model: User, as: 'seller', attributes: ['username', 'full_name', 'reputation_score', 'profile_image_url'] }],
                 order: [['createdAt', 'DESC']],
                 limit: parseInt(limit)
             });
@@ -280,7 +301,7 @@ export const getTrendingProducts = async (req, res) => {
             include: [{
                 model: User,
                 as: 'seller',
-                attributes: ['username', 'full_name', 'reputation_score']
+                attributes: ['username', 'full_name', 'reputation_score', 'profile_image_url']
             }]
         });
 
@@ -291,7 +312,64 @@ export const getTrendingProducts = async (req, res) => {
 
         res.json(sortedProducts);
     } catch (error) {
-        console.error('Get Trending Error:', error);
-        res.status(500).json({ error: 'Failed to fetch trending products' });
+        console.error('Get Trending Items Error:', error);
+        res.status(500).json({ error: 'Failed to fetch trending items' });
+    }
+};
+
+export const getTrendingProducts = getTrendingItems; // Backward compatibility
+
+export const getTrendingCategories = async (req, res) => {
+    try {
+        const { limit = 10 } = req.query;
+
+        // Aggregate total popularity of all items grouped by their category
+        // Regardless of availability status (include Sold, Reserved, etc.)
+        // Formula: SUM(views * 1) + SUM(messages * 3) + SUM(saves * 5) + SUM(buys * 10)
+        const trendingQuery = await sequelize.query(`
+            SELECT p.category, 
+                   COUNT(CASE WHEN ui.interaction_type = 'view' THEN 1 END) as view_count,
+                   COUNT(CASE WHEN ui.interaction_type = 'message' THEN 1 END) as message_count,
+                   COUNT(CASE WHEN ui.interaction_type = 'save' THEN 1 END) as save_count,
+                   COUNT(CASE WHEN ui.interaction_type = 'buy' THEN 1 END) as buy_count,
+                   SUM(CASE 
+                       WHEN ui.interaction_type = 'view' THEN 1
+                       WHEN ui.interaction_type = 'message' THEN 3
+                       WHEN ui.interaction_type = 'save' THEN 5
+                       WHEN ui.interaction_type = 'buy' THEN 10
+                       ELSE 0 
+                   END) as score
+            FROM "UserInteractions" ui
+            JOIN "Products" p ON ui.product_id = p.id
+            WHERE ui.interaction_type IN ('view', 'message', 'save', 'buy')
+              AND p.category IS NOT NULL
+            GROUP BY p.category
+            ORDER BY score DESC
+            LIMIT :limit
+        `, {
+            replacements: { limit: parseInt(limit) },
+            type: sequelize.QueryTypes.SELECT
+        });
+
+        if (trendingQuery.length === 0) {
+            // Cold start fallback: return categories ranked by product count
+            const fallback = await sequelize.query(`
+                SELECT p.category, COUNT(p.id) as product_count, 0 as score
+                FROM "Products" p
+                WHERE p.category IS NOT NULL
+                GROUP BY p.category
+                ORDER BY product_count DESC
+                LIMIT :limit
+            `, {
+                replacements: { limit: parseInt(limit) },
+                type: sequelize.QueryTypes.SELECT
+            });
+            return res.json(fallback);
+        }
+
+        res.json(trendingQuery);
+    } catch (error) {
+        console.error('Get Trending Categories Error:', error);
+        res.status(500).json({ error: 'Failed to fetch trending categories' });
     }
 };

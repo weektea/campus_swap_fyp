@@ -31,7 +31,7 @@ class CategoryChip extends StatelessWidget {
             color: isSelected ? colorScheme.primary : colorScheme.surface,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: isSelected ? colorScheme.primary : Colors.grey[300]!,
+              color: isSelected ? colorScheme.primary : (theme.brightness == Brightness.dark ? colorScheme.outlineVariant : Colors.grey[300]!),
               width: 1,
             ),
             boxShadow: isSelected
@@ -50,13 +50,13 @@ class CategoryChip extends StatelessWidget {
               Icon(
                 icon,
                 size: 20,
-                color: isSelected ? Colors.white : Colors.grey[600],
+                color: isSelected ? Colors.white : colorScheme.onSurfaceVariant,
               ),
               const SizedBox(width: 8),
               Text(
                 label,
                 style: GoogleFonts.outfit(
-                  color: isSelected ? Colors.white : Colors.grey[800],
+                  color: isSelected ? Colors.white : colorScheme.onSurface,
                   fontWeight: FontWeight.w600,
                   fontSize: 14,
                 ),

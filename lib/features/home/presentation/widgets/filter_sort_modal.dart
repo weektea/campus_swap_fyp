@@ -87,9 +87,9 @@ class _FilterSortModalState extends State<FilterSortModal> {
 
     return Container(
       height: height,
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
       child: Column(
         children: [
@@ -97,7 +97,7 @@ class _FilterSortModalState extends State<FilterSortModal> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
+              border: Border(bottom: BorderSide(color: Theme.of(context).brightness == Brightness.dark ? Theme.of(context).colorScheme.outlineVariant : Colors.grey[200]!)),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -128,7 +128,7 @@ class _FilterSortModalState extends State<FilterSortModal> {
                 // Left Column (Tabs)
                 Container(
                   width: MediaQuery.of(context).size.width * 0.3,
-                  color: Colors.grey[100],
+                  color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1E1E1E) : Colors.grey[100],
                   child: ListView.builder(
                     itemCount: _tabs.length,
                     itemBuilder: (context, index) {
@@ -141,7 +141,7 @@ class _FilterSortModalState extends State<FilterSortModal> {
                         },
                         child: Container(
                           decoration: BoxDecoration(
-                            color: isActive ? Colors.white : Colors.transparent,
+                            color: isActive ? Theme.of(context).colorScheme.surface : Colors.transparent,
                             border: Border(
                               left: BorderSide(
                                 color: isActive ? primaryColor : Colors.transparent,
@@ -154,7 +154,7 @@ class _FilterSortModalState extends State<FilterSortModal> {
                             _tabs[index],
                             style: GoogleFonts.outfit(
                               fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-                              color: isActive ? primaryColor : Colors.grey[700],
+                              color: isActive ? primaryColor : Theme.of(context).colorScheme.onSurfaceVariant,
                             ),
                           ),
                         ),
@@ -166,7 +166,7 @@ class _FilterSortModalState extends State<FilterSortModal> {
                 // Right Column (Content)
                 Expanded(
                   child: Container(
-                    color: Colors.white,
+                    color: Theme.of(context).colorScheme.surface,
                     child: IndexedStack(
                       index: _activeTabIndex,
                       children: [
@@ -187,14 +187,16 @@ class _FilterSortModalState extends State<FilterSortModal> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
-                  offset: const Offset(0, -4),
-                  blurRadius: 10,
-                ),
-              ],
+              color: Theme.of(context).colorScheme.surface,
+              boxShadow: Theme.of(context).brightness == Brightness.dark 
+                  ? [] 
+                  : [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        offset: const Offset(0, -4),
+                        blurRadius: 10,
+                      ),
+                    ],
             ),
             child: Row(
               children: [
@@ -204,12 +206,12 @@ class _FilterSortModalState extends State<FilterSortModal> {
                     onPressed: _reset,
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 14),
-                      side: BorderSide(color: Colors.grey[300]!),
+                      side: BorderSide(color: Theme.of(context).brightness == Brightness.dark ? Theme.of(context).colorScheme.outline : Colors.grey[300]!),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                     child: Text(
                       'Reset',
-                      style: GoogleFonts.outfit(color: Colors.grey[700], fontWeight: FontWeight.bold),
+                      style: GoogleFonts.outfit(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.bold),
                     ),
                   ),
                 ),
@@ -278,7 +280,7 @@ class _FilterSortModalState extends State<FilterSortModal> {
           onChanged: (val) => setState(() => _categoryIndex = val!),
           title: Row(
             children: [
-              Icon(cat['icon'], size: 20, color: Colors.grey[600]),
+              Icon(cat['icon'], size: 20, color: Theme.of(context).colorScheme.onSurfaceVariant),
               const SizedBox(width: 8),
               Text(cat['label'], style: GoogleFonts.outfit(fontSize: 14)),
             ],
@@ -350,8 +352,8 @@ class _FilterSortModalState extends State<FilterSortModal> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('RM ${_priceRange.start.round()}', style: GoogleFonts.outfit(color: Colors.grey[700])),
-              Text('RM ${_priceRange.end.round()}', style: GoogleFonts.outfit(color: Colors.grey[700])),
+              Text('RM ${_priceRange.start.round()}', style: GoogleFonts.outfit(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+              Text('RM ${_priceRange.end.round()}', style: GoogleFonts.outfit(color: Theme.of(context).colorScheme.onSurfaceVariant)),
             ],
           ),
           RangeSlider(

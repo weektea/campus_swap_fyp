@@ -1,4 +1,4 @@
-import { Dispute, Transaction, User, Product, Category, SubCategory } from '../models/index.js';
+import { Dispute, Transaction, User, Product, Category, SubCategory, UserInteraction } from '../models/index.js';
 import { createNotification } from './notificationController.js';
 import { emitToAdmins } from '../config/socket.js';
 import { getCarbonValue } from './transactionController.js';
@@ -246,13 +246,16 @@ export const arbitrateDispute = async (req, res) => {
                      co2Saved = getCarbonValue(catName, subCatName, product);
                 }
 
+                // Calculate 2% Platform Fee (based on transaction.amount)
+                const platformFee = parseFloat((parseFloat(transaction.amount) * 0.02).toFixed(2));
+                transaction.platform_fee = platformFee;
                 transaction.awarded_carbon_points = co2Saved;
                 await transaction.save();
 
                 if (product) {
                      if (transaction.buyer_id === transaction.seller_id) {
                           await User.increment(
-                              { items_reused: 1, total_carbon_saved: co2Saved, carbon_saved_buyer: co2Saved, carbon_saved_seller: co2Saved },
+                              { items_reused: 1, total_carbon_saved: co2Saved, carbon_saved_buyer: co2Saved, carbon_saved_seller: co2Saved, accumulated_balance_due: platformFee },
                               { where: { id: transaction.buyer_id } }
                           );
                       } else {
@@ -261,10 +264,26 @@ export const arbitrateDispute = async (req, res) => {
                               { where: { id: transaction.buyer_id } }
                           );
                           await User.increment(
-                              { items_reused: 1, total_carbon_saved: co2Saved, carbon_saved_seller: co2Saved },
+                              { items_reused: 1, total_carbon_saved: co2Saved, carbon_saved_seller: co2Saved, accumulated_balance_due: platformFee },
                               { where: { id: transaction.seller_id } }
                           );
                       }
+                 }
+
+                 // Log interaction: 'buy' for Buyer (Idempotency assured)
+                 try {
+                     await UserInteraction.findOrCreate({
+                         where: {
+                             user_id: transaction.buyer_id,
+                             product_id: transaction.product_id,
+                             interaction_type: 'buy'
+                         },
+                         defaults: {
+                             weight: 10
+                         }
+                     });
+                 } catch (interactionError) {
+                     console.error('Failed to log buy interaction in dispute resolution:', interactionError);
                  }
             }
         } else {

@@ -72,8 +72,8 @@ export const getChatList = async (req, res) => {
                 ]
             },
             include: [
-                { model: User, as: 'sender', attributes: ['id', 'username', 'full_name'] },
-                { model: User, as: 'receiver', attributes: ['id', 'username', 'full_name'] }
+                { model: User, as: 'sender', attributes: ['id', 'username', 'full_name', 'profile_image_url'] },
+                { model: User, as: 'receiver', attributes: ['id', 'username', 'full_name', 'profile_image_url'] }
             ],
             order: [['createdAt', 'DESC']]
         });
@@ -95,6 +95,7 @@ export const getChatList = async (req, res) => {
                     name: partner.username,
                     username: partner.username,
                     full_name: partner.full_name,
+                    profile_image_url: partner.profile_image_url,
                     lastMessage: msg.content,
                     time: msg.createdAt,
                     unread: 0 // logic to be added

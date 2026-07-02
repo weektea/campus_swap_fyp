@@ -39,6 +39,10 @@ const Product = sequelize.define('Product', {
         type: DataTypes.JSON,
         defaultValue: [],
     },
+    accepted_payment_methods: {
+        type: DataTypes.JSON,
+        defaultValue: ['Cash', 'TNG', 'Bank Transfer'],
+    },
     video_url: {
         type: DataTypes.STRING,
         allowNull: true,

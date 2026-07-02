@@ -90,6 +90,7 @@ class _LoginPageState extends State<LoginPage> {
         session.email = response['user']['email'];
         session.username = response['user']['username'];
         session.fullName = response['user']['full_name'];
+        session.avatarUrl = response['user']['profile_picture'];
         session.role = response['user']['role'];
 
         // Initialize real-time WebSocket connection
@@ -366,6 +367,7 @@ class _LoginPageState extends State<LoginPage> {
                             UserSession().email = reactivateResponse['user']['email'];
                             UserSession().username = reactivateResponse['user']['username'];
                             UserSession().fullName = reactivateResponse['user']['full_name'];
+                            UserSession().avatarUrl = reactivateResponse['user']['profile_picture'];
                             UserSession().role = reactivateResponse['user']['role'];
                             
                             // Initialize dynamic real-time WebSocket connection

@@ -82,10 +82,10 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.chat_bubble_outline, size: 80, color: Colors.grey[300]),
+                      Icon(Icons.chat_bubble_outline, size: 80, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.5)),
                       const SizedBox(height: 16),
                       Text('Please login to view messages.',
-                          style: GoogleFonts.outfit(fontSize: 18, color: Colors.grey[600], fontWeight: FontWeight.bold)),
+                          style: GoogleFonts.outfit(fontSize: 18, color: Theme.of(context).colorScheme.onSurface, fontWeight: FontWeight.bold)),
                     ],
                   ),
                 )
@@ -99,13 +99,13 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Icon(Icons.chat_bubble_outline, size: 80, color: Colors.grey[300]),
+                                  Icon(Icons.chat_bubble_outline, size: 80, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.5)),
                                   const SizedBox(height: 16),
                                   Text('No messages yet.',
-                                      style: GoogleFonts.outfit(fontSize: 18, color: Colors.grey[600], fontWeight: FontWeight.bold)),
+                                      style: GoogleFonts.outfit(fontSize: 18, color: Theme.of(context).colorScheme.onSurface, fontWeight: FontWeight.bold)),
                                   const SizedBox(height: 8),
                                   Text('Start a conversation by exploring items!',
-                                      style: GoogleFonts.outfit(fontSize: 14, color: Colors.grey[500])),
+                                      style: GoogleFonts.outfit(fontSize: 14, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                                 ],
                               ),
                             ),
@@ -123,14 +123,19 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                               leading: CircleAvatar(
                                 radius: 28,
                                 backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
-                                child: Text(
-                                  name.isNotEmpty ? name[0].toUpperCase() : '?',
-                                  style: TextStyle(
-                                    color: Theme.of(context).colorScheme.primary,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 20,
-                                  ),
-                                ),
+                                backgroundImage: chat['profile_image_url'] != null
+                                    ? NetworkImage('${ApiClient.baseUrl.replaceAll('/api', '')}${chat['profile_image_url']}')
+                                    : null,
+                                child: chat['profile_image_url'] == null
+                                    ? Text(
+                                        name.isNotEmpty ? name[0].toUpperCase() : '?',
+                                        style: TextStyle(
+                                          color: Theme.of(context).colorScheme.primary,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 20,
+                                        ),
+                                      )
+                                    : null,
                               ),
                               title: Text(
                                 name,
@@ -140,7 +145,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                                 lastMsg,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: TextStyle(color: Colors.grey[600]),
+                                style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
                               ),
                               onTap: () {
                                 Navigator.push(
@@ -149,6 +154,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                                     builder: (_) => ChatDetailPage(
                                       sellerName: name,
                                       otherUserId: chat['id']?.toString(),
+                                      otherUserAvatar: chat['profile_image_url']?.toString(),
                                     ),
                                   ),
                                 ).then((_) => _fetchConversations());

@@ -184,7 +184,7 @@ export const getAllProducts = async (req, res) => {
                 {
                     model: User,
                     as: 'seller',
-                    attributes: ['username', 'full_name', 'email', 'reputation_score', 'total_reviews'],
+                    attributes: ['username', 'full_name', 'email', 'reputation_score', 'total_reviews', 'profile_image_url'],
                     required: false // Force LEFT JOIN
                 },
                 {

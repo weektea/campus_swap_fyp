@@ -129,6 +129,7 @@ export const register = async (req, res) => {
                 email: user.email,
                 username: user.username,
                 full_name: user.full_name,
+                profile_picture: user.profile_image_url,
                 role: user.role
             }
         });
@@ -211,6 +212,7 @@ export const login = async (req, res) => {
                 email: user.email,
                 username: user.username,
                 full_name: user.full_name,
+                profile_picture: user.profile_image_url,
                 role: user.role
             }
         });
@@ -288,7 +290,8 @@ export const getUserProfile = async (req, res) => {
                 'role', 'total_carbon_saved', 'carbon_saved_buyer', 'carbon_saved_seller', 
                 'items_reused', 'reputation_score', 'total_reviews', 'privacy_setting', 
                 'show_full_name', 'show_phone_number',
-                'bio', 'faculty', 'year_of_study', 'createdAt', 'is_active', 'university_id'
+                'bio', 'faculty', 'year_of_study', 'createdAt', 'is_active', 'university_id',
+                'accumulated_balance_due'
             ]
         });
         
@@ -317,8 +320,32 @@ export const getUserProfile = async (req, res) => {
             user.year_of_study = null;
             user.setDataValue('university_id', null);
         }
+
+        // Aggregate successful sales (completed transactions as seller)
+        const completedSales = await Transaction.count({
+            where: {
+                seller_id: id,
+                status: 'Completed'
+            }
+        });
+
+        // Dynamic badges logic
+        const badges = [];
+        if (completedSales >= 5) {
+            badges.push('Fast Seller');
+        }
+        if (completedSales >= 3 && (user.reputation_score || 0) >= 4.8) {
+            badges.push('Highly Rated');
+        }
+
+        const userJSON = user.toJSON();
+        userJSON.badges = badges;
+
+        // Calculate mock billing due date (last day of the current month)
+        const now = new Date();
+        userJSON.billing_due_date = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
         
-        res.json({ user });
+        res.json({ user: userJSON });
     } catch (error) {
         console.error('Get User Profile Error:', error);
         res.status(500).json({ error: 'Failed to fetch user profile' });

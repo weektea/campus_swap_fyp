@@ -33,6 +33,9 @@ class _SellPageState extends State<SellPage> {
   static const int _maxImages = 9;
 
   Map<String, List<String>> _categoriesMap = {};
+  
+  final List<String> _paymentMethods = ['Cash', 'TNG', 'Bank Transfer'];
+  List<String> _selectedPaymentMethods = ['Cash', 'TNG', 'Bank Transfer'];
 
   @override
   void initState() {
@@ -226,7 +229,7 @@ class _SellPageState extends State<SellPage> {
                           spacing: 8,
                           runSpacing: 4,
                           children: _categoriesMap[_selectedCategory!]!.map((sub) => ChoiceChip(
-                             label: Text(sub, style: GoogleFonts.outfit(color: _selectedSubCategory == sub ? Colors.white : Colors.black)),
+                             label: Text(sub, style: GoogleFonts.outfit(color: _selectedSubCategory == sub ? Colors.white : Theme.of(context).colorScheme.onSurface)),
                              selected: _selectedSubCategory == sub,
                              selectedColor: Theme.of(context).colorScheme.primary,
                              onSelected: (sel) {
@@ -363,9 +366,9 @@ class _SellPageState extends State<SellPage> {
                                 height: 120,
                                 margin: const EdgeInsets.only(right: 12),
                                 decoration: BoxDecoration(
-                                    color: Colors.grey[100],
+                                    color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1E1E1E) : Colors.grey[100],
                                     borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: Colors.grey[300]!)
+                                    border: Border.all(color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF2C2C2C) : Colors.grey[300]!)
                                 ),
                                 child: Column(
                                     mainAxisAlignment: MainAxisAlignment.center,
@@ -386,9 +389,9 @@ class _SellPageState extends State<SellPage> {
                                 height: 120,
                                 margin: const EdgeInsets.only(right: 12),
                                 decoration: BoxDecoration(
-                                    color: Colors.grey[100],
+                                    color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1E1E1E) : Colors.grey[100],
                                     borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: Colors.grey[300]!)
+                                    border: Border.all(color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF2C2C2C) : Colors.grey[300]!)
                                 ),
                                 child: Column(
                                     mainAxisAlignment: MainAxisAlignment.center,
@@ -613,14 +616,41 @@ class _SellPageState extends State<SellPage> {
             ],
 
              const SizedBox(height: 8),
-             Align(
-               alignment: Alignment.centerRight,
-               child: TextButton.icon(
-                 onPressed: _fetchPriceSuggestion,
-                 icon: const Icon(Icons.analytics_outlined, size: 16),
-                 label: Text('Get Price Suggestion', style: GoogleFonts.outfit()),
-               ),
-             ),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: _fetchPriceSuggestion,
+                  icon: const Icon(Icons.analytics_outlined, size: 16),
+                  label: Text('Get Price Suggestion', style: GoogleFonts.outfit()),
+                ),
+              ),
+
+              const SizedBox(height: 16),
+              Text('Accepted Payment Methods', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 16)),
+              const SizedBox(height: 8),
+              ..._paymentMethods.map((method) {
+                  return CheckboxListTile(
+                      title: Text(method, style: GoogleFonts.outfit(fontSize: 14)),
+                      value: _selectedPaymentMethods.contains(method),
+                      dense: true,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      contentPadding: EdgeInsets.zero,
+                      activeColor: Theme.of(context).colorScheme.primary,
+                      onChanged: (bool? checked) {
+                          setState(() {
+                              if (checked == true) {
+                                  _selectedPaymentMethods.add(method);
+                              } else {
+                                  if (_selectedPaymentMethods.length > 1) {
+                                      _selectedPaymentMethods.remove(method);
+                                  } else {
+                                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('At least one payment method must be accepted.')));
+                                  }
+                              }
+                          });
+                      },
+                  );
+              }),
 
              const SizedBox(height: 16),
              TextFormField(
@@ -745,6 +775,7 @@ class _SellPageState extends State<SellPage> {
         'seller_id': session.userId,
         'type': _listingType,
         'image_urls': uploadedImageUrls,
+        'accepted_payment_methods': _selectedPaymentMethods,
         if (uploadedVideoUrl != null) 'video_url': uploadedVideoUrl,
       };
 
@@ -766,11 +797,12 @@ class _SellPageState extends State<SellPage> {
         _descController.clear();
         setState(() {
              _imageFiles.clear();
-             _videoFile = null;
-             _selectedCategory = null;
-             _selectedCondition = 'Good';
-        });
-      }
+              _videoFile = null;
+              _selectedCategory = null;
+              _selectedCondition = 'Good';
+              _selectedPaymentMethods = ['Cash', 'TNG', 'Bank Transfer'];
+         });
+       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));

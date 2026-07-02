@@ -144,8 +144,8 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
           children: List.generate(stages.length, (index) {
              bool isPassed = currentIndex > index;
              bool isCurrent = currentIndex == index;
-             Color nodeColor = isPassed || isCurrent ? Theme.of(context).colorScheme.primary : Colors.white;
-             Color borderColor = isPassed || isCurrent ? Theme.of(context).colorScheme.primary : Colors.grey[300]!;
+             Color nodeColor = isPassed || isCurrent ? Theme.of(context).colorScheme.primary : (Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1E1E1E) : Colors.white);
+             Color borderColor = isPassed || isCurrent ? Theme.of(context).colorScheme.primary : (Theme.of(context).brightness == Brightness.dark ? Theme.of(context).colorScheme.outlineVariant : Colors.grey[300]!);
 
              return Row(
                crossAxisAlignment: CrossAxisAlignment.start,
@@ -163,13 +163,13 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
                            ? const Icon(Icons.check, size: 16, color: Colors.white) 
                            : (isCurrent 
                                ? const Icon(Icons.check, size: 16, color: Colors.white) 
-                               : Center(child: Text('${index + 1}', style: TextStyle(color: Colors.grey[400], fontSize: 12)))),
+                               : Center(child: Text('${index + 1}', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12)))),
                      ),
                      if (index < stages.length - 1)
                        Container(
                          width: 2,
                          height: 32,
-                         color: (currentIndex > index) ? Theme.of(context).colorScheme.primary : Colors.grey[300],
+                         color: (currentIndex > index) ? Theme.of(context).colorScheme.primary : (Theme.of(context).brightness == Brightness.dark ? Theme.of(context).colorScheme.outlineVariant : Colors.grey[300]),
                        )
                    ],
                  ),
@@ -181,7 +181,7 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
                       style: GoogleFonts.outfit(
                          fontSize: 15, 
                          fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
-                         color: isPassed || isCurrent ? Colors.black87 : Colors.grey[600]
+                         color: isPassed || isCurrent ? Theme.of(context).colorScheme.onSurface : Theme.of(context).colorScheme.onSurfaceVariant
                       )
                    ),
                  )
@@ -227,7 +227,12 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
             // Status Stepper
             Container(
                 padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.grey.shade200, blurRadius: 10, offset: const Offset(0, 4))]),
+                decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surface, 
+                    borderRadius: BorderRadius.circular(16), 
+                    boxShadow: Theme.of(context).brightness == Brightness.dark 
+                        ? [] 
+                        : [BoxShadow(color: Colors.grey.shade200, blurRadius: 10, offset: const Offset(0, 4))]),
                 child: Column(
                     children: [
                         Text('Transaction Progress', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold)),
@@ -238,19 +243,86 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
             ),
             const SizedBox(height: 24),
 
+            // Order Summary
+            Text('Order Summary', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
+            Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surface, 
+                    borderRadius: BorderRadius.circular(12), 
+                    border: Border.all(color: Theme.of(context).brightness == Brightness.dark ? Theme.of(context).colorScheme.outlineVariant : Colors.grey.shade200)),
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                        Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                                Text('Meetup Location:', style: GoogleFonts.outfit(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                                Text(_transaction['meetup_location'] ?? 'Not specified', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+                            ],
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                                Text('Payment Method:', style: GoogleFonts.outfit(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                                Text(_transaction['selected_payment_method'] ?? 'Cash', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Colors.teal)),
+                            ],
+                        ),
+                        const Divider(height: 24),
+                        Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                                Text('Item Price:', style: GoogleFonts.outfit(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                                Text('RM ${(_transaction['item_price'] ?? _transaction['amount']).toString()}', style: GoogleFonts.outfit()),
+                            ],
+                        ),
+                        if (!isBuying) ...[
+                            const SizedBox(height: 8),
+                            Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                    Text('Platform Fee (2%):', style: GoogleFonts.outfit(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                                    Text('- RM ${(_transaction['platform_fee'] ?? 0.0).toString()}', style: GoogleFonts.outfit(color: Colors.red)),
+                                ],
+                            ),
+                        ],
+                        const SizedBox(height: 8),
+                        Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                                Text(isBuying ? 'Total Paid by Buyer:' : 'Seller Net Earnings:', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+                                Text(
+                                    isBuying 
+                                        ? 'RM ${(_transaction['total_amount_paid_by_buyer'] ?? _transaction['amount']).toString()}'
+                                        : 'RM ${(double.parse((_transaction['item_price'] ?? _transaction['amount']).toString()) - double.parse((_transaction['platform_fee'] ?? 0.0).toString())).toStringAsFixed(2)}',
+                                    style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary, fontSize: 16)
+                                ),
+                            ],
+                        ),
+                    ],
+                )
+            ),
+            const SizedBox(height: 24),
+
             // Product Brief
             Text('Item Summary', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
             Container(
                padding: const EdgeInsets.all(12),
-               decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade200)),
+               decoration: BoxDecoration(
+                   color: Theme.of(context).colorScheme.surface, 
+                   borderRadius: BorderRadius.circular(12), 
+                   border: Border.all(color: Theme.of(context).brightness == Brightness.dark ? Theme.of(context).colorScheme.outlineVariant : Colors.grey.shade200)),
                child: Row(
                    children: [
                        ClipRRect(
                            borderRadius: BorderRadius.circular(8),
                            child: productImg.isNotEmpty 
                              ? Image.network('${ApiClient.baseUrl.replaceAll('/api', '')}$productImg', width: 60, height: 60, fit: BoxFit.cover)
-                             : Container(width: 60, height: 60, color: Colors.grey.shade200)
+                             : Container(width: 60, height: 60, color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1E1E1E) : Colors.grey.shade200)
                        ),
                        const SizedBox(width: 16),
                        Expanded(
@@ -258,7 +330,7 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
                                crossAxisAlignment: CrossAxisAlignment.start,
                                children: [
                                    Text(product['title'] ?? 'Unknown Item', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold)),
-                                   Text('${product['type'] ?? 'Sale'} Request', style: GoogleFonts.outfit(color: Colors.grey[600], fontSize: 13)),
+                                   Text('${product['type'] ?? 'Sale'} Request', style: GoogleFonts.outfit(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13)),
                                ]
                            )
                        ),
@@ -275,16 +347,22 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
               contentPadding: EdgeInsets.zero,
               leading: CircleAvatar(
                   backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
-                  child: Text(otherPartyName[0].toUpperCase(), style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold)),
+                  backgroundImage: otherParty['profile_image_url'] != null
+                      ? NetworkImage('${ApiClient.baseUrl.replaceAll('/api', '')}${otherParty['profile_image_url']}')
+                      : null,
+                  child: otherParty['profile_image_url'] == null
+                      ? Text(otherPartyName[0].toUpperCase(), style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold))
+                      : null,
               ),
               title: Text(otherPartyName, style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
               subtitle: Text('${otherParty['username'] != null ? '@${otherParty['username']} • ' : ''}${otherParty['email'] ?? ''}', style: GoogleFonts.outfit(fontSize: 12)),
               trailing: ElevatedButton.icon(
                   onPressed: () {
-                       Navigator.push(context, MaterialPageRoute(builder: (_) => ChatDetailPage(
-                           sellerName: otherParty['username'] != null ? '@${otherParty['username']}' : 'Unknown User',
-                           otherUserId: otherParty['id']?.toString() ?? ''
-                       )));
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => ChatDetailPage(
+                            sellerName: otherParty['username'] != null ? '@${otherParty['username']}' : 'Unknown User',
+                            otherUserId: otherParty['id']?.toString() ?? '',
+                            otherUserAvatar: otherParty['profile_image_url']?.toString(),
+                        )));
                   },
                   icon: const Icon(Icons.chat_bubble_outline, size: 16),
                   label: const Text('Chat'),
@@ -324,9 +402,9 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: Theme.of(context).colorScheme.surface,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey.shade200),
+                  border: Border.all(color: Theme.of(context).brightness == Brightness.dark ? Theme.of(context).colorScheme.outlineVariant : Colors.grey.shade200),
                 ),
                 child: () {
                   final isPublished = _transaction['review_status'] == 'PUBLISHED';
@@ -354,7 +432,7 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
                                 return Icon(
                                   Icons.star_rounded,
                                   size: 18,
-                                  color: starIndex < starVal ? Colors.amber : Colors.grey.shade300,
+                                  color: starIndex < starVal ? Colors.amber : (Theme.of(context).brightness == Brightness.dark ? Colors.white10 : Colors.grey.shade300),
                                 );
                               }),
                             ),
@@ -363,7 +441,7 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
                         const SizedBox(height: 12),
                         Text(
                           comment ?? 'No comment provided.',
-                          style: const TextStyle(fontSize: 14, color: Colors.black87),
+                          style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurface),
                         ),
                       ],
                     );
@@ -384,7 +462,7 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
                         const SizedBox(height: 8),
                         Text(
                           'Waiting for the counterparty to submit their review to unlock feedback.',
-                          style: TextStyle(fontSize: 13, color: Colors.grey.shade600, fontStyle: FontStyle.italic),
+                          style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant, fontStyle: FontStyle.italic),
                         ),
                       ],
                     );
@@ -477,11 +555,11 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
                           width: double.infinity,
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
-                              color: Colors.blue.withValues(alpha: 0.08),
+                              color: Theme.of(context).brightness == Brightness.dark ? Colors.blue.withValues(alpha: 0.15) : Colors.blue.withValues(alpha: 0.08),
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: Colors.blue.withValues(alpha: 0.2)),
+                              border: Border.all(color: Theme.of(context).brightness == Brightness.dark ? Colors.blue.withValues(alpha: 0.3) : Colors.blue.withValues(alpha: 0.2)),
                           ),
-                          child: Text('Waiting for seller to accept your request...', style: GoogleFonts.outfit(color: Colors.blue[800])),
+                          child: Text('Waiting for seller to accept your request...', style: GoogleFonts.outfit(color: Theme.of(context).brightness == Brightness.dark ? Colors.blue[200] : Colors.blue[800])),
                       ),
                       const SizedBox(height: 16),
                       SizedBox(
