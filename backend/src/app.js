@@ -484,8 +484,40 @@ if (process.env.NODE_ENV !== 'test') {
                         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='Transactions' AND column_name='selected_payment_method') THEN
                             ALTER TABLE "Transactions" ADD COLUMN "selected_payment_method" VARCHAR(255);
                         END IF;
+
+                        -- 13. Ensure rental_type column exists in Transactions table
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='Transactions' AND column_name='rental_type') THEN
+                            ALTER TABLE "Transactions" ADD COLUMN "rental_type" VARCHAR(50) DEFAULT 'Short-term';
+                        END IF;
+
+                        -- 14. Ensure group_size column exists in Transactions table
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='Transactions' AND column_name='group_size') THEN
+                            ALTER TABLE "Transactions" ADD COLUMN "group_size" INTEGER DEFAULT 1;
+                        END IF;
+
+                        -- 15. Ensure co_renter_id column exists in Transactions table
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='Transactions' AND column_name='co_renter_id') THEN
+                            ALTER TABLE "Transactions" ADD COLUMN "co_renter_id" UUID;
+                        END IF;
                     END $$;
                 `);
+
+                // Dynamically add 'On Rent' value to the transactions status enum in Postgres catalog
+                try {
+                    await sequelize.query('ALTER TYPE "enum_Transactions_status" ADD VALUE \'On Rent\';');
+                    console.log('Transactions status enum updated successfully with On Rent');
+                } catch (enumErr) {
+                    // Ignore error if value already exists or enum is not created yet
+                }
+
+                // Dynamically add 'Rental Damage' value to the disputes reason enum in Postgres catalog
+                try {
+                    await sequelize.query('ALTER TYPE "enum_Disputes_reason" ADD VALUE \'Rental Damage\';');
+                    console.log('Disputes reason enum updated successfully with Rental Damage');
+                } catch (enumErr) {
+                    // Ignore error if value already exists or enum is not created yet
+                }
+
                 console.log('SavedItems and Users table pre-sync migrations executed successfully');
             } catch (migrationErr) {
                 console.error('SavedItems table pre-sync migrations failed (might have run already):', migrationErr.message);
@@ -534,6 +566,7 @@ import disputeRoutes from './routes/disputeRoutes.js';
 import sustainabilityRoutes from './routes/sustainabilityRoutes.js';
 import ticketRoutes from './routes/ticketRoutes.js';
 import zoneRoutes from './routes/zoneRoutes.js';
+import analyticsRoutes from './routes/analyticsRoutes.js';
 
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productRoutes);
@@ -551,6 +584,7 @@ app.use('/api/sustainability', sustainabilityRoutes);
 app.use('/api/tickets', ticketRoutes);
 app.use('/api/support_tickets', ticketRoutes);
 app.use('/api/zones', zoneRoutes);
+app.use('/api/profile/analytics', analyticsRoutes);
 
 import adminRoutes from './routes/adminRoutes.js';
 import moderatorRoutes from './routes/moderatorRoutes.js';

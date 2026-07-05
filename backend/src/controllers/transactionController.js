@@ -1,6 +1,7 @@
-import { Transaction, Product, User, Review, Category, SubCategory, Dispute, UserInteraction } from '../models/index.js';
+import { Transaction, Product, User, Review, Category, SubCategory, Dispute, UserInteraction, ActivityLog } from '../models/index.js';
 import { createNotification } from './notificationController.js';
 import { emitToUser, emitToAdmins } from '../config/socket.js';
+import { sendError, isStaff } from '../middleware/authMiddleware.js';
 
 export const createTransaction = async (req, res) => {
     try {
@@ -21,7 +22,20 @@ export const createTransaction = async (req, res) => {
             return res.status(404).json({ error: 'Product not found' });
         }
         if (product.status !== 'Available') {
-            return res.status(400).json({ error: 'Product is no longer available' });
+            return res.status(409).json({ error: 'Conflict Detected: Item already reserved' });
+        }
+
+        // Fix 1: Prevent self-trading
+        if (String(buyer_id) === String(product.seller_id)) {
+            try {
+                await ActivityLog.create({
+                    user_id: buyer_id,
+                    action: 'ANOMALY: Self-trading block'
+                });
+            } catch (err) {
+                console.error("Failed to log self-trading anomaly:", err);
+            }
+            return sendError(res, 400, 'Self-trading is prohibited. You cannot purchase or rent your own product listing.');
         }
 
         // Validate selected payment method
@@ -41,21 +55,77 @@ export const createTransaction = async (req, res) => {
         }
 
         // UC17 Rental Constraints
-        let { rental_start_date, rental_end_date } = req.body;
+        let { rental_start_date, rental_end_date, co_renter_username } = req.body;
+        let rentType = 'Short-term';
+        let grpSize = 1;
+        let coRenterId = null;
+
         if (product.type === 'Rent') {
             if (!rental_start_date || !rental_end_date) {
                 return res.status(400).json({ error: 'Rental start and end dates are required for this product.' });
             }
             const startDate = new Date(rental_start_date);
             const endDate = new Date(rental_end_date);
-            const diffTime = Math.abs(endDate - startDate);
-            const rentalDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            
+            // Validations & Foolproofing
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            if (startDate < today) {
+                return res.status(400).json({ error: 'Rental start date cannot be in the past.' });
+            }
+            if (endDate < startDate) {
+                return res.status(400).json({ error: 'Rental end date cannot be before the start date.' });
+            }
+
+            const diffTime = endDate.getTime() - startDate.getTime();
+            const rentalDays = Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1);
             
             if (product.max_rental_duration && rentalDays > product.max_rental_duration) {
                 return res.status(400).json({ error: `Cannot exceed maximum rental duration of ${product.max_rental_duration} days.` });
             }
-            // Auto overwrite amount securely
-            amount = (rentalDays * parseFloat(product.rental_price_per_day)).toFixed(2);
+
+            let subtotal = rentalDays * parseFloat(product.rental_price_per_day);
+
+            // 1. Long-term check: 30 days or more
+            if (rentalDays >= 30) {
+                rentType = 'Long-term';
+                subtotal = subtotal * 0.7; // flat 30% Academic Discount
+            }
+
+            // 2. Shared Rental check
+            if (co_renter_username && co_renter_username.trim()) {
+                const cleanUsername = co_renter_username.trim();
+                const coRenter = await User.findOne({ where: { username: cleanUsername } });
+                if (!coRenter) {
+                    return res.status(400).json({ error: `Co-renter username '${cleanUsername}' not found.` });
+                }
+
+                // Verify co-renter is not the buyer themselves
+                if (coRenter.id === buyer_id) {
+                    return res.status(400).json({ error: 'You cannot share a rental with yourself.' });
+                }
+
+                rentType = 'Shared';
+                grpSize = 2;
+                coRenterId = coRenter.id;
+            }
+
+            const buyer = await User.findByPk(buyer_id);
+            let deposit = product.rental_deposit ? parseFloat(product.rental_deposit) : 0.0;
+            if (buyer && parseFloat(buyer.reputation_score || 5.0) >= 4.8) {
+                deposit = 0.0;
+            }
+
+            // Shared logic: Only split rental fee (subtotal), hold full deposit
+            let finalAmount = 0.0;
+            if (rentType === 'Shared') {
+                finalAmount = (subtotal / 2.0) + deposit;
+            } else {
+                finalAmount = subtotal + deposit;
+            }
+
+            amount = finalAmount.toFixed(2);
         }
 
         // Atomic Reservation to prevent double-booking
@@ -65,7 +135,7 @@ export const createTransaction = async (req, res) => {
         );
 
         if (affectedRows === 0) {
-            return res.status(409).json({ error: 'Product was just reserved or is no longer available.' });
+            return res.status(409).json({ error: 'Conflict Detected: Item already reserved' });
         }
 
         // Create Transaction
@@ -79,7 +149,10 @@ export const createTransaction = async (req, res) => {
             rental_start_date,
             rental_end_date,
             status: 'Pending',
-            selected_payment_method
+            selected_payment_method,
+            rental_type: rentType,
+            group_size: grpSize,
+            co_renter_id: coRenterId
         });
 
         // Notify Seller
@@ -102,6 +175,11 @@ export const getUserTransactions = async (req, res) => {
     try {
         const { user_id } = req.params;
         const { type } = req.query; // 'buying' or 'selling'
+
+        // Fix 2: Access Control guard
+        if (String(req.user.id) !== String(user_id) && !isStaff(req.user)) {
+            return sendError(res, 403, 'Access Denied: You are not authorized to view these transactions.');
+        }
 
         const whereClause = type === 'selling'
             ? { seller_id: user_id }
@@ -311,23 +389,38 @@ export const updateTransactionStatus = async (req, res) => {
 
         const oldStatus = transaction.status;
 
+        // Fetch product with categories early to fix undefined product bug and support intercept
+        const product = await Product.findByPk(transaction.product_id, {
+            include: [
+                { model: Category, as: 'categoryModel' },
+                { model: SubCategory, as: 'subcategoryModel' }
+            ]
+        });
+
+        // Intercept Completed requested for a Rent item in To Confirm status -> Set target status to 'On Rent'
+        let targetStatus = status;
+        if (targetStatus === 'Completed' && oldStatus === 'To Confirm' && product && product.type === 'Rent') {
+            targetStatus = 'On Rent';
+        }
+
         // State Machine Validation
         const validTransitions = {
             'Pending': ['Scheduled', 'Cancelled'],
             'Scheduled': ['To Confirm', 'Cancelled'],
-            'To Confirm': ['Completed', 'Cancelled', 'Disputed'],
+            'To Confirm': ['On Rent', 'Completed', 'Cancelled', 'Disputed'],
+            'On Rent': ['Completed', 'Disputed'],
             'Completed': [],
             'Cancelled': [],
             'Disputed': []
         };
 
-        if (!validTransitions[oldStatus] || !validTransitions[oldStatus].includes(status)) {
-            return res.status(400).json({ error: `Invalid transition from ${oldStatus} to ${status}` });
+        if (!validTransitions[oldStatus] || !validTransitions[oldStatus].includes(targetStatus)) {
+            return res.status(400).json({ error: `Invalid transition from ${oldStatus} to ${targetStatus}` });
         }
 
         // Atomic status update to prevent race conditions (double clicks)
         const [affectedRows] = await Transaction.update(
-            { status: status },
+            { status: targetStatus },
             { where: { id: id, status: oldStatus } }
         );
 
@@ -341,21 +434,76 @@ export const updateTransactionStatus = async (req, res) => {
         const requesterId = req.user?.id;
         const otherPartyId = requesterId === transaction.buyer_id ? transaction.seller_id : transaction.buyer_id;
 
-        // If completed, mark product as Sold or Reserved for rent
-        if (status === 'Completed') {
-            await Product.update(
-                { status: 'Sold' },
-                { where: { id: transaction.product_id } }
-            );
+        // If completed, mark product as Sold or Available (for Rent)
+        if (targetStatus === 'Completed') {
+            if (product && product.type === 'Rent') {
+                await Product.update(
+                    { status: 'Available' },
+                    { where: { id: transaction.product_id } }
+                );
+            } else {
+                await Product.update(
+                    { status: 'Sold' },
+                    { where: { id: transaction.product_id } }
+                );
+            }
+
+            // Log transaction completion for both seller and buyer
+            try {
+                await ActivityLog.create({
+                    user_id: transaction.seller_id,
+                    action: 'ITEM_SOLD'
+                });
+                await ActivityLog.create({
+                    user_id: transaction.buyer_id,
+                    action: 'ITEM_BOUGHT'
+                });
+            } catch (e) {
+                console.error("Failed to log transaction completion:", e.message);
+            }
+            
+            // Deposit Management Lifecycle: when status changes to Completed (meaning item is returned safely),
+            // the rental_deposit is marked for refund to the Buyer, while the rental fee goes to the Seller.
+            let lateMessage = '';
+            if (product && product.type === 'Rent') {
+                const deposit = product.rental_deposit ? parseFloat(product.rental_deposit) : 0.0;
+                
+                // Late Return Check
+                const endDate = new Date(transaction.rental_end_date);
+                const today = new Date();
+                today.setHours(0,0,0,0);
+                endDate.setHours(0,0,0,0);
+
+                let daysLate = 0;
+                let penalty = 0.0;
+
+                if (today > endDate) {
+                    const diffTime = today.getTime() - endDate.getTime();
+                    daysLate = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                    penalty = daysLate * parseFloat(product.rental_price_per_day);
+                    
+                    // Cap the penalty at the deposit amount to avoid negative values
+                    if (penalty > deposit) {
+                        penalty = deposit;
+                    }
+                    
+                    // Deduct from buyer's reputation score by 0.5 (clamped to 1.0)
+                    const buyer = await User.findByPk(transaction.buyer_id);
+                    if (buyer) {
+                        buyer.reputation_score = Math.max(1.0, parseFloat(buyer.reputation_score || 5.0) - 0.5);
+                        await buyer.save();
+                    }
+
+                    lateMessage = ` Late return detected by ${daysLate} days. Penalty of RM ${penalty.toFixed(2)} applied. Buyer reputation score deducted by 0.5.`;
+                }
+
+                const netRefund = deposit - penalty;
+                const netRentalFee = parseFloat(transaction.amount) - deposit + penalty;
+
+                console.log(`[Deposit Management & Late Penalties]${lateMessage} Refundable Deposit: RM ${netRefund.toFixed(2)} returned to Buyer. Rental Fee + Penalty: RM ${netRentalFee.toFixed(2)} sent to Seller.`);
+            }
             
             // Calculate Carbon Savings
-            const product = await Product.findByPk(transaction.product_id, {
-                include: [
-                    { model: Category, as: 'categoryModel' },
-                    { model: SubCategory, as: 'subcategoryModel' }
-                ]
-            });
-            
             let co2Saved = 0.0;
             if (product) {
                  const catName = product.categoryModel ? product.categoryModel.name : product.category;
@@ -420,12 +568,24 @@ export const updateTransactionStatus = async (req, res) => {
             );
         }
 
+        // If active on rent, notify buyer
+        if (targetStatus === 'On Rent') {
+            await createNotification(
+                transaction.buyer_id,
+                'Rental Active',
+                `Handover confirmed. Your rental for "${product ? product.title : 'Item'}" is now active!`,
+                'Transaction',
+                transaction.id
+            );
+        }
+
         // If cancelled, mark product as Available
-        if (status === 'Cancelled') {
+        if (targetStatus === 'Cancelled') {
             await Product.update(
                 { status: 'Available' },
                 { where: { id: transaction.product_id } }
             );
+
             // Notify the other party who did not cancel it
             await createNotification(
                 otherPartyId,
@@ -436,7 +596,7 @@ export const updateTransactionStatus = async (req, res) => {
             );
         }
 
-        if (status === 'Scheduled') {
+        if (targetStatus === 'Scheduled') {
             // Notify Buyer
             await createNotification(
                 transaction.buyer_id,
@@ -448,7 +608,7 @@ export const updateTransactionStatus = async (req, res) => {
         }
 
         // UC19 Payment Proof
-        if (status === 'To Confirm') {
+        if (targetStatus === 'To Confirm') {
             if (req.body.payment_proof_url) {
                 transaction.payment_proof_url = req.body.payment_proof_url;
                 await transaction.save();
@@ -461,8 +621,9 @@ export const updateTransactionStatus = async (req, res) => {
                 transaction.id
             );
         }
+
         // If disputed, create a Dispute entry automatically
-        if (status === 'Disputed') {
+        if (targetStatus === 'Disputed') {
             // Save pre-dispute status
             transaction.pre_dispute_status = oldStatus;
             await transaction.save();
@@ -506,7 +667,25 @@ export const updateTransactionStatus = async (req, res) => {
         emitToUser(transaction.buyer_id, 'transaction_status_updated', { transaction_id: transaction.id, status: transaction.status });
         emitToUser(transaction.seller_id, 'transaction_status_updated', { transaction_id: transaction.id, status: transaction.status });
 
-        res.json(transaction);
+        let successMessage = `Transaction updated to ${targetStatus}`;
+        if (targetStatus === 'Completed' && product && product.type === 'Rent') {
+            const endDate = new Date(transaction.rental_end_date);
+            const today = new Date();
+            today.setHours(0,0,0,0);
+            endDate.setHours(0,0,0,0);
+            if (today > endDate) {
+                const diffTime = today.getTime() - endDate.getTime();
+                const daysLate = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                const penalty = Math.min(daysLate * parseFloat(product.rental_price_per_day), product.rental_deposit ? parseFloat(product.rental_deposit) : 0.0);
+                successMessage = `Transaction completed. Late return penalty of RM ${penalty.toFixed(2)} applied (${daysLate} days late).`;
+            }
+        }
+
+        if (targetStatus === 'Completed') {
+            emitToAdmins('admin_metrics_update', { trigger: 'transaction_completed' });
+        }
+
+        res.json({ message: successMessage, transaction });
     } catch (error) {
         console.error('Update Status Error:', error);
         res.status(500).json({ error: 'Failed to update transaction' });

@@ -1,4 +1,4 @@
-import { Product, User, Report, Category, SubCategory } from '../models/index.js';
+import { Product, User, Report, Category, SubCategory, ActivityLog } from '../models/index.js';
 import { Op } from 'sequelize';
 import fs from 'fs';
 import FormData from 'form-data';
@@ -82,6 +82,16 @@ export const createProduct = async (req, res) => {
             } catch(e) {
                 console.error("Failed to prepare ML feedback:", e);
             }
+        }
+
+        // Log product listing creation
+        try {
+            await ActivityLog.create({
+                user_id: seller_id,
+                action: 'ITEM_LISTED'
+            });
+        } catch (e) {
+            console.error("Failed to log product listing:", e.message);
         }
 
         res.status(201).json(newProduct);

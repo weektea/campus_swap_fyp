@@ -16,7 +16,7 @@ const Dispute = sequelize.define('Dispute', {
         allowNull: false,
     },
     reason: {
-        type: DataTypes.ENUM('Not Received', 'Damaged', 'Fraud', 'Other'),
+        type: DataTypes.ENUM('Not Received', 'Damaged', 'Fraud', 'Rental Damage', 'Other'),
         allowNull: false,
     },
     description: {

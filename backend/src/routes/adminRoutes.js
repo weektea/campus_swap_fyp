@@ -2,6 +2,7 @@ import express from 'express';
 import { authenticateToken } from '../middleware/authMiddleware.js';
 import { isAdmin, isAdminOrModerator } from '../middleware/adminMiddleware.js';
 import * as adminController from '../controllers/adminController.js';
+import { getAdminAnalytics, exportEnvironmentalReport } from '../controllers/analyticsController.js';
 
 const router = express.Router();
 
@@ -53,6 +54,8 @@ router.put('/tickets/:id', authenticateToken, isAdminOrModerator, adminControlle
 // ======================= ADMINISTRATOR EXCLUSIVE ROUTES =======================
 // Platform Monitoring & Reporting
 router.get('/metrics', authenticateToken, isAdminOrModerator, adminController.getSystemMetrics);
+router.get('/analytics', authenticateToken, isAdminOrModerator, getAdminAnalytics);
+router.get('/export-report', authenticateToken, isAdminOrModerator, exportEnvironmentalReport);
 router.get('/ml-dashboard', authenticateToken, isAdmin, adminController.getMLDashboardMetrics);
 
 // Full User Administration (Promoting, Banning)

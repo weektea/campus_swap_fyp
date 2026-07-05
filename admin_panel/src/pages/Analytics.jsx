@@ -1,18 +1,36 @@
+// =============================================================================
+// TODO (WIP): Section 4 "Growth & Predictive Analytics" charts are not yet
+// fully wired up. The following backend data fields are still missing / need
+// to be verified on the /admin/metrics and /admin/analytics endpoints:
+//   - growth_labels / growth_data        → Monthly User Growth line chart
+//   - earnings_labels / earnings_actual  → Earnings bar chart
+//   - earnings_prediction / prediction_labels / prediction_values → Trend line
+//   - carbon_by_category                 → Carbon Savings by Category pie
+//   - order_type_breakdown               → Sale vs Rent split pie
+//   - anomaly_logs                       → Anomaly Behavior Logs table
+// Until these are returned correctly, Section 4 will render empty charts.
+// =============================================================================
 import React, { useState, useEffect } from 'react';
 import { Calendar, Download, Printer, Users, BarChart3, ShieldAlert, Award } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import api from '../services/api';
+
 
 const Analytics = () => {
     const [metrics, setMetrics] = useState(null);
     const [loading, setLoading] = useState(true);
     const [range, setRange] = useState('last30'); // 'last30', 'quarter', 'semester', 'all'
+    const [startDate, setStartDate] = useState('');
+    const [endDate, setEndDate] = useState('');
 
     const fetchMetrics = async (selectedRange) => {
         setLoading(true);
         try {
-            const res = await api.get(`/admin/metrics?range=${selectedRange}`);
-            setMetrics(res.data);
+            const [metricsRes, analyticsRes] = await Promise.all([
+                api.get(`/admin/metrics?range=${selectedRange}`),
+                api.get('/admin/analytics')
+            ]);
+            setMetrics({ ...metricsRes.data, ...analyticsRes.data });
         } catch (err) {
             console.error('Failed to fetch metrics', err);
         } finally {
@@ -78,6 +96,27 @@ const Analytics = () => {
         document.body.removeChild(link);
     };
 
+    const handleExportEnvironmentalCSV = async () => {
+        if (!startDate || !endDate) {
+            alert('Please select both start and end dates.');
+            return;
+        }
+        try {
+            const res = await api.get(`/admin/export-report?startDate=${startDate}&endDate=${endDate}`, { responseType: 'blob' });
+            const url = window.URL.createObjectURL(new Blob([res.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `Environmental_Impact_Report_${startDate}_to_${endDate}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+        } catch (err) {
+            console.error(err);
+            alert('Failed to export environmental CSV report.');
+        }
+    };
+
     const handleExportPDF = () => {
         window.print();
     };
@@ -85,6 +124,34 @@ const Analytics = () => {
     if (loading) return <div className="p-8 text-center text-gray-500">Loading platform reports...</div>;
 
     const COLORS = ['#0d503c', '#2563eb', '#d97706', '#dc2626', '#8b5cf6'];
+
+    // FYP Charts Data
+    const growthData = (metrics?.growth_labels || []).map((label, idx) => ({
+        name: label,
+        registrations: metrics.growth_data?.[idx] || 0
+    }));
+
+    const actualEarnings = metrics?.earnings_actual || [];
+    const predValues = metrics?.prediction_values || [];
+    const earningsLabels = metrics?.earnings_labels || [];
+    const predLabels = metrics?.prediction_labels || [];
+
+    const combinedEarningsData = [];
+    earningsLabels.forEach((label, idx) => {
+        combinedEarningsData.push({ name: label, actual: actualEarnings[idx] || 0, prediction: null });
+    });
+    predLabels.forEach((label, idx) => {
+        combinedEarningsData.push({
+            name: label,
+            actual: idx === 0 && actualEarnings.length > 0 ? actualEarnings[actualEarnings.length - 1] : null,
+            prediction: predValues[idx] || 0
+        });
+    });
+
+    const orderTypeData = [
+        { name: 'Sale', value: metrics?.order_type_breakdown?.sale || 0 },
+        { name: 'Rent', value: metrics?.order_type_breakdown?.rent || 0 }
+    ];
 
     return (
         <div>
@@ -350,7 +417,7 @@ const Analytics = () => {
                     </div>
                 </div>
 
-                {/* Sales Chart (Hidden on print to preserve A4 structure if necessary, or kept clean) */}
+                {/* Sales Chart */}
                 <div className="card flex-col no-print" style={{ height: '280px' }}>
                     <h3 style={{ margin: '0 0 1rem 0', fontSize: '0.9rem' }}>GMV Sales Trend (RM)</h3>
                     <div style={{ flex: 1, width: '100%' }}>
@@ -366,6 +433,123 @@ const Analytics = () => {
                                 <Line type="monotone" dataKey="sales" stroke="#0d503c" strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
                             </LineChart>
                         </ResponsiveContainer>
+                    </div>
+                </div>
+            </div>
+
+            {/* SECTION 4: FYP ANALYTICS — Growth, Earnings Prediction, Category Carbon, Order Type, Anomaly Logs */}
+            <div className="print-domain-section mb-8 no-print">
+                <h2 className="print-domain-title" style={{ fontSize: '1.2rem', margin: '0 0 1.5rem 0', display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--primary)', borderBottom: '2px solid var(--border)', paddingBottom: '8px' }}>
+                    <BarChart3 size={20} />
+                    <span>Growth & Predictive Analytics</span>
+                </h2>
+
+                {/* Row 1: User Growth + Earnings Prediction */}
+                <div className="flex gap-6 mb-6">
+                    <div className="card flex-1" style={{ height: '300px' }}>
+                        <h3 style={{ margin: '0 0 0.75rem 0', fontSize: '0.9rem' }}>📈 Monthly User Growth</h3>
+                        <ResponsiveContainer width="100%" height={230}>
+                            <LineChart data={growthData}>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                                <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#6b7280' }} />
+                                <YAxis tick={{ fontSize: 10, fill: '#6b7280' }} />
+                                <Tooltip />
+                                <Line type="monotone" dataKey="registrations" name="New Registrations" stroke="#0d503c" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+                            </LineChart>
+                        </ResponsiveContainer>
+                    </div>
+                    <div className="card flex-1" style={{ height: '300px' }}>
+                        <h3 style={{ margin: '0 0 0.75rem 0', fontSize: '0.9rem' }}>💸 Earnings & 3-Month Trend Prediction</h3>
+                        <ResponsiveContainer width="100%" height={230}>
+                            <BarChart data={combinedEarningsData}>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                                <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#6b7280' }} />
+                                <YAxis tick={{ fontSize: 10, fill: '#6b7280' }} />
+                                <Tooltip />
+                                <Legend wrapperStyle={{ fontSize: '0.75rem' }} />
+                                <Bar dataKey="actual" name="Earnings (RM)" fill="#0d503c" radius={[4, 4, 0, 0]} />
+                                <Line type="monotone" dataKey="prediction" name="Projected Trend" stroke="#d97706" strokeDasharray="5 5" strokeWidth={2} dot={{ r: 3 }} />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
+                </div>
+
+                {/* Row 2: Category Carbon Pie + Order Type Pie + Anomaly Logs */}
+                <div className="flex gap-6">
+                    <div className="card flex-1" style={{ height: '280px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <h3 style={{ margin: '0 0 0.75rem 0', fontSize: '0.9rem', width: '100%' }}>🌿 Carbon Savings by Category</h3>
+                        <ResponsiveContainer width="100%" height={200}>
+                            <PieChart>
+                                <Pie data={metrics?.carbon_by_category || []} cx="50%" cy="50%" innerRadius={45} outerRadius={70} paddingAngle={2} dataKey="value" nameKey="category">
+                                    {(metrics?.carbon_by_category || []).map((_, index) => (
+                                        <Cell key={index} fill={COLORS[index % COLORS.length]} />
+                                    ))}
+                                </Pie>
+                                <Tooltip formatter={(v) => [`${Number(v).toFixed(2)} kg CO2e`, 'Saved']} />
+                            </PieChart>
+                        </ResponsiveContainer>
+                    </div>
+                    <div className="card flex-1" style={{ height: '280px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <h3 style={{ margin: '0 0 0.75rem 0', fontSize: '0.9rem', width: '100%' }}>🔄 Sale vs Rent Split</h3>
+                        <ResponsiveContainer width="100%" height={200}>
+                            <PieChart>
+                                <Pie data={orderTypeData} cx="50%" cy="50%" outerRadius={70} dataKey="value" nameKey="name">
+                                    <Cell fill="#0d503c" />
+                                    <Cell fill="#8b5cf6" />
+                                </Pie>
+                                <Tooltip />
+                                <Legend wrapperStyle={{ fontSize: '0.75rem' }} />
+                            </PieChart>
+                        </ResponsiveContainer>
+                    </div>
+                    <div className="card flex-1" style={{ height: '280px', overflowY: 'auto' }}>
+                        <h3 style={{ margin: '0 0 0.75rem 0', fontSize: '0.9rem', color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <ShieldAlert size={16} /> Anomaly Behavior Logs
+                        </h3>
+                        <table style={{ width: '100%', fontSize: '0.8rem' }}>
+                            <thead>
+                                <tr>
+                                    <th style={{ padding: '6px 8px' }}>User</th>
+                                    <th style={{ padding: '6px 8px' }}>Event</th>
+                                    <th style={{ padding: '6px 8px' }}>Time</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {(metrics?.anomaly_logs || []).map((log, idx) => (
+                                    <tr key={idx}>
+                                        <td style={{ padding: '6px 8px', fontWeight: '600' }}>{log.username}</td>
+                                        <td style={{ padding: '6px 8px' }}>
+                                            <span style={{ padding: '2px 6px', background: '#fee2e2', color: '#dc2626', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>
+                                                {log.action.replace('ANOMALY: ', '')}
+                                            </span>
+                                        </td>
+                                        <td style={{ padding: '6px 8px', color: 'var(--text-muted)' }}>{new Date(log.timestamp).toLocaleTimeString()}</td>
+                                    </tr>
+                                ))}
+                                {(!metrics?.anomaly_logs || metrics.anomaly_logs.length === 0) && (
+                                    <tr><td colSpan="3" style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-muted)' }}>No anomalies recorded.</td></tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                {/* Environmental Report Export */}
+                <div className="card mt-6">
+                    <h3 style={{ margin: '0 0 0.75rem 0', fontSize: '0.9rem', color: 'var(--primary)' }}>📅 Environmental Impact Report Exporter (UC30)</h3>
+                    <div className="flex gap-4 items-end" style={{ flexWrap: 'wrap' }}>
+                        <div style={{ flex: 1, minWidth: '180px' }}>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>Start Date</div>
+                            <input type="date" className="input" style={{ margin: 0 }} value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+                        </div>
+                        <div style={{ flex: 1, minWidth: '180px' }}>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>End Date</div>
+                            <input type="date" className="input" style={{ margin: 0 }} value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+                        </div>
+                        <button className="btn flex items-center gap-2" style={{ height: '42px', padding: '0 1.25rem' }} onClick={handleExportEnvironmentalCSV}>
+                            <Download size={15} />
+                            <span>Generate Report</span>
+                        </button>
                     </div>
                 </div>
             </div>

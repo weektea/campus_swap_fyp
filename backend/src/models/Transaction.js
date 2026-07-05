@@ -90,6 +90,18 @@ const Transaction = sequelize.define('Transaction', {
         type: DataTypes.STRING,
         allowNull: true,
     },
+    rental_type: {
+        type: DataTypes.ENUM('Short-term', 'Long-term', 'Shared'),
+        defaultValue: 'Short-term',
+    },
+    group_size: {
+        type: DataTypes.INTEGER,
+        defaultValue: 1,
+    },
+    co_renter_id: {
+        type: DataTypes.UUID,
+        allowNull: true,
+    },
 }, {
     timestamps: true,
 });

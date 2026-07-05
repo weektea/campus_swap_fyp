@@ -989,8 +989,8 @@ export const getAlerts = async (req, res) => {
             const disputes = await Dispute.count({ where: { status: ['New', 'Investigating'] } });
             if (disputes > 0) alerts.push({ type: 'dispute', count: disputes, message: `${disputes} new/investigating disputes`, link: '/disputes' });
 
-            const tickets = await SupportTicket.count({ where: { status: 'Open' } });
-            if (tickets > 0) alerts.push({ type: 'ticket', count: tickets, message: `${tickets} open support tickets`, link: '/tickets' });
+            const tickets = await SupportTicket.count({ where: { status: ['Open', 'Pending'] } });
+            if (tickets > 0) alerts.push({ type: 'ticket', count: tickets, message: `${tickets} open/pending support tickets`, link: '/tickets' });
         }
 
         res.json({ alerts, total: alerts.reduce((acc, a) => acc + a.count, 0) });

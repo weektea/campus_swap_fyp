@@ -3,6 +3,7 @@ import 'package:campus_swap/core/api/api_client.dart';
 import 'package:campus_swap/features/profile/presentation/pages/ticket_chat_page.dart';
 import 'package:campus_swap/features/profile/presentation/pages/submit_ticket_page.dart';
 import 'package:campus_swap/features/profile/presentation/pages/help_category_detail_page.dart';
+import 'package:campus_swap/features/profile/presentation/pages/customer_support_chat_page.dart';
 
 class HelpCenterPage extends StatefulWidget {
   const HelpCenterPage({super.key});
@@ -455,7 +456,7 @@ class _HelpCenterPageState extends State<HelpCenterPage> with SingleTickerProvid
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
-          Navigator.push(context, MaterialPageRoute(builder: (_) => const SubmitTicketPage()));
+          Navigator.push(context, MaterialPageRoute(builder: (_) => const CustomerSupportChatPage())).then((_) => _fetchData());
         },
         backgroundColor: primaryGreen,
         child: const Icon(Icons.headset_mic, color: Colors.white),

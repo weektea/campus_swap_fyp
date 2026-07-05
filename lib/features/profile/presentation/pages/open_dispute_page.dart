@@ -7,8 +7,9 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 
 class OpenDisputePage extends StatefulWidget {
   final Map<String, dynamic> transaction;
+  final String? prefilledCategory;
   
-  const OpenDisputePage({super.key, required this.transaction});
+  const OpenDisputePage({super.key, required this.transaction, this.prefilledCategory});
 
   @override
   State<OpenDisputePage> createState() => _OpenDisputePageState();
@@ -24,6 +25,17 @@ class _OpenDisputePageState extends State<OpenDisputePage> {
     'Fraud',
     'Other'
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.prefilledCategory != null) {
+      if (!_reasons.contains(widget.prefilledCategory!)) {
+        _reasons.add(widget.prefilledCategory!);
+      }
+      _selectedReason = widget.prefilledCategory!;
+    }
+  }
   
   bool _isLoading = false;
   

@@ -11,6 +11,7 @@ import 'package:campus_swap/features/profile/presentation/pages/help_center_page
 import 'package:campus_swap/features/profile/presentation/pages/sustainability_dashboard_page.dart';
 import 'package:campus_swap/features/profile/presentation/pages/student_profile_page.dart';
 import 'package:campus_swap/features/home/presentation/pages/home_page.dart';
+import 'package:campus_swap/features/profile/presentation/pages/profile_analytics_dashboard_page.dart';
 // import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 
@@ -321,6 +322,9 @@ class _ProfilePageState extends State<ProfilePage> {
             _buildMenuItem(context, Icons.bookmark_outline, 'Saved Items', () {
                Navigator.push(context, MaterialPageRoute(builder: (_) => const SavedItemsPage()));
             }), // "Save favorite items"
+            _buildMenuItem(context, Icons.bar_chart_outlined, 'Analytics & Impact Dashboard', () {
+               Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileAnalyticsDashboardPage()));
+            }),
             _buildMenuItem(context, Icons.help_outline, 'Help & Support (Resolution Center)', () {
                Navigator.push(context, MaterialPageRoute(builder: (_) => const HelpCenterPage()));
             }), // "Provide user support"

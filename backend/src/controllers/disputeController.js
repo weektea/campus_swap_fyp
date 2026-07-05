@@ -2,6 +2,7 @@ import { Dispute, Transaction, User, Product, Category, SubCategory, UserInterac
 import { createNotification } from './notificationController.js';
 import { emitToAdmins } from '../config/socket.js';
 import { getCarbonValue } from './transactionController.js';
+import { sendError } from '../middleware/authMiddleware.js';
 
 const rollbackCarbonPoints = async (transaction) => {
     try {
@@ -57,11 +58,18 @@ export const createDispute = async (req, res) => {
         const transaction = await Transaction.findByPk(transaction_id);
         if (!transaction) return res.status(404).json({ error: 'Transaction not found' });
 
+        // Fix 4: Ensure complainant is either buyer or seller of the transaction
+        if (String(complainant_id) !== String(transaction.buyer_id) && String(complainant_id) !== String(transaction.seller_id)) {
+            return sendError(res, 403, 'Access Denied: You are not authorized to file a dispute against this transaction.');
+        }
+
         let dbReason = 'Other';
         if (selectedReason && typeof selectedReason === 'string') {
             const lowerReason = selectedReason.toLowerCase();
             if (lowerReason.includes('not received') || lowerReason.includes('received')) {
                 dbReason = 'Not Received';
+            } else if (lowerReason.includes('rental damage')) {
+                dbReason = 'Rental Damage';
             } else if (lowerReason.includes('damaged')) {
                 dbReason = 'Damaged';
             } else if (lowerReason.includes('fraud') || lowerReason.includes('fake')) {
@@ -224,21 +232,42 @@ export const arbitrateDispute = async (req, res) => {
             dispute.status = 'Resolved';
             await transaction.save();
 
-            // Set product status to Sold
-            await Product.update(
-                { status: 'Sold' },
-                { where: { id: transaction.product_id } }
-            );
+            const product = await Product.findByPk(transaction.product_id, {
+                include: [
+                    { model: Category, as: 'categoryModel' },
+                    { model: SubCategory, as: 'subcategoryModel' }
+                ]
+            });
+
+            // Set product status to Sold or Available depending on if Rent
+            if (product) {
+                if (product.type === 'Rent') {
+                    await Product.update(
+                        { status: 'Available' },
+                        { where: { id: transaction.product_id } }
+                    );
+                } else {
+                    await Product.update(
+                        { status: 'Sold' },
+                        { where: { id: transaction.product_id } }
+                    );
+                }
+            }
+
+            // Damage Compensation rules:
+            if (dispute.reason === 'Rental Damage' && product && product.type === 'Rent') {
+                const depositVal = product.rental_deposit ? parseFloat(product.rental_deposit) : 0.0;
+                console.log(`[Damage Compensation Resolved] Seller won dispute. Buyer's entire rental deposit of RM ${depositVal.toFixed(2)} forfeited to Seller.`);
+                
+                const buyer = await User.findByPk(transaction.buyer_id);
+                if (buyer) {
+                    buyer.reputation_score = Math.max(1.0, parseFloat(buyer.reputation_score || 5.0) - 1.0);
+                    await buyer.save();
+                }
+            }
 
             // Award carbon points if it was NOT completed before
             if (!wasCompleted) {
-                const product = await Product.findByPk(transaction.product_id, {
-                    include: [
-                        { model: Category, as: 'categoryModel' },
-                        { model: SubCategory, as: 'subcategoryModel' }
-                    ]
-                });
-                
                 let co2Saved = 0.0;
                 if (product) {
                      const catName = product.categoryModel ? product.categoryModel.name : product.category;

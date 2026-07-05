@@ -18,6 +18,7 @@ User.hasMany(Transaction, { foreignKey: 'buyer_id', as: 'buyer_transactions' });
 User.hasMany(Transaction, { foreignKey: 'seller_id', as: 'seller_transactions' });
 Transaction.belongsTo(User, { foreignKey: 'buyer_id', as: 'buyer' });
 Transaction.belongsTo(User, { foreignKey: 'seller_id', as: 'seller' });
+Transaction.belongsTo(User, { foreignKey: 'co_renter_id', as: 'coRenter' });
 
 Product.hasOne(Transaction, { foreignKey: 'product_id', as: 'transaction' });
 Transaction.belongsTo(Product, { foreignKey: 'product_id', as: 'product' });

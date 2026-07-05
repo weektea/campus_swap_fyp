@@ -25,3 +25,14 @@ export const authenticateToken = async (req, res, next) => {
         return res.status(403).json({ error: 'Invalid token.' });
     }
 };
+
+export const sendError = (res, statusCode, message) => {
+    return res.status(statusCode).json({
+        status: 'error',
+        message: message
+    });
+};
+
+export const isStaff = (user) => {
+    return user && (user.role === 'admin' || user.role === 'moderator');
+};

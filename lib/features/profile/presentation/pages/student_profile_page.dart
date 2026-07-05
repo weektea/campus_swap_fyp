@@ -202,7 +202,6 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
                       const Divider(),
                       _buildSectionHeader('Academic Identity', Icons.school_outlined),
                       _buildDataRow('Student ID', _userData!['university_id'] ?? 'Not provided'),
-                      _buildDataRow('Faculty', _userData!['faculty'] ?? 'Not provided'),
                       _buildDataRow('Year of Study', _userData!['year_of_study']?.toString() ?? 'Not provided'),
 
                       const Divider(),

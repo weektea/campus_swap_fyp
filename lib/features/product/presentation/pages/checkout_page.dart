@@ -19,11 +19,30 @@ class CheckoutPage extends StatefulWidget {
 
 class _CheckoutPageState extends State<CheckoutPage> {
   SafeZone _selectedZone = SafeZone.predefinedZones.first;
+  double _buyerReputationScore = 5.0;
 
   @override
   void initState() {
     super.initState();
     _fetchZones();
+    _fetchBuyerReputation();
+  }
+
+  Future<void> _fetchBuyerReputation() async {
+    try {
+      final session = UserSession();
+      if (session.userId != null) {
+        final apiClient = ApiClient();
+        final res = await apiClient.get('/auth/user/${session.userId}');
+        if (res != null && res['reputation_score'] != null && mounted) {
+          setState(() {
+            _buyerReputationScore = double.tryParse(res['reputation_score'].toString()) ?? 5.0;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Error fetching buyer reputation in checkout: $e');
+    }
   }
 
   Future<void> _fetchZones() async {
@@ -48,6 +67,14 @@ class _CheckoutPageState extends State<CheckoutPage> {
   DateTime? _rentStartDate;
   DateTime? _rentEndDate;
   bool _isSubmitting = false;
+  bool _isShared = false;
+  final TextEditingController _coRenterUsernameController = TextEditingController();
+
+  @override
+  void dispose() {
+    _coRenterUsernameController.dispose();
+    super.dispose();
+  }
 
   bool get _isRent => widget.product.type == 'Rent';
 
@@ -56,16 +83,34 @@ class _CheckoutPageState extends State<CheckoutPage> {
     return _rentEndDate!.difference(_rentStartDate!).inDays + 1;
   }
 
-  double get _itemPrice {
+  double get _rentalSubtotal {
+    return _rentDays > 0
+        ? _rentDays * widget.product.rentalPricePerDay
+        : widget.product.rentalPricePerDay;
+  }
+
+  double get _longTermDiscount {
+    if (_isRent && _rentDays >= 30) {
+      return _rentalSubtotal * 0.3; // 30% flat academic discount
+    }
+    return 0.0;
+  }
+
+  double get _discountedSubtotal => _rentalSubtotal - _longTermDiscount;
+
+  bool get _isDepositWaived => _buyerReputationScore >= 4.8;
+
+  double get _rentalDeposit => _isDepositWaived ? 0.0 : widget.product.rentalDeposit;
+
+  double get _totalPrice {
     if (_isRent) {
-      return _rentDays > 0
-          ? _rentDays * widget.product.rentalPricePerDay
-          : widget.product.rentalPricePerDay;
+      if (_isShared) {
+        return (_discountedSubtotal / 2.0) + _rentalDeposit;
+      }
+      return _discountedSubtotal + _rentalDeposit;
     }
     return widget.product.price;
   }
-
-  double get _totalPrice => _itemPrice; // Service fee = 0 for now
 
   String _formatDate(DateTime dt) {
     const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -106,6 +151,13 @@ class _CheckoutPageState extends State<CheckoutPage> {
     if (_isRent && (_rentStartDate == null || _rentEndDate == null)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please select rental dates'), backgroundColor: Colors.red),
+      );
+      return;
+    }
+
+    if (_isRent && _isShared && _coRenterUsernameController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please enter your friend's username for Shared Rental"), backgroundColor: Colors.red),
       );
       return;
     }
@@ -152,6 +204,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
       if (_isRent && _rentStartDate != null && _rentEndDate != null) {
         payload['rental_start_date'] = _rentStartDate!.toIso8601String();
         payload['rental_end_date'] = _rentEndDate!.toIso8601String();
+        if (_isShared && _coRenterUsernameController.text.trim().isNotEmpty) {
+          payload['co_renter_username'] = _coRenterUsernameController.text.trim();
+        }
       }
 
       final result = await apiClient.post('/transactions', payload);
@@ -373,6 +428,77 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
             const SizedBox(height: 16),
 
+            if (_isRent) ...[
+              // ── Shared Rental Toggle ───────────────────────────────
+              _SectionCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.people_alt_outlined, color: primary, size: 22),
+                            const SizedBox(width: 12),
+                            Text(
+                              'Shared Rental',
+                              style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 15),
+                            ),
+                          ],
+                        ),
+                        Switch(
+                          value: _isShared,
+                          activeColor: primary,
+                          onChanged: (val) {
+                            setState(() {
+                              _isShared = val;
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                    AnimatedSize(
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeInOut,
+                      child: _isShared
+                          ? Padding(
+                              padding: const EdgeInsets.only(top: 12),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    "Split bill cost sharing with a friend (50% rent split, full deposit retained).",
+                                    style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey[600]),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  TextField(
+                                    controller: _coRenterUsernameController,
+                                    decoration: InputDecoration(
+                                      labelText: "Enter Friend's Username",
+                                      labelStyle: GoogleFonts.outfit(fontSize: 13),
+                                      hintText: "e.g. ali_student",
+                                      hintStyle: GoogleFonts.outfit(fontSize: 13),
+                                      prefixIcon: const Icon(Icons.alternate_email, size: 16),
+                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                    ),
+                                    style: GoogleFonts.outfit(fontSize: 14),
+                                    onChanged: (text) {
+                                      setState(() {});
+                                    },
+                                  ),
+                                ],
+                              ),
+                            )
+                          : const SizedBox.shrink(),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+
             // ── Rental deposit notice ─────────────────────────────
             if (_isRent && widget.product.rentalDeposit > 0)
               Container(
@@ -423,38 +549,151 @@ class _CheckoutPageState extends State<CheckoutPage> {
             // ── Price Breakdown ───────────────────────────────────
             _SectionCard(
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _PriceRow(
-                    label: _isRent
-                        ? (_rentDays > 0
-                            ? 'Rental (${ _rentDays}d × RM ${widget.product.rentalPricePerDay.toStringAsFixed(2)})'
-                            : 'Rental Price / day')
-                        : 'Item Price',
-                    value: 'RM ${_itemPrice.toStringAsFixed(2)}',
-                    isTotal: false,
-                  ),
-                  if (_isRent && widget.product.rentalDeposit > 0) ...[
+                  if (_isRent) ...[
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: _isShared
+                                ? Colors.purple.withValues(alpha: 0.1)
+                                : (_rentDays >= 30
+                                    ? Colors.orange.withValues(alpha: 0.1)
+                                    : Colors.blue.withValues(alpha: 0.1)),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            _isShared
+                                ? 'Shared Bill Rental'
+                                : (_rentDays >= 30 ? 'Long-Term Semester Rental' : 'Short-Term Rental'),
+                            style: GoogleFonts.outfit(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: _isShared
+                                  ? Colors.purple[700]
+                                  : (_rentDays >= 30 ? Colors.orange[800] : Colors.blue[700]),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    _PriceRow(
+                      label: 'Days Selected',
+                      value: '$_rentDays day${_rentDays > 1 ? 's' : ''}',
+                      isTotal: false,
+                    ),
                     const Divider(height: 20),
                     _PriceRow(
-                      label: 'Refundable Deposit',
-                      value: 'RM ${widget.product.rentalDeposit.toStringAsFixed(2)}',
+                      label: 'Base Rental Subtotal',
+                      value: 'RM ${_rentalSubtotal.toStringAsFixed(2)}',
                       isTotal: false,
-                      valueColor: Colors.blue[700]!,
+                    ),
+                    if (_rentDays >= 30) ...[
+                      const Divider(height: 20),
+                      _PriceRow(
+                        label: 'Long-Term Discount (30%)',
+                        value: '-RM ${_longTermDiscount.toStringAsFixed(2)}',
+                        isTotal: false,
+                        valueColor: Colors.green[700]!,
+                      ),
+                    ],
+                    if (_isShared) ...[
+                      const Divider(height: 20),
+                      _PriceRow(
+                        label: 'Cost Share Split (50%)',
+                        value: '-RM ${(_discountedSubtotal / 2.0).toStringAsFixed(2)}',
+                        isTotal: false,
+                        valueColor: Colors.purple[700]!,
+                      ),
+                    ],
+                    const Divider(height: 20),
+                    if (_isDepositWaived) ...[
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Security Deposit',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 14,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.amber.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+                                ),
+                                child: Text(
+                                  'Deposit Waived (High Trust User)',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.amber[900],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          Row(
+                            children: [
+                              Text(
+                                'RM ${widget.product.rentalDeposit.toStringAsFixed(2)}',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 14,
+                                  color: Colors.grey[500],
+                                  decoration: TextDecoration.lineThrough,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'RM 0.00',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.green[700],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ] else ...[
+                      _PriceRow(
+                        label: 'Security Deposit (Full)',
+                        value: 'RM ${widget.product.rentalDeposit.toStringAsFixed(2)}',
+                        isTotal: false,
+                        valueColor: Colors.blue[700]!,
+                      ),
+                    ],
+                  ] else ...[
+                    _PriceRow(
+                      label: 'Item Price',
+                      value: 'RM ${widget.product.price.toStringAsFixed(2)}',
+                      isTotal: false,
                     ),
                   ],
                   const Divider(height: 20),
-                  _PriceRow(
-                    label: 'Service Fee',
-                    value: 'RM 0',
-                    isTotal: false,
-                    valueColor: Colors.grey[500]!,
-                  ),
-                  const Divider(height: 20),
-                  _PriceRow(
-                    label: 'Total',
-                    value: 'RM ${_totalPrice.toStringAsFixed(2)}',
-                    isTotal: true,
-                    valueColor: primary,
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 300),
+                    transitionBuilder: (Widget child, Animation<double> animation) {
+                      return ScaleTransition(scale: animation, child: child);
+                    },
+                    child: _PriceRow(
+                      key: ValueKey<String>('${_isShared}_$_totalPrice'),
+                      label: _isShared ? 'Your Share (50% Payable)' : 'Total Payable Amount',
+                      value: 'RM ${_totalPrice.toStringAsFixed(2)}',
+                      isTotal: true,
+                      valueColor: primary,
+                    ),
                   ),
                 ],
               ),
@@ -555,6 +794,7 @@ class _PriceRow extends StatelessWidget {
   final Color? valueColor;
 
   const _PriceRow({
+    super.key,
     required this.label,
     required this.value,
     required this.isTotal,

@@ -12,7 +12,6 @@ class EditProfilePage extends StatefulWidget {
 }
 
 class _EditProfilePageState extends State<EditProfilePage> {
-  final _facultyController = TextEditingController();
   final _yearController = TextEditingController();
   final _bioController = TextEditingController();
   final _studentIdController = TextEditingController();
@@ -30,7 +29,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
   @override
   void dispose() {
-    _facultyController.dispose();
     _yearController.dispose();
     _bioController.dispose();
     _studentIdController.dispose();
@@ -46,7 +44,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
       final res = await apiClient.get('/auth/user/${UserSession().userId}');
       if (res != null && res['user'] != null) {
         final userData = res['user'];
-        _facultyController.text = userData['faculty'] ?? '';
         _yearController.text = userData['year_of_study']?.toString() ?? '';
         _bioController.text = userData['bio'] ?? '';
         _studentIdController.text = userData['university_id'] ?? '';
@@ -106,7 +103,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
     try {
       final apiClient = ApiClient();
       await apiClient.patch('/auth/user/${UserSession().userId}', {
-        'faculty': _facultyController.text,
         'year_of_study': int.tryParse(_yearController.text),
         'bio': _bioController.text,
         'privacy_setting': _privacySetting,
@@ -226,15 +222,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                   ),
                   const SizedBox(height: 16),
                   
-                  TextFormField(
-                    controller: _facultyController,
-                    decoration: InputDecoration(
-                        labelText: 'Faculty',
-                        hintText: 'e.g. FTMK, FKE, FSPU',
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
+
                   TextFormField(
                     controller: _yearController,
                     keyboardType: TextInputType.number,

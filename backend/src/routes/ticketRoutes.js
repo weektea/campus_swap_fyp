@@ -1,7 +1,7 @@
 import express from 'express';
 import { Op } from 'sequelize';
-import { authenticateToken as verifyToken } from '../middleware/authMiddleware.js';
-import { Report, Dispute, SupportTicket, TicketMessage, Product, User, Transaction } from '../models/index.js';
+import { authenticateToken as verifyToken, sendError, isStaff } from '../middleware/authMiddleware.js';
+import { Report, Dispute, SupportTicket, TicketMessage, Product, User, Transaction, ActivityLog } from '../models/index.js';
 import Notification from '../models/Notification.js';
 import { emitToUser, emitToAdmins } from '../config/socket.js';
 
@@ -10,19 +10,29 @@ const router = express.Router();
 // Create Support Ticket
 router.post('/', verifyToken, async (req, res) => {
     try {
-        const { category, subject, description } = req.body;
+        const { category, subject, description, status } = req.body;
         if (!category || !subject || !description) {
             return res.status(400).json({ error: 'Missing support ticket details' });
         }
 
-        // Anti-Spam: Check if user has 3 or more open tickets
+        // Anti-Spam: Check if user has 3 or more active tickets
         const openTicketsCount = await SupportTicket.count({
             where: {
                 user_id: req.user.id,
-                status: 'Open'
+                status: {
+                    [Op.in]: ['Open', 'Pending', 'In-Progress']
+                }
             }
         });
         if (openTicketsCount >= 3) {
+            try {
+                await ActivityLog.create({
+                    user_id: req.user.id,
+                    action: 'ANOMALY: Spam ticket flood'
+                });
+            } catch (err) {
+                console.error("Failed to log spam anomaly:", err);
+            }
             return res.status(429).json({ error: 'You have reached the maximum number of open tickets' });
         }
 
@@ -37,8 +47,18 @@ router.post('/', verifyToken, async (req, res) => {
             category: dbCategory,
             subject,
             description,
-            status: 'Open'
+            status: status || 'Open'
         });
+
+        // Log support ticket creation
+        try {
+            await ActivityLog.create({
+                user_id: req.user.id,
+                action: 'TICKET_OPENED'
+            });
+        } catch (e) {
+            console.error("Failed to log ticket creation:", e.message);
+        }
 
         // Emit new ticket event to admin room
         emitToAdmins('new_ticket_submitted', ticket);
@@ -104,8 +124,28 @@ router.get('/my-tickets', verifyToken, async (req, res) => {
 // Get Thread Messages
 router.get('/thread/:reference_id', verifyToken, async (req, res) => {
     try {
+        const refId = req.params.reference_id;
+        const dispute = await Dispute.findByPk(refId);
+        if (dispute) {
+            const tx = await Transaction.findByPk(dispute.transaction_id);
+            if (!tx || (String(req.user.id) !== String(dispute.complainant_id) && 
+                        String(req.user.id) !== String(tx.buyer_id) && 
+                        String(req.user.id) !== String(tx.seller_id) && 
+                        !isStaff(req.user))) {
+                return sendError(res, 403, 'Access Denied: You are not authorized to view this dispute thread.');
+            }
+        } else {
+            const ticket = await SupportTicket.findByPk(refId);
+            if (!ticket) {
+                return sendError(res, 404, 'Thread not found.');
+            }
+            if (String(req.user.id) !== String(ticket.user_id) && !isStaff(req.user)) {
+                return sendError(res, 403, 'Access Denied: You are not authorized to view this support ticket thread.');
+            }
+        }
+
         const messages = await TicketMessage.findAll({
-            where: { reference_id: req.params.reference_id },
+            where: { reference_id: refId },
             include: [{ model: User, as: 'sender', attributes: ['id', 'email', 'role', 'username', 'full_name'] }],
             order: [['createdAt', 'ASC']]
         });
@@ -142,18 +182,37 @@ router.get('/thread/:reference_id/status', verifyToken, async (req, res) => {
 router.post('/thread/:reference_id', verifyToken, async (req, res) => {
     try {
         const { reference_type, content, attachment_url } = req.body;
+        const refId = req.params.reference_id;
 
-        // Check if ticket or dispute is resolved/closed
+        // Fix 3: Thread authorization checks for POST
         if (reference_type === 'Dispute') {
-            const dispute = await Dispute.findByPk(req.params.reference_id);
-            if (dispute && dispute.status === 'Resolved') {
-                return res.status(400).json({ error: 'This dispute is resolved and closed.' });
+            const dispute = await Dispute.findByPk(refId);
+            if (!dispute) {
+                return sendError(res, 404, 'Dispute not found.');
+            }
+            const tx = await Transaction.findByPk(dispute.transaction_id);
+            if (!tx || (String(req.user.id) !== String(dispute.complainant_id) && 
+                        String(req.user.id) !== String(tx.buyer_id) && 
+                        String(req.user.id) !== String(tx.seller_id) && 
+                        !isStaff(req.user))) {
+                return sendError(res, 403, 'Access Denied: You are not authorized to post to this dispute.');
+            }
+            if (dispute.status === 'Resolved') {
+                return sendError(res, 400, 'This dispute is resolved and closed.');
             }
         } else if (reference_type === 'SupportTicket') {
-            const ticket = await SupportTicket.findByPk(req.params.reference_id);
-            if (ticket && ticket.status === 'Resolved') {
-                return res.status(400).json({ error: 'This support ticket is resolved and closed.' });
+            const ticket = await SupportTicket.findByPk(refId);
+            if (!ticket) {
+                return sendError(res, 404, 'Support ticket not found.');
             }
+            if (String(req.user.id) !== String(ticket.user_id) && !isStaff(req.user)) {
+                return sendError(res, 403, 'Access Denied: You are not authorized to post to this support ticket.');
+            }
+            if (ticket.status === 'Resolved') {
+                return sendError(res, 400, 'This support ticket is resolved and closed.');
+            }
+        } else {
+            return sendError(res, 400, 'Invalid thread reference type.');
         }
         
         const message = await TicketMessage.create({

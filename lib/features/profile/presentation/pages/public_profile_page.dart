@@ -170,12 +170,10 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
                              _buildInfoRow('Email', _userProfile!['email']),
                            if (_userProfile!['phone_number'] != null)
                              _buildInfoRow('Phone Number', _userProfile!['phone_number']),
-                           if (_userProfile!['faculty'] != null)
-                             _buildInfoRow('Faculty', _userProfile!['faculty']),
                            if (_userProfile!['year_of_study'] != null)
                              _buildInfoRow('Year of Study', 'Year ${_userProfile!['year_of_study']}'),
                           
-                          if (_userProfile!['email'] == null && _userProfile!['phone_number'] == null && _userProfile!['faculty'] == null && _userProfile!['year_of_study'] == null)
+                          if (_userProfile!['email'] == null && _userProfile!['phone_number'] == null && _userProfile!['year_of_study'] == null)
                             Padding(
                               padding: const EdgeInsets.symmetric(vertical: 8.0),
                               child: Row(

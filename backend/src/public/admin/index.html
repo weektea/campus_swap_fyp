@@ -7,6 +7,8 @@
     <title>🌿 Campus Swap Admin Dashboard</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
     <style>
         :root {
             --bg-color: #0b0f0c;
@@ -291,6 +293,7 @@
                 currentUser = JSON.parse(userStr);
                 document.getElementById('login-overlay').style.display = 'none';
                 document.getElementById('user-display').innerText = `${currentUser.username} (${currentUser.role})`;
+                initializeSocketConnection();
                 loadDashboard();
             }
         });
@@ -320,6 +323,7 @@
                     
                     document.getElementById('login-overlay').style.display = 'none';
                     document.getElementById('user-display').innerText = `${currentUser.username} (${currentUser.role})`;
+                    initializeSocketConnection();
                     switchTab('dashboard');
                 } else {
                     alert(data.error || 'Login failed');
@@ -331,6 +335,10 @@
         }
 
         function handleLogout() {
+            if (socket) {
+                socket.disconnect();
+                socket = null;
+            }
             localStorage.clear();
             currentUser = null;
             document.getElementById('login-overlay').style.display = 'flex';
@@ -381,14 +389,241 @@
             else if (tab === 'tickets') loadTickets();
         }
 
+        let socket = null;
+        let chartUserGrowthInstance = null;
+        let chartEarningsInstance = null;
+        let chartCategoryInstance = null;
+        let chartOrderTypeInstance = null;
+
+        function initializeSocketConnection() {
+            const token = localStorage.getItem('admin_token');
+            if (!token) return;
+
+            socket = io({
+                auth: { token }
+            });
+
+            socket.on('connect', () => {
+                console.log('Socket.io: Connected to Admin/Staff room.');
+            });
+
+            socket.on('admin_metrics_update', async (data) => {
+                console.log('Socket.io: Real-time update received:', data);
+                if (currentTab === 'dashboard') {
+                    try {
+                        const res = await fetchWithAuth('/admin/analytics');
+                        if (res) {
+                            const newMetrics = await res.json();
+                            document.getElementById('metric-users').innerText = newMetrics.total_users;
+                            document.getElementById('metric-listings').innerText = newMetrics.active_listings;
+                            document.getElementById('metric-orders').innerText = newMetrics.completed_transactions;
+                            document.getElementById('metric-carbon').innerText = `${newMetrics.total_carbon_saved} kg CO2e`;
+                            
+                            renderCharts(newMetrics);
+                            renderAnomalyLogs(newMetrics.anomaly_logs);
+                        }
+                    } catch (e) {
+                        console.error('Socket refresh error:', e);
+                    }
+                }
+            });
+        }
+
+        async function triggerReportExport() {
+            const start = document.getElementById('export-start-date').value;
+            const end = document.getElementById('export-end-date').value;
+            if (!start || !end) {
+                alert('Please select both Start and End dates.');
+                return;
+            }
+
+            try {
+                const res = await fetchWithAuth(`/admin/export-report?startDate=${start}&endDate=${end}`);
+                if (!res) return;
+                
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `Environmental_Impact_Report_${start}_to_${end}.csv`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+            } catch (e) {
+                alert('Failed to generate report: ' + e.message);
+            }
+        }
+
+        function renderAnomalyLogs(logs) {
+            const tbody = document.getElementById('table-anomaly-logs');
+            if (!tbody) return;
+            if (!logs || logs.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">No anomalies detected.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = logs.map(l => `
+                <tr>
+                    <td><strong>${l.username}</strong></td>
+                    <td><span class="badge bg-danger">${l.action.replace('ANOMALY: ', '')}</span></td>
+                    <td><small class="text-muted">${new Date(l.timestamp).toLocaleTimeString()}</small></td>
+                </tr>
+            `).join('');
+        }
+
+        function renderCharts(metrics) {
+            if (chartUserGrowthInstance) chartUserGrowthInstance.destroy();
+            if (chartEarningsInstance) chartEarningsInstance.destroy();
+            if (chartCategoryInstance) chartCategoryInstance.destroy();
+            if (chartOrderTypeInstance) chartOrderTypeInstance.destroy();
+
+            // 1. User Growth Analysis
+            const ctxGrowth = document.getElementById('chart-user-growth').getContext('2d');
+            chartUserGrowthInstance = new Chart(ctxGrowth, {
+                type: 'line',
+                data: {
+                    labels: metrics.growth_labels || [],
+                    datasets: [{
+                        label: 'New Student Registrations',
+                        data: metrics.growth_data || [],
+                        borderColor: '#05cd83',
+                        backgroundColor: 'rgba(5, 205, 131, 0.1)',
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: { ticks: { color: '#8ca396' }, grid: { color: '#27332b' } },
+                        x: { ticks: { color: '#8ca396' }, grid: { color: '#27332b' } }
+                    }
+                }
+            });
+
+            // 2. Earnings and Trend Prediction Line
+            const ctxEarnings = document.getElementById('chart-earnings-predictions').getContext('2d');
+            const actualLabels = metrics.earnings_labels || [];
+            const predLabels = metrics.prediction_labels || [];
+            const combinedLabels = [...actualLabels, ...predLabels];
+
+            const actualData = [...(metrics.earnings_actual || [])];
+            const predData = Array(actualData.length).fill(null);
+            
+            if (actualData.length > 0) {
+                predData[actualData.length - 1] = actualData[actualData.length - 1];
+            }
+            predData.push(...(metrics.prediction_values || []));
+
+            chartEarningsInstance = new Chart(ctxEarnings, {
+                type: 'bar',
+                data: {
+                    labels: combinedLabels,
+                    datasets: [
+                        {
+                            label: 'Completed Earnings (RM)',
+                            type: 'bar',
+                            data: metrics.earnings_actual || [],
+                            backgroundColor: '#00a86b',
+                            borderRadius: 6
+                        },
+                        {
+                            label: '3-Month Projected Trend (RM)',
+                            type: 'line',
+                            data: predData,
+                            borderColor: '#ffc107',
+                            borderDash: [5, 5],
+                            borderWidth: 2,
+                            pointRadius: 4,
+                            fill: false,
+                            tension: 0.1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            labels: { color: '#e2e8e4' }
+                        }
+                    },
+                    scales: {
+                        y: { ticks: { color: '#8ca396' }, grid: { color: '#27332b' } },
+                        x: { ticks: { color: '#8ca396' }, grid: { color: '#27332b' } }
+                    }
+                }
+            });
+
+            // 3. Category Distribution (Doughnut / Pie)
+            const ctxCat = document.getElementById('chart-category-distribution').getContext('2d');
+            const catLabels = (metrics.carbon_by_category || []).map(c => c.category);
+            const catData = (metrics.carbon_by_category || []).map(c => c.value);
+            chartCategoryInstance = new Chart(ctxCat, {
+                type: 'doughnut',
+                data: {
+                    labels: catLabels,
+                    datasets: [{
+                        data: catData,
+                        backgroundColor: [
+                            '#00a86b', '#007bff', '#e83e8c', '#fd7e14', '#20c997', '#ffc107', '#17a2b8'
+                        ],
+                        borderWidth: 1,
+                        borderColor: '#141a16'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                            labels: { color: '#e2e8e4', boxWidth: 12, font: { size: 10 } }
+                        }
+                    }
+                }
+            });
+
+            // 4. Order Type Breakdown (Doughnut)
+            const ctxOrder = document.getElementById('chart-order-type').getContext('2d');
+            const saleVal = metrics.order_type_breakdown?.sale || 0;
+            const rentVal = metrics.order_type_breakdown?.rent || 0;
+            chartOrderTypeInstance = new Chart(ctxOrder, {
+                type: 'pie',
+                data: {
+                    labels: ['Sale', 'Rent'],
+                    datasets: [{
+                        data: [saleVal, rentVal],
+                        backgroundColor: ['#20c997', '#9146ff'],
+                        borderWidth: 1,
+                        borderColor: '#141a16'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: { color: '#e2e8e4', boxWidth: 12 }
+                        }
+                    }
+                }
+            });
+        }
+
         // Tab: Dashboard Overview
         async function loadDashboard() {
             const container = document.getElementById('main-content');
             container.innerHTML = `<div class="text-center my-5"><div class="spinner-border text-success" role="status"></div></div>`;
             
             try {
-                // Moderator /metrics is accessible to both roles
-                const res = await fetchWithAuth('/moderator/metrics');
+                const res = await fetchWithAuth('/admin/analytics');
                 if (!res) return;
                 const metrics = await res.json();
 
@@ -397,33 +632,116 @@
                         <div class="col-md-3">
                             <div class="card p-4 card-stat">
                                 <h6 class="text-muted">Total Users</h6>
-                                <h2>${metrics.total_users || 0}</h2>
+                                <h2 id="metric-users">${metrics.total_users || 0}</h2>
                             </div>
                         </div>
                         <div class="col-md-3">
                             <div class="card p-4 card-stat">
-                                <h6 class="text-muted">Active Products</h6>
-                                <h2>${metrics.total_products || 0}</h2>
+                                <h6 class="text-muted">Active Listings</h6>
+                                <h2 id="metric-listings">${metrics.active_listings || 0}</h2>
                             </div>
                         </div>
                         <div class="col-md-3">
                             <div class="card p-4 card-stat">
                                 <h6 class="text-muted">Completed Orders</h6>
-                                <h2>${metrics.total_transactions || 0}</h2>
+                                <h2 id="metric-orders">${metrics.completed_transactions || 0}</h2>
                             </div>
                         </div>
                         <div class="col-md-3">
                             <div class="card p-4 card-stat">
                                 <h6 class="text-muted">🌿 Total Carbon Saved</h6>
-                                <h2 class="text-success">${metrics.co2_saved_kg || 0} kg CO2e</h2>
+                                <h2 class="text-success" id="metric-carbon">${metrics.total_carbon_saved || 0} kg CO2e</h2>
                             </div>
                         </div>
                     </div>
-                    <div class="card p-4 mt-4">
-                        <h4>System Welcome Overview</h4>
-                        <p class="text-muted">You are logged in as <strong>${currentUser.username}</strong> (${currentUser.role}). Use the sidebar menu to handle user flags, review transactions, and moderate transactions or disputes.</p>
+
+                    <!-- Date range selector & Export button -->
+                    <div class="card p-4 mb-4">
+                        <h5 class="mb-3">📅 Environmental Impact Performance Exporter</h5>
+                        <div class="row g-3 align-items-end">
+                            <div class="col-md-4">
+                                <label class="form-label text-muted">Start Date</label>
+                                <input type="date" id="export-start-date" class="form-control" value="${new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0]}">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label text-muted">End Date</label>
+                                <input type="date" id="export-end-date" class="form-control" value="${new Date().toISOString().split('T')[0]}">
+                            </div>
+                            <div class="col-md-4">
+                                <button class="btn btn-primary w-100 py-2" onclick="triggerReportExport()">
+                                    📥 Generate Performance Report (CSV)
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row g-4 mb-4">
+                        <!-- User Growth Line Chart -->
+                        <div class="col-md-6">
+                            <div class="card p-4">
+                                <h5>📈 User Growth Analysis</h5>
+                                <div style="position: relative; height: 280px;">
+                                    <canvas id="chart-user-growth"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Transaction Predictions & Earnings Bar Chart -->
+                        <div class="col-md-6">
+                            <div class="card p-4">
+                                <h5>💸 Monthly Completed Order Earnings</h5>
+                                <div style="position: relative; height: 280px;">
+                                    <canvas id="chart-earnings-predictions"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row g-4 mb-4">
+                        <!-- Category Distribution Doughnut/Pie -->
+                        <div class="col-md-4">
+                            <div class="card p-4">
+                                <h5>🌿 Category Carbon Savings</h5>
+                                <div style="position: relative; height: 250px;">
+                                    <canvas id="chart-category-distribution"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Order Type Breakdown Doughnut -->
+                        <div class="col-md-4">
+                            <div class="card p-4">
+                                <h5>🔄 Order Type Breakdown (Sale vs Rent)</h5>
+                                <div style="position: relative; height: 250px;">
+                                    <canvas id="chart-order-type"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Security & Anomaly Logs Grid -->
+                        <div class="col-md-4">
+                            <div class="card p-4" style="max-height: 310px; overflow-y: auto;">
+                                <h5>🚨 Automated Anomaly Behavior Logs</h5>
+                                <div class="table-responsive">
+                                    <table class="table table-sm">
+                                        <thead>
+                                            <tr>
+                                                <th>Filer</th>
+                                                <th>Detection Trigger</th>
+                                                <th>Time</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="table-anomaly-logs">
+                                            <!-- Dynamically filled -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 `;
+
+                // Render logs & charts
+                renderAnomalyLogs(metrics.anomaly_logs);
+                renderCharts(metrics);
+
             } catch (e) {
                 container.innerHTML = `<div class="alert alert-danger">Error loading dashboard: ${e.message}</div>`;
             }

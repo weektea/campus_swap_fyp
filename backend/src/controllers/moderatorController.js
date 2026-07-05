@@ -229,7 +229,7 @@ export const getDashboardData = async (req, res) => {
         });
         const tickets = await SupportTicket.findAll({ 
             where: { 
-                status: ['Open', 'In-Progress'],
+                status: ['Open', 'In-Progress', 'Pending'],
                 type: { [Op.ne]: 'SUSPENSION_APPEAL' }
             },
             include: ['student', 'handler'] 

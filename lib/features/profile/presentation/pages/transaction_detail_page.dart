@@ -89,9 +89,10 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
           if (extraData != null) {
               body.addAll(extraData);
           }
-          await apiClient.patch('/transactions/${widget.transactionId}/status', body);
+          final res = await apiClient.patch('/transactions/${widget.transactionId}/status', body);
           _fetchTransactionDetails(); // Refresh
-          if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Status updated to $newStatus')));
+          final msg = (res != null && res['message'] != null) ? res['message'].toString() : 'Status updated to $newStatus';
+          if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
       } catch (e) {
           if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
       } finally {
@@ -132,8 +133,15 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
           return Center(child: Text('Transaction $status', style: GoogleFonts.outfit(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 18)));
       }
       
-      final stages = ['Pending', 'Scheduled', 'To Confirm', 'Completed'];
-      final labels = ['Pending', 'Scheduled', 'To Confirm', 'Done'];
+      final product = _transaction['product'] ?? {};
+      final isRent = product['type'] == 'Rent';
+      final stages = isRent 
+          ? ['Pending', 'Scheduled', 'To Confirm', 'On Rent', 'Completed'] 
+          : ['Pending', 'Scheduled', 'To Confirm', 'Completed'];
+      final labels = isRent 
+          ? ['Pending', 'Scheduled', 'To Confirm', 'On Rent', 'Done'] 
+          : ['Pending', 'Scheduled', 'To Confirm', 'Done'];
+
       int currentIndex = stages.indexOf(status);
       if (currentIndex == -1) currentIndex = 0;
 
@@ -479,6 +487,83 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
   Widget _buildActionPanel(String status, bool isBuying) {
       if (status == 'Cancelled' || status == 'Disputed') {
           return const SizedBox.shrink();
+      }
+
+      if (status == 'On Rent') {
+          if (isBuying) {
+              return Column(
+                  children: [
+                      Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                              color: Colors.blue.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.blue.withValues(alpha: 0.2)),
+                          ),
+                          child: Text(
+                              'You are currently renting this item. Once you return the item to the seller, the seller will confirm the return to refund your deposit.', 
+                              style: GoogleFonts.outfit(color: Colors.blue[800])
+                          ),
+                      ),
+                  ],
+              );
+          } else {
+              return Column(
+                  children: [
+                      Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                              color: Colors.amber.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.amber.withValues(alpha: 0.2)),
+                          ),
+                          child: Text(
+                              'Item is currently rented. Once the buyer has safely returned the item, click "Confirm Safe Return" to release the security deposit and complete the transaction.', 
+                              style: GoogleFonts.outfit(color: Colors.amber[800])
+                          ),
+                      ),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                          width: double.infinity,
+                          height: 48,
+                          child: ElevatedButton(
+                              onPressed: () => _updateStatus('Completed'),
+                              style: ElevatedButton.styleFrom(
+                                  backgroundColor: Theme.of(context).colorScheme.primary,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              ),
+                              child: Text('Confirm Safe Return & Complete', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
+                          ),
+                      ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                          width: double.infinity,
+                          height: 48,
+                          child: OutlinedButton.icon(
+                              onPressed: () async {
+                                  final result = await Navigator.push(context, MaterialPageRoute(
+                                      builder: (_) => OpenDisputePage(
+                                          transaction: _transaction,
+                                          prefilledCategory: 'Rental Damage',
+                                      )
+                                  ));
+                                  if (result == true) {
+                                      _fetchTransactionDetails();
+                                  }
+                              },
+                              icon: const Icon(Icons.broken_image_outlined, color: Colors.red),
+                              label: Text('Report Damage (Open Dispute)', style: GoogleFonts.outfit(color: Colors.red, fontWeight: FontWeight.bold)),
+                              style: OutlinedButton.styleFrom(
+                                  side: const BorderSide(color: Colors.red),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              ),
+                          ),
+                      ),
+                  ],
+              );
+          }
       }
 
       if (status == 'Completed') {

@@ -121,6 +121,9 @@ export const register = async (req, res) => {
             { expiresIn: '30d' }
         );
 
+        // Notify admin real-time dashboard of registration event
+        emitToAdmins('admin_metrics_update', { trigger: 'user_registration' });
+
         res.status(201).json({
             message: 'Registration successful',
             token,
@@ -245,7 +248,6 @@ export const updateProfile = async (req, res) => {
         if (updates.profile_picture !== undefined) user.profile_image_url = updates.profile_picture;
         if (updates.phone_number !== undefined) user.phone_number = updates.phone_number;
         if (updates.bio !== undefined) user.bio = updates.bio;
-        if (updates.faculty !== undefined) user.faculty = updates.faculty;
         if (updates.year_of_study !== undefined) user.year_of_study = updates.year_of_study;
         if (updates.privacy_setting !== undefined) user.privacy_setting = updates.privacy_setting;
         if (updates.show_full_name !== undefined) user.show_full_name = updates.show_full_name;
@@ -263,7 +265,6 @@ export const updateProfile = async (req, res) => {
                 profile_picture: user.profile_image_url,
                 phone: user.phone_number,
                 bio: user.bio,
-                faculty: user.faculty,
                 year_of_study: user.year_of_study,
                 privacy_setting: user.privacy_setting,
                 show_full_name: user.show_full_name,
@@ -290,7 +291,7 @@ export const getUserProfile = async (req, res) => {
                 'role', 'total_carbon_saved', 'carbon_saved_buyer', 'carbon_saved_seller', 
                 'items_reused', 'reputation_score', 'total_reviews', 'privacy_setting', 
                 'show_full_name', 'show_phone_number',
-                'bio', 'faculty', 'year_of_study', 'createdAt', 'is_active', 'university_id',
+                'bio', 'year_of_study', 'createdAt', 'is_active', 'university_id',
                 'accumulated_balance_due'
             ]
         });
@@ -313,10 +314,9 @@ export const getUserProfile = async (req, res) => {
             }
         }
 
-        // General profile privacy redactions (except email/faculty/year which are bound to general privacy setting)
+        // General profile privacy redactions (except email/year which are bound to general privacy setting)
         if (!isOwner && !isAdminOrMod && user.privacy_setting !== 'Public') {
             user.email = null;
-            user.faculty = null;
             user.year_of_study = null;
             user.setDataValue('university_id', null);
         }
