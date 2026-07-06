@@ -104,7 +104,21 @@ async function seedData() {
             if (created) {
                 console.log(`Created Category: ${cat.name} (Saves ${cat.carbon_conversion_factor}kg CO2)`);
             } else {
-                console.log(`Checking existing Category: ${cat.name}`);
+                let updated = false;
+                if (cat.carbon_conversion_factor !== catData.carbon_conversion_factor) {
+                    cat.carbon_conversion_factor = catData.carbon_conversion_factor;
+                    updated = true;
+                }
+                if (cat.icon_url !== catData.icon_url) {
+                    cat.icon_url = catData.icon_url;
+                    updated = true;
+                }
+                if (updated) {
+                    await cat.save();
+                    console.log(`Updated Category "${cat.name}" details.`);
+                } else {
+                    console.log(`Checking existing Category: ${cat.name}`);
+                }
             }
 
             // Sync and seed subcategories

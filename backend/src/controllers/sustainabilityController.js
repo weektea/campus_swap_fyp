@@ -2,6 +2,15 @@ import { User, Transaction, Product, Category, SubCategory } from '../models/ind
 import { Op } from 'sequelize';
 import { getCarbonValue } from './transactionController.js';
 
+/**
+ * Retrieves the carbon footprint savings leaderboard.
+ * Returns top 10 student users sorted by carbon savings descending.
+ *
+ * @param {import('express').Request} req - The Express request object.
+ * @param {import('express').Response} res - The Express response object.
+ * @returns {Promise<void>} - Responds with a JSON array of leaderboard entries.
+ * @throws {Error} - Responds with HTTP 500 if database query fails.
+ */
 export const getLeaderboard = async (req, res) => {
     try {
         const users = await User.findAll({
@@ -31,6 +40,15 @@ export const getLeaderboard = async (req, res) => {
     }
 };
 
+/**
+ * Computes and returns the environmental impact breakdown by category for the authenticated user.
+ * Considers all completed transactions where the user participated as either buyer or seller.
+ *
+ * @param {import('express').Request} req - The Express request object.
+ * @param {import('express').Response} res - The Express response object.
+ * @returns {Promise<void>} - Responds with a JSON object mapping category names to total carbon points saved.
+ * @throws {Error} - Responds with HTTP 500 if transaction parsing or queries fail.
+ */
 export const getImpactByCategory = async (req, res) => {
     try {
         const userId = req.user.id;
@@ -61,8 +79,8 @@ export const getImpactByCategory = async (req, res) => {
                 const subCatName = t.product.subcategoryModel ? t.product.subcategoryModel.name : null;
                 
                 const carbonValue = t.awarded_carbon_points !== null && t.awarded_carbon_points !== undefined
-                    ? parseFloat(t.awarded_carbon_points)
-                    : getCarbonValue(catName, subCatName, t.product);
+                     ? parseFloat(t.awarded_carbon_points)
+                     : getCarbonValue(catName, subCatName, t.product);
                 
                 if (!categoryMap[catName]) {
                     categoryMap[catName] = 0;

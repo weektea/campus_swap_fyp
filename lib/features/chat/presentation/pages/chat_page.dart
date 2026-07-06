@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:campus_swap/core/api/api_client.dart';
 import 'package:campus_swap/core/session/user_session.dart';
 import 'package:campus_swap/features/chat/presentation/pages/chat_detail_page.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:campus_swap/core/widgets/empty_state_widget.dart';
 
 class ChatPage extends StatefulWidget {
   const ChatPage({super.key});
@@ -59,9 +59,16 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Scaffold(
       appBar: AppBar(
-        title: Text('Messages', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: Text(
+          'Messages',
+          style: theme.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.bold,
+            color: theme.colorScheme.onPrimary,
+          ),
+        ),
         automaticallyImplyLeading: false,
         elevation: 0,
         actions: [
@@ -82,10 +89,18 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.chat_bubble_outline, size: 80, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.5)),
+                      Icon(
+                        Icons.chat_bubble_outline,
+                        size: 80,
+                        color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+                      ),
                       const SizedBox(height: 16),
-                      Text('Please login to view messages.',
-                          style: GoogleFonts.outfit(fontSize: 18, color: Theme.of(context).colorScheme.onSurface, fontWeight: FontWeight.bold)),
+                      Text(
+                        'Please login to view messages.',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ],
                   ),
                 )
@@ -93,20 +108,14 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                   onRefresh: _fetchConversations,
                   child: _conversations.isEmpty
                       ? ListView(
+                          physics: const AlwaysScrollableScrollPhysics(),
                           children: [
-                            SizedBox(height: MediaQuery.of(context).size.height * 0.3),
-                            Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.chat_bubble_outline, size: 80, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.5)),
-                                  const SizedBox(height: 16),
-                                  Text('No messages yet.',
-                                      style: GoogleFonts.outfit(fontSize: 18, color: Theme.of(context).colorScheme.onSurface, fontWeight: FontWeight.bold)),
-                                  const SizedBox(height: 8),
-                                  Text('Start a conversation by exploring items!',
-                                      style: GoogleFonts.outfit(fontSize: 14, color: Theme.of(context).colorScheme.onSurfaceVariant)),
-                                ],
+                            SizedBox(
+                              height: MediaQuery.of(context).size.height * 0.6,
+                              child: const EmptyStateWidget(
+                                icon: Icons.chat_bubble_outline,
+                                title: 'No Messages Yet',
+                                message: 'Start a conversation by exploring items in the market!',
                               ),
                             ),
                           ],
@@ -122,30 +131,33 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                               leading: CircleAvatar(
                                 radius: 28,
-                                backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                                backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.1),
                                 backgroundImage: chat['profile_image_url'] != null
                                     ? NetworkImage('${ApiClient.baseUrl.replaceAll('/api', '')}${chat['profile_image_url']}')
                                     : null,
                                 child: chat['profile_image_url'] == null
                                     ? Text(
                                         name.isNotEmpty ? name[0].toUpperCase() : '?',
-                                        style: TextStyle(
-                                          color: Theme.of(context).colorScheme.primary,
+                                        style: theme.textTheme.titleLarge?.copyWith(
+                                          color: theme.colorScheme.primary,
                                           fontWeight: FontWeight.bold,
-                                          fontSize: 20,
                                         ),
                                       )
                                     : null,
                               ),
                               title: Text(
                                 name,
-                                style: const TextStyle(fontWeight: FontWeight.bold),
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                               subtitle: Text(
                                 lastMsg,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
                               ),
                               onTap: () {
                                 Navigator.push(

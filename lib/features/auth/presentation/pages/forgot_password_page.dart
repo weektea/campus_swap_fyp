@@ -12,9 +12,48 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
   final _emailController = TextEditingController();
   bool _isLoading = false;
 
+  @override
+  void dispose() {
+    _emailController.dispose();
+    super.dispose();
+  }
+
+  void _showErrorSnackBar(BuildContext context, String message) {
+    final theme = Theme.of(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: theme.colorScheme.error,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  void _showSuccessSnackBar(BuildContext context, String message) {
+    final theme = Theme.of(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: theme.colorScheme.primary,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  String _getFriendlyErrorMessage(dynamic e) {
+    final message = e.toString();
+    if (message.contains('SocketException') || message.contains('Connection error') || message.contains('Failed host lookup')) {
+      return 'Network error. Please check your internet connection and try again.';
+    }
+    if (message.contains('TimeoutException') || message.contains('Connection timed out')) {
+      return 'Connection timed out. Please check your network and try again.';
+    }
+    return message.replaceAll(RegExp(r'^Exception:\s*'), '').replaceAll(RegExp(r'^ApiException:\s*'), '');
+  }
+
   void _submit() async {
     if (_emailController.text.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter email')));
+        _showErrorSnackBar(context, 'Please enter email');
         return;
     }
 
@@ -25,11 +64,11 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
         final res = await apiClient.post('/auth/forgot-password', {'email': _emailController.text});
         
         if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(res['message'] ?? 'Request sent')));
+            _showSuccessSnackBar(context, res['message'] ?? 'Request sent');
             Navigator.pop(context);
         }
     } catch (e) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+        if (mounted) _showErrorSnackBar(context, 'Reset request failed: ${_getFriendlyErrorMessage(e)}');
     } finally {
         if (mounted) setState(() => _isLoading = false);
     }

@@ -28,7 +28,6 @@ class _SustainabilityDashboardPageState extends State<SustainabilityDashboardPag
   bool _isLoadingLeaderboard = true;
 
   // Dynamic user stats to keep them in sync with backend
-  int _itemsReused = 0;
   double _co2Saved = 0.0;
   double _co2Bought = 0.0;
   double _co2Sold = 0.0;
@@ -36,7 +35,6 @@ class _SustainabilityDashboardPageState extends State<SustainabilityDashboardPag
   @override
   void initState() {
     super.initState();
-    _itemsReused = widget.itemsReused;
     _co2Saved = widget.co2Saved;
     _co2Bought = widget.co2Bought;
     _co2Sold = widget.co2Sold;
@@ -58,7 +56,6 @@ class _SustainabilityDashboardPageState extends State<SustainabilityDashboardPag
                   _co2Saved = double.tryParse(userData['total_carbon_saved'].toString()) ?? 0.0;
                   _co2Bought = double.tryParse(userData['carbon_saved_buyer'].toString()) ?? 0.0;
                   _co2Sold = double.tryParse(userData['carbon_saved_seller'].toString()) ?? 0.0;
-                  _itemsReused = int.tryParse(userData['items_reused'].toString()) ?? 0;
               });
           }
       }

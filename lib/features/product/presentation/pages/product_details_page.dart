@@ -6,11 +6,11 @@ import 'package:campus_swap/core/session/user_session.dart';
 import 'package:campus_swap/features/chat/presentation/pages/chat_detail_page.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:campus_swap/features/profile/presentation/pages/public_profile_page.dart';
 import 'package:campus_swap/features/product/presentation/pages/edit_listing_page.dart';
 import 'package:campus_swap/features/product/presentation/pages/report_listing_page.dart';
+import 'package:campus_swap/features/product/presentation/pages/full_screen_image_viewer.dart';
 
 class ProductDetailsPage extends StatefulWidget {
   final Product product;
@@ -31,7 +31,6 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
   bool _isBuying = false;
   List<Product> _sellerProducts = [];
   List<Product> _similarProducts = [];
-  // bool _isLoadingSellerItems = true;
 
   @override
   void initState() {
@@ -76,7 +75,6 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                           .map((data) => Product.fromJson(data))
                           .where((p) => p.id != widget.product.id && p.status == 'Available')
                           .toList();
-                      // _isLoadingSellerItems = false;
                   });
               }
           }
@@ -237,7 +235,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                     child: IconButton(
                       icon: Icon(
                         _isSaved ? Icons.favorite : Icons.favorite_border,
-                        color: _isSaved ? Colors.red : theme.colorScheme.onSurface,
+                        color: _isSaved ? theme.colorScheme.error : theme.colorScheme.onSurface,
                       ),
                       onPressed: _toggleSave,
                     ),
@@ -256,13 +254,13 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                         }
                       },
                       itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
-                        const PopupMenuItem<String>(
+                        PopupMenuItem<String>(
                           value: 'report',
                           child: Row(
                             children: [
-                              Icon(Icons.flag, color: Colors.red, size: 20),
-                              SizedBox(width: 8),
-                              Text('Report Listing', style: TextStyle(color: Colors.red)),
+                              Icon(Icons.flag, color: theme.colorScheme.error, size: 20),
+                              const SizedBox(width: 8),
+                              Text('Report Listing', style: TextStyle(color: theme.colorScheme.error)),
                             ],
                           ),
                         ),
@@ -272,7 +270,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                 ),
             ],
             flexibleSpace: FlexibleSpaceBar(
-                title: Text(widget.product.title, style: TextStyle(color: Colors.transparent)),
+                title: Text(widget.product.title, style: const TextStyle(color: Colors.transparent)),
                 background: _buildImageGallery(widget.product),
             ),
           ),
@@ -288,15 +286,14 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
-                          color: widget.product.type == 'Rent' ? Colors.blue.withValues(alpha: 0.1) : theme.colorScheme.primary.withValues(alpha: 0.1),
+                          color: widget.product.type == 'Rent' ? theme.colorScheme.secondary.withValues(alpha: 0.1) : theme.colorScheme.primary.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
                           widget.product.type == 'Rent' ? 'RENTAL' : widget.product.category.toUpperCase(),
-                          style: GoogleFonts.outfit(
-                            color: widget.product.type == 'Rent' ? Colors.blue : theme.colorScheme.primary,
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            color: widget.product.type == 'Rent' ? theme.colorScheme.secondary : theme.colorScheme.primary,
                             fontWeight: FontWeight.bold,
-                            fontSize: 12,
                             letterSpacing: 1.0,
                           ),
                         ),
@@ -306,14 +303,13 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                           decoration: BoxDecoration(
-                            color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1E1E1E) : Colors.grey.withValues(alpha: 0.1),
+                            color: theme.colorScheme.surfaceContainer,
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Text(
                             widget.product.subCategoryName,
-                            style: GoogleFonts.outfit(
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
-                              fontSize: 12,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
                             ),
                           ),
                         ),
@@ -321,11 +317,11 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                       const Spacer(),
                       Row(
                         children: [
-                           Icon(Icons.schedule, size: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                           Icon(Icons.schedule, size: 14, color: theme.colorScheme.onSurfaceVariant),
                            const SizedBox(width: 4),
                            Text(
                              _timeAgo(widget.product.postedAt),
-                             style: GoogleFonts.outfit(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12),
+                             style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                            )
                         ],
                       )
@@ -334,8 +330,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                   const SizedBox(height: 16),
                   Text(
                     widget.product.title,
-                    style: GoogleFonts.outfit(
-                      fontSize: 28,
+                    style: theme.textTheme.headlineMedium?.copyWith(
                       fontWeight: FontWeight.bold,
                       height: 1.1,
                     ),
@@ -353,8 +348,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                              children: [
                                Text(
                                  'RM',
-                                 style: GoogleFonts.outfit(
-                                   fontSize: 16,
+                                 style: theme.textTheme.titleMedium?.copyWith(
                                    fontWeight: FontWeight.bold,
                                    color: theme.colorScheme.primary,
                                  ),
@@ -362,8 +356,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                                const SizedBox(width: 4),
                                Text(
                                  widget.product.type == 'Rent' ? widget.product.rentalPricePerDay.toStringAsFixed(2) : widget.product.price.toStringAsFixed(2),
-                                 style: GoogleFonts.outfit(
-                                   fontSize: 32,
+                                 style: theme.textTheme.headlineMedium?.copyWith(
                                    fontWeight: FontWeight.w900,
                                    color: theme.colorScheme.primary,
                                  ),
@@ -371,7 +364,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                                if (widget.product.type == 'Rent') 
                                  Padding(
                                    padding: const EdgeInsets.only(left: 4.0),
-                                   child: Text('/ day', style: GoogleFonts.outfit(color: theme.colorScheme.onSurfaceVariant, fontSize: 16)),
+                                   child: Text('/ day', style: theme.textTheme.titleMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
                                  ),
                              ],
                            ),
@@ -381,14 +374,14 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                        Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
-                          color: Colors.grey[100],
+                          color: theme.colorScheme.surfaceContainer,
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
                           widget.product.condition,
-                          style: GoogleFonts.outfit(
+                          style: theme.textTheme.bodyMedium?.copyWith(
                             fontWeight: FontWeight.w600,
-                            color: Colors.grey[800],
+                            color: theme.colorScheme.onSurface,
                           ),
                         ),
                       ),
@@ -400,21 +393,33 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                      Container(
                        padding: const EdgeInsets.all(12),
                        decoration: BoxDecoration(
-                         color: Colors.blue.withValues(alpha: 0.05),
+                         color: theme.colorScheme.secondary.withValues(alpha: 0.05),
                          borderRadius: BorderRadius.circular(12),
-                         border: Border.all(color: Colors.blue.withValues(alpha: 0.2)),
+                         border: Border.all(color: theme.colorScheme.secondary.withValues(alpha: 0.2)),
                        ),
                        child: Row(
                          children: [
-                           Icon(Icons.info_outline, color: Colors.blue[700], size: 20),
+                           Icon(Icons.info_outline, color: theme.colorScheme.secondary, size: 20),
                            const SizedBox(width: 8),
                            Expanded(
                              child: Column(
                                crossAxisAlignment: CrossAxisAlignment.start,
                                children: [
-                                 Text("Rental Details", style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Colors.blue[800])),
-                                 Text("Deposit required: RM ${widget.product.rentalDeposit.toStringAsFixed(2)}", style: GoogleFonts.outfit(color: Colors.blue[800], fontSize: 13)),
-                                 Text("Max Duration: ${widget.product.maxRentalDuration} days", style: GoogleFonts.outfit(color: Colors.blue[800], fontSize: 13)),
+                                 Text(
+                                   "Rental Details",
+                                   style: theme.textTheme.bodyMedium?.copyWith(
+                                     fontWeight: FontWeight.bold,
+                                     color: theme.colorScheme.onSecondaryContainer,
+                                   ),
+                                 ),
+                                 Text(
+                                   "Deposit required: RM ${widget.product.rentalDeposit.toStringAsFixed(2)}",
+                                   style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSecondaryContainer),
+                                 ),
+                                 Text(
+                                   "Max Duration: ${widget.product.maxRentalDuration} days",
+                                   style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSecondaryContainer),
+                                 ),
                                ]
                              )
                            )
@@ -428,18 +433,21 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                      Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                         decoration: BoxDecoration(
-                           color: Colors.green.withValues(alpha: 0.1),
+                           color: theme.colorScheme.tertiary.withValues(alpha: 0.1),
                            borderRadius: BorderRadius.circular(8),
-                           border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
+                           border: Border.all(color: theme.colorScheme.tertiary.withValues(alpha: 0.3)),
                         ),
                         child: Row(
                            mainAxisSize: MainAxisSize.min,
                            children: [
-                               const Icon(Icons.eco, color: Colors.green, size: 18),
+                               Icon(Icons.eco, color: theme.colorScheme.tertiary, size: 18),
                                const SizedBox(width: 8),
                                Text(
                                    "Eco-Impact: Saves ${widget.product.co2Saved} kg CO2e",
-                                   style: GoogleFonts.outfit(color: Colors.green[800], fontWeight: FontWeight.bold, fontSize: 13)
+                                   style: theme.textTheme.bodySmall?.copyWith(
+                                     color: theme.colorScheme.onTertiaryContainer,
+                                     fontWeight: FontWeight.bold,
+                                   ),
                                )
                            ],
                         ),
@@ -458,18 +466,16 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                     child: Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                      color: theme.colorScheme.surfaceContainerHighest,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Theme.of(context).brightness == Brightness.dark ? Theme.of(context).colorScheme.outlineVariant : Colors.grey.withValues(alpha: 0.1)),
-                      boxShadow: Theme.of(context).brightness == Brightness.dark 
-                          ? [] 
-                          : [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.03),
-                                blurRadius: 10,
-                                offset: const Offset(0, 4),
-                              )
-                            ],
+                      border: Border.all(color: theme.colorScheme.outlineVariant),
+                      boxShadow: [
+                        BoxShadow(
+                          color: theme.colorScheme.shadow.withValues(alpha: 0.03),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        )
+                      ],
                     ),
                     child: Row(
                       children: [
@@ -482,7 +488,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                           child: widget.product.sellerAvatar.isEmpty
                               ? Text(
                                   widget.product.sellerName[0].toUpperCase(),
-                                  style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: theme.colorScheme.secondary),
+                                  style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold, color: theme.colorScheme.secondary),
                                 )
                               : null,
                         ),
@@ -493,7 +499,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                             children: [
                               Text(
                                   "Seller",
-                                  style: GoogleFonts.outfit(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12)
+                                  style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)
                               ),
                               Row(
                                 children: [
@@ -502,22 +508,21 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                                       widget.product.sellerName,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 16),
+                                      style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold),
                                     ),
                                   ),
                                   const SizedBox(width: 8),
-                                  const Icon(Icons.star_rounded, size: 16, color: Colors.amber),
+                                  Icon(Icons.star_rounded, size: 16, color: theme.colorScheme.secondary),
                                   Text(
                                     '${widget.product.sellerReputation.toStringAsFixed(1)} (${widget.product.sellerTotalReviews})',
-                                    style: GoogleFonts.outfit(fontSize: 14, color: Theme.of(context).colorScheme.onSurface, fontWeight: FontWeight.bold),
+                                    style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface, fontWeight: FontWeight.bold),
                                   ),
                                 ],
                               ),
                             ],
                           ),
                         ),
-                        const Spacer(),
-                        Icon(Icons.chevron_right, color: Theme.of(context).colorScheme.onSurfaceVariant)
+                        Icon(Icons.chevron_right, color: theme.colorScheme.onSurfaceVariant)
                       ],
                     ),
                   ),
@@ -526,7 +531,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                   const SizedBox(height: 32),
                   // Seller Portfolio
                   if (_sellerProducts.isNotEmpty) ...[
-                      Text("More from ${widget.product.sellerName}", style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 18)),
+                      Text("More from ${widget.product.sellerName}", style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
                       const SizedBox(height: 12),
                       SizedBox(
                         height: 140,
@@ -551,9 +556,9 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                                         width: 110,
                                         margin: const EdgeInsets.only(right: 12),
                                         decoration: BoxDecoration(
-                                            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                                            color: theme.colorScheme.surfaceContainerHighest,
                                             borderRadius: BorderRadius.circular(12),
-                                            border: Border.all(color: Theme.of(context).brightness == Brightness.dark ? Theme.of(context).colorScheme.outlineVariant : Colors.grey.shade200)
+                                            border: Border.all(color: theme.colorScheme.outlineVariant)
                                         ),
                                         child: Column(
                                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -567,7 +572,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                                                                 fit: BoxFit.cover,
                                                                 width: double.infinity,
                                                               )
-                                                            : Container(color: Colors.grey[100]),
+                                                            : Container(color: theme.colorScheme.surfaceContainer),
                                                     ),
                                                 ),
                                                 Padding(
@@ -575,8 +580,8 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                                                     child: Column(
                                                         crossAxisAlignment: CrossAxisAlignment.start,
                                                         children: [
-                                                            Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.bold)),
-                                                            Text('RM ${item.price.toStringAsFixed(0)}', style: GoogleFonts.outfit(fontSize: 12, color: Theme.of(context).colorScheme.primary)),
+                                                            Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold)),
+                                                            Text('RM ${item.price.toStringAsFixed(0)}', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.primary)),
                                                         ],
                                                     ),
                                                 )
@@ -589,17 +594,17 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                       ),
                       const SizedBox(height: 32),
                   ],
-                  Text('Description', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 18)),
+                  Text('Description', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
                   Text(
                     widget.product.description,
-                    style: GoogleFonts.outfit(color: Theme.of(context).colorScheme.onSurfaceVariant, height: 1.6, fontSize: 15),
+                    style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant, height: 1.6),
                   ).animate().fadeIn(duration: 500.ms, delay: 400.ms),
                   
                   const SizedBox(height: 32),
                   // Similar Items Section
                   if (_similarProducts.isNotEmpty) ...[
-                      Text("Similar Items Recommended", style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 18)),
+                      Text("Similar Items Recommended", style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
                       const SizedBox(height: 12),
                       SizedBox(
                         height: 140,
@@ -623,9 +628,9 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                                         width: 110,
                                         margin: const EdgeInsets.only(right: 12),
                                         decoration: BoxDecoration(
-                                            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                                            color: theme.colorScheme.surfaceContainerHighest,
                                             borderRadius: BorderRadius.circular(12),
-                                            border: Border.all(color: Theme.of(context).brightness == Brightness.dark ? Theme.of(context).colorScheme.outlineVariant : Colors.grey.shade200)
+                                            border: Border.all(color: theme.colorScheme.outlineVariant)
                                         ),
                                         child: Column(
                                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -639,7 +644,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                                                                 fit: BoxFit.cover,
                                                                 width: double.infinity,
                                                               )
-                                                            : Container(color: Colors.grey[100]),
+                                                            : Container(color: theme.colorScheme.surfaceContainer),
                                                     ),
                                                 ),
                                                 Padding(
@@ -647,8 +652,8 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                                                     child: Column(
                                                         crossAxisAlignment: CrossAxisAlignment.start,
                                                         children: [
-                                                            Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.bold)),
-                                                            Text('RM ${item.price.toStringAsFixed(0)}', style: GoogleFonts.outfit(fontSize: 12, color: Theme.of(context).colorScheme.primary)),
+                                                            Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold)),
+                                                            Text('RM ${item.price.toStringAsFixed(0)}', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.primary)),
                                                         ],
                                                     ),
                                                 )
@@ -671,16 +676,14 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
       bottomNavigationBar: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          boxShadow: Theme.of(context).brightness == Brightness.dark 
-              ? [] 
-              : [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
-                    blurRadius: 20,
-                    offset: const Offset(0, -5),
-                  )
-                ],
+          color: theme.colorScheme.surface,
+          boxShadow: [
+            BoxShadow(
+              color: theme.colorScheme.shadow.withValues(alpha: 0.05),
+              blurRadius: 20,
+              offset: const Offset(0, -5),
+            )
+          ],
         ),
         child: SafeArea(
           child: _buildBottomBar(context, theme),
@@ -704,7 +707,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                      ));
                   },
                   icon: const Icon(Icons.edit_outlined),
-                  label: Text('Edit Listing', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+                  label: const Text('Edit Listing'),
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     side: BorderSide(color: theme.colorScheme.primary),
@@ -717,10 +720,10 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                  child: ElevatedButton.icon(
                     onPressed: _deleteProduct, 
                     icon: const Icon(Icons.delete_outline),
-                    label: Text('Remove', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+                    label: const Text('Remove'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Theme.of(context).brightness == Brightness.dark ? Colors.red.withValues(alpha: 0.2) : Colors.red[50],
-                      foregroundColor: Colors.red,
+                      backgroundColor: theme.colorScheme.errorContainer,
+                      foregroundColor: theme.colorScheme.onErrorContainer,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       elevation: 0,
@@ -749,7 +752,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                     side: BorderSide(color: theme.colorScheme.primary),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  child: Text('Chat', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+                  child: const Text('Chat'),
                 ),
               ),
               const SizedBox(width: 16),
@@ -758,28 +761,28 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                   onPressed: () => _showBuyConfirmation(context),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: theme.colorScheme.primary,
-                    foregroundColor: Colors.white,
+                    foregroundColor: theme.colorScheme.onPrimary,
                     elevation: 0,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  child: Text(widget.product.type == 'Rent' ? 'Rent Now' : 'Buy Now', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+                  child: Text(widget.product.type == 'Rent' ? 'Rent Now' : 'Buy Now'),
                 ),
               ),
             ],
           );
   }
 
-
   void _deleteProduct() async {
+      final theme = Theme.of(context);
       final confirm = await showDialog(
           context: context, 
           builder: (context) => AlertDialog(
-              title: Text("Delete Listing?", style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
-              content: Text("Are you sure you want to remove this item? This cannot be undone.", style: GoogleFonts.outfit()),
+              title: Text("Delete Listing?", style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+              content: const Text("Are you sure you want to remove this item? This cannot be undone."),
               actions: [
                   TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancel")),
-                  TextButton(onPressed: () => Navigator.pop(context, true), child: const Text("Delete", style: TextStyle(color: Colors.red))),
+                  TextButton(onPressed: () => Navigator.pop(context, true), child: Text("Delete", style: TextStyle(color: theme.colorScheme.error))),
               ],
           )
       );
@@ -789,17 +792,41 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
               final apiClient = ApiClient();
               await apiClient.delete('/products/${widget.product.id}');
               if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Listing Deleted")));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: const Text("Listing deleted successfully!"),
+                      backgroundColor: theme.colorScheme.primary,
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
                   Navigator.pop(context); // Go back
               }
           } catch (e) {
-              if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Failed to delete: $e")));
+              if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text("Failed to delete: ${_getFriendlyErrorMessage(e)}"),
+                      backgroundColor: theme.colorScheme.error,
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+              }
           }
       }
   }
 
+  String _getFriendlyErrorMessage(dynamic e) {
+    final message = e.toString();
+    if (message.contains('SocketException') || message.contains('Connection error') || message.contains('Failed host lookup')) {
+      return 'Network error. Please check your internet connection and try again.';
+    }
+    if (message.contains('TimeoutException') || message.contains('Connection timed out')) {
+      return 'Connection timed out. Please check your network and try again.';
+    }
+    return message.replaceAll(RegExp(r'^Exception:\s*'), '').replaceAll(RegExp(r'^ApiException:\s*'), '');
+  }
+
   String _timeAgo(DateTime date) {
-    // Simple helper for now, usually use timeago package
     final diff = DateTime.now().difference(date);
     if (diff.inDays > 0) return '${diff.inDays}d ago';
     if (diff.inHours > 0) return '${diff.inHours}h ago';
@@ -810,7 +837,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
       final session = UserSession();
       if (!session.isLoggedIn) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Login to save items', style: GoogleFonts.outfit()),
+            content: const Text('Login to save items'),
             backgroundColor: Theme.of(context).colorScheme.error,
             behavior: SnackBarBehavior.floating,
           ));
@@ -899,8 +926,8 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
 
   void _showBuyConfirmation(BuildContext context) {
     if (!UserSession().isLoggedIn) {
-       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-         content: Text('Please login first', style: GoogleFonts.outfit()),
+       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+         content: Text('Please login first'),
          behavior: SnackBarBehavior.floating,
        ));
        return;
@@ -913,6 +940,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
       isScrollControlled: true, // Allow full height for keyboard
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (context) {
+        final theme = Theme.of(context);
         String? selectedPaymentMethod;
         return StatefulBuilder(
           builder: (context, setModalState) {
@@ -945,16 +973,16 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(isRent ? 'Confirm Rental' : 'Confirm Purchase', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.bold)),
+                Text(isRent ? 'Confirm Rental' : 'Confirm Purchase', style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 16),
                 
                 // Location Selector (FYP Map Requirement)
-                Text("Select Meetup Location", style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+                Text("Select Meetup Location", style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
                 Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12),
                     decoration: BoxDecoration(
-                        border: Border.all(color: Colors.grey.shade300),
+                        border: Border.all(color: theme.colorScheme.outline),
                         borderRadius: BorderRadius.circular(12)
                     ),
                     child: DropdownButtonHideUnderline(
@@ -965,9 +993,9 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                                 value: loc,
                                 child: Row(
                                     children: [
-                                        const Icon(Icons.location_on, color: Colors.blue, size: 18),
+                                        Icon(Icons.location_on, color: theme.colorScheme.primary, size: 18),
                                         const SizedBox(width: 8),
-                                        Text(loc, style: GoogleFonts.outfit()),
+                                        Text(loc, style: theme.textTheme.bodyMedium),
                                     ],
                                 )
                             )).toList(),
@@ -979,12 +1007,12 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                 ),
 
                 const SizedBox(height: 16),
-                Text("Select Payment Method", style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+                Text("Select Payment Method", style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
                 Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12),
                     decoration: BoxDecoration(
-                        border: Border.all(color: Colors.grey.shade300),
+                        border: Border.all(color: theme.colorScheme.outline),
                         borderRadius: BorderRadius.circular(12)
                     ),
                     child: DropdownButtonHideUnderline(
@@ -999,11 +1027,11 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                                             method == 'Cash' 
                                                 ? Icons.money_outlined 
                                                 : (method == 'TNG' ? Icons.account_balance_wallet_outlined : Icons.account_balance_outlined), 
-                                            color: Theme.of(context).colorScheme.primary, 
+                                            color: theme.colorScheme.primary, 
                                             size: 18
                                         ),
                                         const SizedBox(width: 8),
-                                        Text(method, style: GoogleFonts.outfit()),
+                                        Text(method, style: theme.textTheme.bodyMedium),
                                     ],
                                 )
                             )).toList(),
@@ -1017,7 +1045,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                  const SizedBox(height: 16),
 
                  if (isRent) ...[
-                   Text("Select Rental Period", style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+                   Text("Select Rental Period", style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold)),
                    const SizedBox(height: 8),
                    InkWell(
                      onTap: () async {
@@ -1037,27 +1065,27 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                          },
                        );
                        if (picked != null) {
-                         int selectedDays = picked.end.difference(picked.start).inDays + 1;
-                         if (selectedDays > widget.product.maxRentalDuration) {
-                              if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                      content: Text('Maximum rental duration is ${widget.product.maxRentalDuration} days!', style: GoogleFonts.outfit()),
-                                      backgroundColor: Colors.red,
-                                      behavior: SnackBarBehavior.floating,
-                                  ));
-                              }
-                              return;
-                         }
-                         setModalState(() {
-                           _rentStartDate = picked.start;
-                           _rentEndDate = picked.end;
-                         });
+                          int selectedDays = picked.end.difference(picked.start).inDays + 1;
+                          if (selectedDays > widget.product.maxRentalDuration) {
+                               if (context.mounted) {
+                                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                       content: Text('Maximum rental duration is ${widget.product.maxRentalDuration} days!'),
+                                       backgroundColor: theme.colorScheme.error,
+                                       behavior: SnackBarBehavior.floating,
+                                   ));
+                               }
+                               return;
+                          }
+                          setModalState(() {
+                            _rentStartDate = picked.start;
+                            _rentEndDate = picked.end;
+                          });
                        }
                      },
                      child: Container(
                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                        decoration: BoxDecoration(
-                         border: Border.all(color: Colors.grey.shade300),
+                         border: Border.all(color: theme.colorScheme.outline),
                          borderRadius: BorderRadius.circular(12),
                        ),
                        child: Row(
@@ -1067,11 +1095,11 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                              _rentStartDate != null && _rentEndDate != null
                                  ? '${_rentStartDate!.toString().split(' ')[0]} to ${_rentEndDate!.toString().split(' ')[0]}'
                                  : 'Tap to select dates',
-                             style: GoogleFonts.outfit(
-                               color: _rentStartDate != null ? Colors.black87 : Colors.grey.shade600,
+                             style: theme.textTheme.bodyMedium?.copyWith(
+                               color: _rentStartDate != null ? theme.colorScheme.onSurface : theme.colorScheme.onSurfaceVariant,
                              ),
                            ),
-                           const Icon(Icons.calendar_today, size: 18, color: Colors.blue),
+                           Icon(Icons.calendar_today, size: 18, color: theme.colorScheme.primary),
                          ],
                        ),
                      ),
@@ -1079,7 +1107,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                    const SizedBox(height: 16),
                  ],
                 
-                Text(isRent ? 'Rental Summary:' : 'Product Summary:', style: GoogleFonts.outfit(color: Colors.grey[600])),
+                Text(isRent ? 'Rental Summary:' : 'Product Summary:', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
                  const SizedBox(height: 8),
                 Row(
                   children: [
@@ -1087,28 +1115,28 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                       borderRadius: BorderRadius.circular(8),
                       child: widget.product.imageUrl.isNotEmpty 
                         ? CachedNetworkImage(imageUrl: widget.product.imageUrl, width: 60, height: 60, fit: BoxFit.cover)
-                        : Container(width: 60, height: 60, color: Colors.grey[200]),
+                        : Container(width: 60, height: 60, color: theme.colorScheme.surfaceContainer),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(widget.product.title, style: GoogleFonts.outfit(fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
+                          Text(widget.product.title, style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
                           if (isRent) ...[
                             Text(
                               'RM ${widget.product.rentalPricePerDay.toStringAsFixed(2)} / day',
-                              style: GoogleFonts.outfit(color: Colors.grey[700], fontSize: 12)
+                              style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)
                             ),
                               if (_rentStartDate != null && _rentEndDate != null)
                                 Text(
                                   'Total ($rentDays days): RM ${totalRentCost.toStringAsFixed(2)}',
-                                  style: GoogleFonts.outfit(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold)
+                                  style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.primary, fontWeight: FontWeight.bold)
                                 ),
                           ] else ...[
                             Text(
                                 'RM ${widget.product.price.toStringAsFixed(2)}', 
-                                style: GoogleFonts.outfit(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold)
+                                style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.primary, fontWeight: FontWeight.bold)
                             ),
                           ],
                         ],
@@ -1130,14 +1158,14 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                       ); 
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Theme.of(context).colorScheme.primary,
-                      foregroundColor: Colors.white,
+                      backgroundColor: theme.colorScheme.primary,
+                      foregroundColor: theme.colorScheme.onPrimary,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                     child: _isBuying
-                        ? const Center(child: CircularProgressIndicator(color: Colors.white))
-                        : Text('Confirm & Schedule', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+                        ? Center(child: CircularProgressIndicator(color: theme.colorScheme.onPrimary))
+                        : const Text('Confirm & Schedule'),
                   ),
                 ),
               ],
@@ -1150,6 +1178,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
 }
 
   void _buyNow(BuildContext context, double finalPrice, {DateTime? rentStartDate, DateTime? rentEndDate, String? paymentMethod}) async {
+      final theme = Theme.of(context);
       setState(() => _isBuying = true);
       try {
         final apiClient = ApiClient();
@@ -1173,17 +1202,18 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
         if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text(widget.product.type == 'Rent' ? 'Rental Request Sent!' : 'Purchase Request Sent!', style: GoogleFonts.outfit()),
-                backgroundColor: Colors.green,
+                content: Text(widget.product.type == 'Rent' ? 'Rental Request Sent!' : 'Purchase Request Sent!'),
+                backgroundColor: theme.colorScheme.primary,
                 behavior: SnackBarBehavior.floating,
               )
             );
-            Navigator.pop(context); // Close details page on success? Or just stay. Usually stay is fine or go to chat.
+            Navigator.pop(context);
         }
       } catch (e) {
           if (context.mounted) {
              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-               content: Text('Failed: $e', style: GoogleFonts.outfit()),
+               content: Text('Failed: ${_getFriendlyErrorMessage(e)}'),
+               backgroundColor: theme.colorScheme.error,
                behavior: SnackBarBehavior.floating,
              ));
           }
@@ -1195,15 +1225,15 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
   int _currentImageIndex = 0;
 
   Widget _buildImageGallery(Product product) {
-    // Priority: imageUrls > imageUrl
+    final theme = Theme.of(context);
     List<String> images = product.imageUrls.isNotEmpty 
         ? product.imageUrls 
         : (product.imageUrl.isNotEmpty ? [product.imageUrl] : []);
     
     if (images.isEmpty) {
         return Container(
-            color: Colors.grey[200],
-            child: const Icon(Icons.image_not_supported, size: 64, color: Colors.grey),
+            color: theme.colorScheme.surfaceContainer,
+            child: Icon(Icons.image_not_supported, size: 64, color: theme.colorScheme.onSurfaceVariant),
         );
     }
 
@@ -1216,11 +1246,24 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
           },
           itemCount: images.length,
           itemBuilder: (context, index) {
-            return CachedNetworkImage(
-                    imageUrl: images[index],
-                    fit: BoxFit.cover,
-                    placeholder: (context, url) => Container(color: Colors.grey[200]),
-                    errorWidget: (context, url, error) => const Icon(Icons.error),
+            return GestureDetector(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => FullScreenImageViewer(
+                      imageUrls: images,
+                      initialIndex: index,
+                    ),
+                  ),
+                );
+              },
+              child: CachedNetworkImage(
+                imageUrl: images[index],
+                fit: BoxFit.cover,
+                placeholder: (context, url) => Container(color: theme.colorScheme.surfaceContainer),
+                errorWidget: (context, url, error) => const Icon(Icons.error),
+              ),
             );
           },
         ),
@@ -1238,10 +1281,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                   margin: const EdgeInsets.symmetric(horizontal: 4.0),
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: (Theme.of(context).brightness == Brightness.dark
-                            ? Colors.white
-                            : Colors.black)
-                        .withValues(alpha: _currentImageIndex == entry.key ? 0.9 : 0.4),
+                    color: theme.colorScheme.onSurface.withValues(alpha: _currentImageIndex == entry.key ? 0.9 : 0.4),
                   ),
                 );
               }).toList(),

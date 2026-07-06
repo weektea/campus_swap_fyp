@@ -4,6 +4,11 @@ import random
 import os
 
 def test_api():
+    """
+    Validates API endpoint correctness. Picks random images from the dataset and issues HTTP POST
+    requests to the running API microservice at http://localhost:5000/predict/image, reporting prediction
+    categories, confidence, status, and computing total accuracy.
+    """
     dataset_dir = "dataset/user_corrections"
     images = glob.glob(os.path.join(dataset_dir, "**", "*.jpg"), recursive=True)
     images.extend(glob.glob(os.path.join(dataset_dir, "**", "*.png"), recursive=True))

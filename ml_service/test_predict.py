@@ -9,6 +9,11 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from model_vision import predict_image
 
 def main():
+    """
+    Offline model inference evaluator. Accepts an image path as a command-line argument to run predictions.
+    If no argument is passed, it picks 5 random samples from the feedback dataset and runs predictions,
+    printing true label, predicted label, confidence, status, and average accuracy.
+    """
     print("==================================================")
     print("Campus Swap ML Prediction Tester")
     print("==================================================")

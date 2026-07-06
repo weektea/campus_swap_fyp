@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:campus_swap/core/api/api_client.dart';
 import 'package:campus_swap/core/session/user_session.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:campus_swap/core/widgets/empty_state_widget.dart';
 import 'package:campus_swap/features/product/presentation/pages/sell_page.dart';
 import 'package:campus_swap/features/profile/presentation/pages/transaction_detail_page.dart';
@@ -58,9 +57,9 @@ class _MyTransactionsPageState extends State<MyTransactionsPage> with SingleTick
     }
   }
 
-
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final filteredBuying = _filterStatus == 'All' 
         ? _buyingTransactions 
         : _buyingTransactions.where((t) => t['status']?.toString().toLowerCase() == _filterStatus.toLowerCase()).toList();
@@ -70,19 +69,25 @@ class _MyTransactionsPageState extends State<MyTransactionsPage> with SingleTick
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('My Orders', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+        title: Text(
+          'My Orders',
+          style: theme.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.bold,
+            color: theme.colorScheme.onPrimary,
+          ),
+        ),
         automaticallyImplyLeading: widget.isPushed,
         bottom: TabBar(
             controller: _tabController,
-            labelColor: Colors.white,
-            unselectedLabelColor: Colors.white60,
-            indicatorColor: Colors.white,
+            labelColor: theme.colorScheme.onPrimary,
+            unselectedLabelColor: theme.colorScheme.onPrimary.withValues(alpha: 0.6),
+            indicatorColor: theme.colorScheme.onPrimary,
             tabs: [
                 Tab(text: 'Purchases (${filteredBuying.length})'), 
                 Tab(text: 'Sales (${filteredSelling.length})')
             ],
-            labelStyle: GoogleFonts.outfit(fontWeight: FontWeight.bold),
-            unselectedLabelStyle: GoogleFonts.outfit(),
+            labelStyle: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+            unselectedLabelStyle: theme.textTheme.titleSmall,
         ),
       ),
       body: Column(
@@ -91,7 +96,10 @@ class _MyTransactionsPageState extends State<MyTransactionsPage> with SingleTick
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
                 child: Row(
                     children: [
-                        Text("Filter by:", style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+                        Text(
+                          "Filter by:",
+                          style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold),
+                        ),
                         const SizedBox(width: 12),
                         Expanded(
                             child: DropdownButtonFormField<String>(
@@ -101,7 +109,7 @@ class _MyTransactionsPageState extends State<MyTransactionsPage> with SingleTick
                                     contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                                 ),
-                                items: _statusOptions.map((s) => DropdownMenuItem(value: s, child: Text(s, style: GoogleFonts.outfit()))).toList(),
+                                items: _statusOptions.map((s) => DropdownMenuItem(value: s, child: Text(s, style: theme.textTheme.bodyMedium))).toList(),
                                 onChanged: (val) {
                                     if (val != null) setState(() => _filterStatus = val);
                                 },
@@ -127,6 +135,7 @@ class _MyTransactionsPageState extends State<MyTransactionsPage> with SingleTick
   }
 
   Widget _buildList(List<dynamic> transactions, {required bool isBuying}) {
+      final theme = Theme.of(context);
       if (transactions.isEmpty) {
           return EmptyStateWidget(
               icon: isBuying ? Icons.shopping_bag_outlined : Icons.receipt_long_outlined,
@@ -163,9 +172,9 @@ class _MyTransactionsPageState extends State<MyTransactionsPage> with SingleTick
             return Container(
                 margin: const EdgeInsets.only(bottom: 16),
                 decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surface,
+                    color: theme.colorScheme.surface,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Theme.of(context).brightness == Brightness.dark ? Theme.of(context).colorScheme.outlineVariant : Colors.grey.withValues(alpha: 0.2), width: 1),
+                    border: Border.all(color: theme.colorScheme.outlineVariant, width: 1),
                 ),
                 child: Column(
                   children: [
@@ -180,9 +189,15 @@ class _MyTransactionsPageState extends State<MyTransactionsPage> with SingleTick
                              child: SizedBox(
                                width: 72, height: 72,
                                child: productImg.isNotEmpty 
-                                 ? Image.network('${ApiClient.baseUrl.replaceAll('/api', '')}$productImg', fit: BoxFit.cover, 
-                                      errorBuilder: (c,o,s) => Container(color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1E1E1E) : Colors.grey[200], child: const Icon(Icons.error))) 
-                                 : Container(color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1E1E1E) : Colors.grey[200]),
+                                 ? Image.network(
+                                     '${ApiClient.baseUrl.replaceAll('/api', '')}$productImg',
+                                     fit: BoxFit.cover, 
+                                     errorBuilder: (c,o,s) => Container(
+                                       color: theme.colorScheme.surfaceContainer,
+                                       child: const Icon(Icons.error),
+                                     ),
+                                   ) 
+                                 : Container(color: theme.colorScheme.surfaceContainer),
                              ),
                            ),
                            const SizedBox(width: 16),
@@ -190,17 +205,34 @@ class _MyTransactionsPageState extends State<MyTransactionsPage> with SingleTick
                              child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                  Text(product['title'] ?? 'Unknown Item', maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 16)),
+                                  Text(
+                                    product['title'] ?? 'Unknown Item',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                                  ),
                                   const SizedBox(height: 4),
-                                  Text('RM ${item['amount']}', style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 15, color: Theme.of(context).colorScheme.primary)),
+                                  Text(
+                                    'RM ${item['amount']}',
+                                    style: theme.textTheme.titleSmall?.copyWith(
+                                      color: theme.colorScheme.primary,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
                                   const SizedBox(height: 8),
                                   Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                       decoration: BoxDecoration(
-                                          color: _getStatusColor(status).withValues(alpha: 0.15),
+                                          color: _getStatusColor(context, status).withValues(alpha: 0.15),
                                           borderRadius: BorderRadius.circular(8)
                                       ),
-                                      child: Text(status, style: GoogleFonts.outfit(color: _getStatusColor(status), fontWeight: FontWeight.w600, fontSize: 12)),
+                                      child: Text(
+                                        status,
+                                        style: theme.textTheme.labelSmall?.copyWith(
+                                          color: _getStatusColor(context, status),
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
                                   ),
                               ],
                              ),
@@ -221,11 +253,14 @@ class _MyTransactionsPageState extends State<MyTransactionsPage> with SingleTick
                                       _fetchAllTransactions();
                                   },
                                   style: OutlinedButton.styleFrom(
-                                      foregroundColor: Theme.of(context).colorScheme.onSurface,
-                                      side: BorderSide(color: Theme.of(context).brightness == Brightness.dark ? Theme.of(context).colorScheme.outline : Colors.grey.withValues(alpha: 0.3)),
+                                      foregroundColor: theme.colorScheme.onSurface,
+                                      side: BorderSide(color: theme.colorScheme.outline),
                                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
                                   ),
-                                  child: Text('View Progress', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 14)),
+                                  child: Text(
+                                    'View Progress',
+                                    style: theme.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.bold),
+                                  ),
                               ),
                             ),
                           ),
@@ -252,10 +287,17 @@ class _MyTransactionsPageState extends State<MyTransactionsPage> with SingleTick
                                         _fetchAllTransactions();
                                     },
                                     style: ElevatedButton.styleFrom(
-                                        backgroundColor: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF004D40) : const Color(0xFF0D503C), // Matching RateExperiencePage button
+                                        backgroundColor: theme.colorScheme.primary,
+                                        foregroundColor: theme.colorScheme.onPrimary,
                                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
                                     ),
-                                    child: Text('Rate Experience', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                                    child: Text(
+                                      'Rate Experience',
+                                      style: theme.textTheme.labelLarge?.copyWith(
+                                        color: theme.colorScheme.onPrimary,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
                                 ),
                               ),
                             ),
@@ -270,16 +312,16 @@ class _MyTransactionsPageState extends State<MyTransactionsPage> with SingleTick
       );
   }
 
-  Color _getStatusColor(String status) {
+  Color _getStatusColor(BuildContext context, String status) {
+      final theme = Theme.of(context);
       switch(status.toString().toLowerCase()) {
           case 'pending': return Colors.orange;
-          case 'scheduled': return Colors.blue;
+          case 'scheduled': return theme.colorScheme.secondary;
           case 'to confirm': return Colors.amber;
-          case 'completed': return Colors.green;
-          case 'cancelled': return Colors.red;
-          case 'disputed': return Colors.purple;
-          default: return Colors.grey;
+          case 'completed': return theme.colorScheme.primary;
+          case 'cancelled': return theme.colorScheme.error;
+          case 'disputed': return theme.colorScheme.errorContainer;
+          default: return theme.colorScheme.onSurfaceVariant;
       }
   }
-
 }

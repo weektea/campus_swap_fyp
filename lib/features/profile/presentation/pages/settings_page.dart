@@ -5,10 +5,9 @@ import 'package:campus_swap/core/session/user_session.dart';
 import 'package:campus_swap/features/auth/presentation/pages/login_page.dart';
 import 'package:campus_swap/core/theme/theme_provider.dart';
 import 'package:campus_swap/core/services/socket_service.dart';
-import 'package:campus_swap/features/profile/presentation/pages/help_page.dart';
+import 'package:campus_swap/core/services/notification_service.dart';
 import 'package:campus_swap/core/api/api_client.dart';
 import 'package:campus_swap/features/profile/presentation/pages/change_password_page.dart';
-import 'package:campus_swap/features/profile/presentation/pages/edit_profile_page.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -22,7 +21,6 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _emailUpdates = false;
   bool _showFullName = true;
   bool _showPhoneNumber = true;
-  bool _isLoadingSettings = false;
 
   @override
   void initState() {
@@ -31,7 +29,6 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _loadPrivacySettings() async {
-    setState(() => _isLoadingSettings = true);
     try {
       final apiClient = ApiClient();
       final res = await apiClient.get('/auth/user/${UserSession().userId}');
@@ -43,10 +40,9 @@ class _SettingsPageState extends State<SettingsPage> {
         });
       }
     } catch (_) {}
-    finally {
-      if (mounted) setState(() => _isLoadingSettings = false);
-    }
   }
+
+
 
   Future<void> _updatePrivacySetting(String key, bool value) async {
     try {
@@ -55,24 +51,18 @@ class _SettingsPageState extends State<SettingsPage> {
         key: value,
       });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Privacy setting updated!'),
-            duration: const Duration(milliseconds: 500),
-          ),
-        );
+        _showSuccessSnackBar(context, 'Privacy setting updated!');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to save setting: $e')),
-        );
+        _showErrorSnackBar(context, 'Failed to save setting: ${_getFriendlyErrorMessage(e)}');
       }
     }
   }
 
   void _logout() {
     SocketService().disconnect();
+    NotificationService().stopPolling();
     UserSession().clear();
     Navigator.pushAndRemoveUntil(
       context, 
@@ -205,7 +195,42 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
+
+  void _showErrorSnackBar(BuildContext context, String message) {
+    final theme = Theme.of(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message, style: GoogleFonts.outfit()),
+        backgroundColor: theme.colorScheme.error,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  void _showSuccessSnackBar(BuildContext context, String message) {
+    final theme = Theme.of(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message, style: GoogleFonts.outfit()),
+        backgroundColor: theme.colorScheme.primary,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  String _getFriendlyErrorMessage(dynamic e) {
+    final message = e.toString();
+    if (message.contains('SocketException') || message.contains('Connection error') || message.contains('Failed host lookup')) {
+      return 'Network error. Please check your internet connection and try again.';
+    }
+    if (message.contains('TimeoutException') || message.contains('Connection timed out')) {
+      return 'Connection timed out. Please check your network and try again.';
+    }
+    return message.replaceAll(RegExp(r'^Exception:\s*'), '').replaceAll(RegExp(r'^ApiException:\s*'), '');
+  }
+
   void _deactivateAccount() async {
+      final theme = Theme.of(context);
       final confirm = await showDialog(
           context: context, 
           builder: (context) => AlertDialog(
@@ -213,7 +238,7 @@ class _SettingsPageState extends State<SettingsPage> {
               content: Text("Are you sure you want to deactivate your account? Your public profile will be hidden, but your historical transaction data will be securely preserved to comply with ongoing responsibilities.", style: GoogleFonts.outfit()),
               actions: [
                   TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancel")),
-                  TextButton(onPressed: () => Navigator.pop(context, true), child: const Text("Deactivate", style: TextStyle(color: Colors.red))),
+                  TextButton(onPressed: () => Navigator.pop(context, true), child: Text("Deactivate", style: TextStyle(color: theme.colorScheme.error))),
               ],
           )
       );
@@ -224,11 +249,13 @@ class _SettingsPageState extends State<SettingsPage> {
              await apiClient.delete('/auth/user/${UserSession().userId}'); 
              
              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Account deactivated successfully. Goodbye!")));
+                _showSuccessSnackBar(context, "Account deactivated successfully. Goodbye!");
                 _logout();
              }
           } catch (e) {
-              if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Failed to deactivate account: $e")));
+              if (mounted) {
+                  _showErrorSnackBar(context, "Failed to deactivate account: ${_getFriendlyErrorMessage(e)}");
+              }
           }
       }
   }

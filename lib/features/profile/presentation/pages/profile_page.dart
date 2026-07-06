@@ -3,6 +3,7 @@ import 'package:campus_swap/core/api/api_client.dart';
 import 'package:campus_swap/core/session/user_session.dart';
 import 'package:campus_swap/features/auth/presentation/pages/login_page.dart';
 import 'package:campus_swap/core/services/socket_service.dart';
+import 'package:campus_swap/core/services/notification_service.dart';
 import 'package:campus_swap/features/profile/presentation/pages/my_listings_page.dart';
 import 'package:campus_swap/features/profile/presentation/pages/my_purchases_page.dart';
 import 'package:campus_swap/features/profile/presentation/pages/saved_items_page.dart';
@@ -12,7 +13,6 @@ import 'package:campus_swap/features/profile/presentation/pages/sustainability_d
 import 'package:campus_swap/features/profile/presentation/pages/student_profile_page.dart';
 import 'package:campus_swap/features/home/presentation/pages/home_page.dart';
 import 'package:campus_swap/features/profile/presentation/pages/profile_analytics_dashboard_page.dart';
-// import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 
 class ProfilePage extends StatefulWidget {
@@ -32,7 +32,6 @@ class _ProfilePageState extends State<ProfilePage> {
   double _reputationScore = 5.0;
   int _totalReviews = 0;
 
-
   @override
   void initState() {
     super.initState();
@@ -46,7 +45,6 @@ class _ProfilePageState extends State<ProfilePage> {
       if (!session.isLoggedIn) return;
       try {
           final apiClient = ApiClient();
-          // Assuming we have a route GET /auth/me or similar, if not we use /auth/user/:id
           final resData = await apiClient.get('/auth/user/${session.userId}');
           if (resData != null && resData['user'] != null) {
               final userData = resData['user'];
@@ -79,7 +77,6 @@ class _ProfilePageState extends State<ProfilePage> {
                   if (userData['total_reviews'] != null) {
                       _totalReviews = int.tryParse(userData['total_reviews'].toString()) ?? 0;
                   }
-
               });
           }
       } catch (e) {
@@ -89,7 +86,6 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Future<void> _fetchStats() async {
       final session = UserSession();
-// ... (rest of _fetchStats same logic)
       if (!session.isLoggedIn) {
           setState(() => _loadingStats = false);
           return;
@@ -99,7 +95,6 @@ class _ProfilePageState extends State<ProfilePage> {
           final apiClient = ApiClient();
           // Fetch selling transactions that are completed
           final res = await apiClient.get('/transactions/user/${session.userId}?type=selling');
-// ...
           if (res is List) {
               if (mounted) {
                   setState(() {
@@ -142,37 +137,45 @@ class _ProfilePageState extends State<ProfilePage> {
           }
       } catch (e) {
           if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Upload Failed: $e')));
-              setState(() => _isUploading = false);
+               ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Upload Failed: $e')));
+               setState(() => _isUploading = false);
           }
       }
   }
 
-
   @override
   Widget build(BuildContext context) {
     final session = UserSession();
+    final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('My Profile')),
+      appBar: AppBar(
+        title: Text(
+          'My Profile',
+          style: theme.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.bold,
+            color: theme.colorScheme.onPrimary,
+          ),
+        ),
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(
           children: [
             const SizedBox(height: 10),
             
-            // Row 1: The CircleAvatar (just the image)
+            // Row 1: The CircleAvatar
             GestureDetector(
               onTap: _pickAndUploadAvatar,
               child: CircleAvatar(
                 radius: 45,
-                backgroundColor: Colors.teal,
+                backgroundColor: theme.colorScheme.primary,
                 backgroundImage: session.avatarUrl != null 
                     ? NetworkImage('${ApiClient.baseUrl.replaceAll('/api', '')}${session.avatarUrl}') 
                     : null,
                 child: _isUploading 
-                  ? const CircularProgressIndicator(color: Colors.white)
-                  : (session.avatarUrl == null ? const Icon(Icons.person, size: 45, color: Colors.white) : null),
+                  ? CircularProgressIndicator(color: theme.colorScheme.onPrimary)
+                  : (session.avatarUrl == null ? Icon(Icons.person, size: 45, color: theme.colorScheme.onPrimary) : null),
               ),
             ),
             const SizedBox(height: 8),
@@ -183,18 +186,21 @@ class _ProfilePageState extends State<ProfilePage> {
               children: [
                 Text(
                   session.fullName ?? (session.username != null ? '@${session.username}' : 'Guest User'), 
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(width: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
-                    color: Colors.green[100],
+                    color: theme.colorScheme.primaryContainer,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Text(
+                  child: Text(
                     'Verified', 
-                    style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 11),
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.primary,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
               ],
@@ -205,7 +211,10 @@ class _ProfilePageState extends State<ProfilePage> {
             if (session.username != null) ...[
               Text(
                 '@${session.username}',
-                style: const TextStyle(fontSize: 14, color: Colors.grey, fontWeight: FontWeight.w500),
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
               const SizedBox(height: 6),
             ],
@@ -218,11 +227,14 @@ class _ProfilePageState extends State<ProfilePage> {
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.star_rounded, size: 20, color: Colors.amber),
+                      Icon(Icons.star_rounded, size: 20, color: theme.colorScheme.secondary),
                       const SizedBox(width: 4),
                       Text(
                         '${_reputationScore.toStringAsFixed(1)} ($_totalReviews)',
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87),
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: theme.colorScheme.onSurface,
+                        ),
                       ),
                     ],
                   ),
@@ -238,9 +250,14 @@ class _ProfilePageState extends State<ProfilePage> {
                       visualDensity: VisualDensity.compact,
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                      side: BorderSide(color: Colors.teal.shade300),
+                      side: BorderSide(color: theme.colorScheme.outline),
                     ),
-                    child: Text('View Profile', style: TextStyle(color: Colors.teal.shade700, fontSize: 13)),
+                    child: Text(
+                      'View Profile',
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: theme.colorScheme.primary,
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -259,22 +276,32 @@ class _ProfilePageState extends State<ProfilePage> {
                 padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [const Color(0xFF1B5E20), Colors.green.shade600],
+                  colors: [theme.colorScheme.primary, theme.colorScheme.secondary],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
                 borderRadius: BorderRadius.circular(24),
                 boxShadow: [
-                  BoxShadow(color: Colors.green.withValues(alpha: 0.3), blurRadius: 10, offset: const Offset(0, 5))
+                  BoxShadow(
+                    color: theme.colorScheme.primary.withValues(alpha: 0.3),
+                    blurRadius: 10,
+                    offset: const Offset(0, 5),
+                  )
                 ]
               ),
               child: Column(
                 children: [
                    Row(
                     children: [
-                      const Icon(Icons.eco, color: Colors.white, size: 28),
+                      Icon(Icons.eco, color: theme.colorScheme.onPrimary, size: 28),
                       const SizedBox(width: 12),
-                      const Text("My Eco-Impact", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                      Text(
+                        "My Eco-Impact",
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          color: theme.colorScheme.onPrimary,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 16),
@@ -284,18 +311,40 @@ class _ProfilePageState extends State<ProfilePage> {
                         Column(
                         children: [
                           _loadingStats 
-                              ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                              : Text("$_itemsReused", style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
-                          Text("Items Reused", style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 12)),
+                              ? SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: theme.colorScheme.onPrimary, strokeWidth: 2))
+                              : Text(
+                                  "$_itemsReused",
+                                  style: theme.textTheme.headlineMedium?.copyWith(
+                                    color: theme.colorScheme.onPrimary,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                          Text(
+                            "Items Reused",
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onPrimary.withValues(alpha: 0.8),
+                            ),
+                          ),
                         ],
                       ),
-                      Container(height: 40, width: 1, color: Colors.white24),
+                      Container(height: 40, width: 1, color: theme.colorScheme.onPrimary.withValues(alpha: 0.24)),
                       Column(
                         children: [
                            _loadingStats 
-                              ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                              : Text("$_co2Saved kg CO2e", style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
-                          Text("Carbon Saved", style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 12)),
+                              ? SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: theme.colorScheme.onPrimary, strokeWidth: 2))
+                              : Text(
+                                  "$_co2Saved kg CO2e",
+                                  style: theme.textTheme.headlineMedium?.copyWith(
+                                    color: theme.colorScheme.onPrimary,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                          Text(
+                            "Carbon Saved",
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onPrimary.withValues(alpha: 0.8),
+                            ),
+                          ),
                         ],
                       ),
                     ],
@@ -321,26 +370,50 @@ class _ProfilePageState extends State<ProfilePage> {
             }),
             _buildMenuItem(context, Icons.bookmark_outline, 'Saved Items', () {
                Navigator.push(context, MaterialPageRoute(builder: (_) => const SavedItemsPage()));
-            }), // "Save favorite items"
+            }),
             _buildMenuItem(context, Icons.bar_chart_outlined, 'Analytics & Impact Dashboard', () {
                Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileAnalyticsDashboardPage()));
             }),
             _buildMenuItem(context, Icons.help_outline, 'Help & Support (Resolution Center)', () {
                Navigator.push(context, MaterialPageRoute(builder: (_) => const HelpCenterPage()));
-            }), // "Provide user support"
+            }),
             _buildMenuItem(context, Icons.settings_outlined, 'Settings', () {
                Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsPage()));
             }),
             const SizedBox(height: 24),
-            _buildMenuItem(context, Icons.logout, 'Logout', () {
-              // Clear session
-              SocketService().disconnect();
-              UserSession().clear();
-              Navigator.pushAndRemoveUntil(
-                context, 
-                MaterialPageRoute(builder: (_) => const LoginPage()), 
-                (route) => false
+            _buildMenuItem(context, Icons.logout, 'Logout', () async {
+              final theme = Theme.of(context);
+              final confirm = await showDialog<bool>(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: Text('Logout?', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                  content: const Text('Are you sure you want to logout of your account?'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      child: const Text('Cancel'),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, true),
+                      child: Text('Logout', style: TextStyle(color: theme.colorScheme.error, fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                ),
               );
+
+              if (confirm == true) {
+                // Clear session
+                SocketService().disconnect();
+                NotificationService().stopPolling();
+                UserSession().clear();
+                if (context.mounted) {
+                  Navigator.pushAndRemoveUntil(
+                    context, 
+                    MaterialPageRoute(builder: (_) => const LoginPage()), 
+                    (route) => false
+                  );
+                }
+              }
             }, isDestructive: true),
           ],
         ),
@@ -349,16 +422,20 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Widget _buildMenuItem(BuildContext context, IconData icon, String title, VoidCallback onTap, {bool isDestructive = false}) {
+    final theme = Theme.of(context);
     return ListTile(
-      leading: Icon(icon, color: isDestructive ? Colors.red : null),
+      leading: Icon(
+        icon,
+        color: isDestructive ? theme.colorScheme.error : theme.colorScheme.onSurfaceVariant,
+      ),
       title: Text(
         title,
-        style: TextStyle(
-          color: isDestructive ? Colors.red : null,
-          fontWeight: isDestructive ? FontWeight.bold : FontWeight.normal
+        style: theme.textTheme.bodyMedium?.copyWith(
+          color: isDestructive ? theme.colorScheme.error : theme.colorScheme.onSurface,
+          fontWeight: isDestructive ? FontWeight.bold : FontWeight.normal,
         ),
       ),
-      trailing: const Icon(Icons.chevron_right),
+      trailing: Icon(Icons.chevron_right, color: theme.colorScheme.onSurfaceVariant),
       onTap: onTap,
     );
   }

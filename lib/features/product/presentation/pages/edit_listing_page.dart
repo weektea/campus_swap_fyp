@@ -242,7 +242,7 @@ class _EditListingPageState extends State<EditListingPage> {
                                 if (_selectedPaymentMethods.length > 1) {
                                     _selectedPaymentMethods.remove(method);
                                 } else {
-                                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('At least one payment method must be accepted.')));
+                                    _showErrorSnackBar(context, 'At least one payment method must be accepted.');
                                 }
                             }
                         });
@@ -266,27 +266,60 @@ class _EditListingPageState extends State<EditListingPage> {
     );
   }
 
+  void _showErrorSnackBar(BuildContext context, String message) {
+    final theme = Theme.of(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message, style: GoogleFonts.outfit()),
+        backgroundColor: theme.colorScheme.error,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  void _showSuccessSnackBar(BuildContext context, String message) {
+    final theme = Theme.of(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message, style: GoogleFonts.outfit()),
+        backgroundColor: theme.colorScheme.primary,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  String _getFriendlyErrorMessage(dynamic e) {
+    final message = e.toString();
+    if (message.contains('SocketException') || message.contains('Connection error') || message.contains('Failed host lookup')) {
+      return 'Network error. Please check your internet connection and try again.';
+    }
+    if (message.contains('TimeoutException') || message.contains('Connection timed out')) {
+      return 'Connection timed out. Please check your network and try again.';
+    }
+    return message.replaceAll(RegExp(r'^Exception:\s*'), '').replaceAll(RegExp(r'^ApiException:\s*'), '');
+  }
+
   void _updateItem() async {
     if (_titleController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Please provide a descriptive title', style: GoogleFonts.outfit())));
+      _showErrorSnackBar(context, 'Please provide a descriptive title');
       return;
     }
 
     if (_priceController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Please enter a price', style: GoogleFonts.outfit())));
+      _showErrorSnackBar(context, 'Please enter a price');
       return;
     }
 
     final double price = double.tryParse(_priceController.text) ?? 0.0;
     if (price <= 0) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Price must be greater than 0', style: GoogleFonts.outfit())));
+        _showErrorSnackBar(context, 'Price must be greater than 0');
         return;
     }
 
     if (_listingType == 'Rent') {
         int maxDays = int.tryParse(_maxDurationController.text) ?? 0;
         if (maxDays < 1) {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Max rental duration must be at least 1 day', style: GoogleFonts.outfit())));
+            _showErrorSnackBar(context, 'Max rental duration must be at least 1 day');
             return;
         }
     }
@@ -315,12 +348,12 @@ class _EditListingPageState extends State<EditListingPage> {
       await apiClient.put('/products/${widget.product.id}', body);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Listing Updated!', style: GoogleFonts.outfit())));
+        _showSuccessSnackBar(context, 'Listing Updated!');
         Navigator.pop(context, true); // Return true to refresh caller
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+        _showErrorSnackBar(context, 'Update failed: ${_getFriendlyErrorMessage(e)}');
       }
     } finally {
       if (mounted) setState(() => _isSubmitting = false);

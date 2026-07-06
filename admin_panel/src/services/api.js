@@ -1,8 +1,12 @@
 import axios from 'axios';
 
+const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+
 const api = axios.create({
-    baseURL: 'http://localhost:3000/api',
+    baseURL,
 });
+
+export const IMAGE_BASE_URL = baseURL.replace('/api', '');
 
 // Add a request interceptor to inject the token
 api.interceptors.request.use(

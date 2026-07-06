@@ -55,7 +55,29 @@ async function seedZones() {
             if (created) {
                 console.log(`Created Safe Zone: ${zone.name} [${zone.latitude}, ${zone.longitude}]`);
             } else {
-                console.log(`Skipped existing Zone: ${zone.name}`);
+                let updated = false;
+                if (zone.latitude !== zoneData.latitude) {
+                    zone.latitude = zoneData.latitude;
+                    updated = true;
+                }
+                if (zone.longitude !== zoneData.longitude) {
+                    zone.longitude = zoneData.longitude;
+                    updated = true;
+                }
+                if (zone.description !== zoneData.description) {
+                    zone.description = zoneData.description;
+                    updated = true;
+                }
+                if (zone.is_active !== zoneData.is_active) {
+                    zone.is_active = zoneData.is_active;
+                    updated = true;
+                }
+                if (updated) {
+                    await zone.save();
+                    console.log(`Updated details for Zone: ${zone.name}`);
+                } else {
+                    console.log(`Checking existing Zone: ${zone.name}`);
+                }
             }
         }
 

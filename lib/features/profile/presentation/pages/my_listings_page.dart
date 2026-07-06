@@ -37,6 +37,39 @@ class _MyListingsPageState extends State<MyListingsPage> with SingleTickerProvid
     super.dispose();
   }
 
+  void _showErrorSnackBar(BuildContext context, String message) {
+    final theme = Theme.of(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message, style: GoogleFonts.outfit()),
+        backgroundColor: theme.colorScheme.error,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  void _showSuccessSnackBar(BuildContext context, String message) {
+    final theme = Theme.of(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message, style: GoogleFonts.outfit()),
+        backgroundColor: theme.colorScheme.primary,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  String _getFriendlyErrorMessage(dynamic e) {
+    final message = e.toString();
+    if (message.contains('SocketException') || message.contains('Connection error') || message.contains('Failed host lookup')) {
+      return 'Network error. Please check your internet connection and try again.';
+    }
+    if (message.contains('TimeoutException') || message.contains('Connection timed out')) {
+      return 'Connection timed out. Please check your network and try again.';
+    }
+    return message.replaceAll(RegExp(r'^Exception:\s*'), '').replaceAll(RegExp(r'^ApiException:\s*'), '');
+  }
+
   Future<void> _fetchMyListings() async {
     final session = UserSession();
     if (session.userId == null) return;
@@ -55,13 +88,14 @@ class _MyListingsPageState extends State<MyListingsPage> with SingleTickerProvid
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+        _showErrorSnackBar(context, 'Failed to load listings: ${_getFriendlyErrorMessage(e)}');
         setState(() => _isLoading = false);
       }
     }
   }
 
   Future<void> _deleteProduct(Product product) async {
+      final theme = Theme.of(context);
       bool confirm = await showDialog(
           context: context,
           builder: (ctx) => AlertDialog(
@@ -69,7 +103,7 @@ class _MyListingsPageState extends State<MyListingsPage> with SingleTickerProvid
               content: Text('Are you sure you want to delete this listing?', style: GoogleFonts.outfit()),
               actions: [
                   TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Cancel', style: GoogleFonts.outfit())),
-                  TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text('Delete', style: GoogleFonts.outfit(color: Colors.red, fontWeight: FontWeight.bold))),
+                  TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text('Delete', style: GoogleFonts.outfit(color: theme.colorScheme.error, fontWeight: FontWeight.bold))),
               ]
           )
       ) ?? false;
@@ -80,12 +114,12 @@ class _MyListingsPageState extends State<MyListingsPage> with SingleTickerProvid
           final apiClient = ApiClient();
           await apiClient.delete('/products/${product.id}');
           if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Listing deleted successfully', style: GoogleFonts.outfit())));
+              _showSuccessSnackBar(context, 'Listing deleted successfully');
               _fetchMyListings();
           }
       } catch (e) {
           if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to delete: $e')));
+              _showErrorSnackBar(context, 'Failed to delete: ${_getFriendlyErrorMessage(e)}');
           }
       }
   }

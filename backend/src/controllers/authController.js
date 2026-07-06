@@ -231,6 +231,11 @@ export const updateProfile = async (req, res) => {
         const { id } = req.params;
         const updates = req.body; // e.g. { profile_picture: '...' }
 
+        // IDOR Prevention: Ensure requesting user matches target user ID, or is admin
+        if (String(req.user.id) !== String(id) && req.user.role !== 'admin') {
+            return res.status(403).json({ error: 'Access denied. You can only update your own profile.' });
+        }
+
         const user = await User.findByPk(id);
         if (!user) {
             return res.status(404).json({ error: 'User not found' });

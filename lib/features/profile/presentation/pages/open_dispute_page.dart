@@ -51,18 +51,49 @@ class _OpenDisputePageState extends State<OpenDisputePage> {
     }
   }
 
+
+
+  void _showErrorSnackBar(BuildContext context, String message) {
+    final theme = Theme.of(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: theme.colorScheme.error,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  void _showSuccessSnackBar(BuildContext context, String message) {
+    final theme = Theme.of(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: theme.colorScheme.primary,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  String _getFriendlyErrorMessage(dynamic e) {
+    final message = e.toString();
+    if (message.contains('SocketException') || message.contains('Connection error') || message.contains('Failed host lookup')) {
+      return 'Network error. Please check your internet connection and try again.';
+    }
+    if (message.contains('TimeoutException') || message.contains('Connection timed out')) {
+      return 'Connection timed out. Please check your network and try again.';
+    }
+    return message.replaceAll(RegExp(r'^Exception:\s*'), '').replaceAll(RegExp(r'^ApiException:\s*'), '');
+  }
+
   Future<void> _submitDispute() async {
     if (_detailsController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please provide details of the issue.')),
-      );
+      _showErrorSnackBar(context, 'Please provide details of the issue.');
       return;
     }
 
     if (_selectedImages.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please upload at least one image as evidence.'), backgroundColor: Colors.red),
-      );
+      _showErrorSnackBar(context, 'Please upload at least one image as evidence.');
       return;
     }
 
@@ -92,16 +123,12 @@ class _OpenDisputePageState extends State<OpenDisputePage> {
       await ApiClient().post('/disputes', body);
       
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Dispute submitted for moderation.')),
-        );
+        _showSuccessSnackBar(context, 'Dispute submitted for moderation.');
         Navigator.pop(context, true); // Return true to indicate success
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        _showErrorSnackBar(context, 'Dispute submission failed: ${_getFriendlyErrorMessage(e)}');
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);

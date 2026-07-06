@@ -16,22 +16,20 @@ const Login = () => {
         try {
             const response = await api.post('/auth/login', { email, password });
 
-            // Store token and user info
-            localStorage.setItem('token', response.data.token);
-            localStorage.setItem('user', JSON.stringify(response.data.user));
-
-            // Check role based on selected tab
+            // Check role based on selected tab first before storing in localStorage
             const userRole = response.data.user.role;
             if (loginRole === 'admin' && userRole !== 'admin') {
                 setError('Access denied. Admin privileges required.');
-                localStorage.removeItem('token');
                 return;
             }
             if (loginRole === 'moderator' && !['admin', 'moderator'].includes(userRole)) {
                 setError('Access denied. Moderator privileges required.');
-                localStorage.removeItem('token');
                 return;
             }
+
+            // Store token and user info only after checks pass
+            localStorage.setItem('token', response.data.token);
+            localStorage.setItem('user', JSON.stringify(response.data.user));
 
             navigate('/dashboard');
         } catch (err) {

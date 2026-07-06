@@ -12,7 +12,7 @@
 // =============================================================================
 import React, { useState, useEffect } from 'react';
 import { Calendar, Download, Printer, Users, BarChart3, ShieldAlert, Award } from 'lucide-react';
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { LineChart, Line, BarChart, Bar, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import api from '../services/api';
 
 
@@ -461,7 +461,7 @@ const Analytics = () => {
                     <div className="card flex-1" style={{ height: '300px' }}>
                         <h3 style={{ margin: '0 0 0.75rem 0', fontSize: '0.9rem' }}>💸 Earnings & 3-Month Trend Prediction</h3>
                         <ResponsiveContainer width="100%" height={230}>
-                            <BarChart data={combinedEarningsData}>
+                            <ComposedChart data={combinedEarningsData}>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
                                 <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#6b7280' }} />
                                 <YAxis tick={{ fontSize: 10, fill: '#6b7280' }} />
@@ -469,7 +469,7 @@ const Analytics = () => {
                                 <Legend wrapperStyle={{ fontSize: '0.75rem' }} />
                                 <Bar dataKey="actual" name="Earnings (RM)" fill="#0d503c" radius={[4, 4, 0, 0]} />
                                 <Line type="monotone" dataKey="prediction" name="Projected Trend" stroke="#d97706" strokeDasharray="5 5" strokeWidth={2} dot={{ r: 3 }} />
-                            </BarChart>
+                            </ComposedChart>
                         </ResponsiveContainer>
                     </div>
                 </div>

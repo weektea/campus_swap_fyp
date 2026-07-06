@@ -1,8 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:campus_swap/core/api/api_client.dart';
 import 'package:campus_swap/core/session/user_session.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:campus_swap/core/services/socket_service.dart';
 
 class TicketChatPage extends StatefulWidget {
@@ -27,11 +28,11 @@ class _TicketChatPageState extends State<TicketChatPage> {
   final ApiClient _apiClient = ApiClient();
   final TextEditingController _msgController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  
+  final ImagePicker _picker = ImagePicker();
+
   List<dynamic> _messages = [];
   bool _isLoading = true;
   bool _isSending = false;
-  final ImagePicker _picker = ImagePicker();
   String _currentStatus = '';
   Timer? _pollTimer;
 
@@ -114,10 +115,32 @@ class _TicketChatPageState extends State<TicketChatPage> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error loading thread: $e')));
+        _showErrorSnackBar(context, 'Error loading thread: ${_getFriendlyErrorMessage(e)}');
         setState(() => _isLoading = false);
       }
     }
+  }
+
+  void _showErrorSnackBar(BuildContext context, String message) {
+    final theme = Theme.of(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message, style: GoogleFonts.outfit()),
+        backgroundColor: theme.colorScheme.error,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  String _getFriendlyErrorMessage(dynamic e) {
+    final message = e.toString();
+    if (message.contains('SocketException') || message.contains('Connection error') || message.contains('Failed host lookup')) {
+      return 'Network error. Please check your internet connection and try again.';
+    }
+    if (message.contains('TimeoutException') || message.contains('Connection timed out')) {
+      return 'Connection timed out. Please check your network and try again.';
+    }
+    return message.replaceAll(RegExp(r'^Exception:\s*'), '').replaceAll(RegExp(r'^ApiException:\s*'), '');
   }
 
   Future<void> _sendMessage() async {
@@ -134,7 +157,7 @@ class _TicketChatPageState extends State<TicketChatPage> {
       await _fetchMessages();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to send: $e')));
+        _showErrorSnackBar(context, 'Failed to send: ${_getFriendlyErrorMessage(e)}');
       }
     } finally {
       if (mounted) setState(() => _isSending = false);
@@ -158,7 +181,7 @@ class _TicketChatPageState extends State<TicketChatPage> {
       await _fetchMessages();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to upload: $e')));
+        _showErrorSnackBar(context, 'Failed to upload: ${_getFriendlyErrorMessage(e)}');
       }
     } finally {
       if (mounted) setState(() => _isSending = false);

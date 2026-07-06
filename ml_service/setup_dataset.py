@@ -13,6 +13,11 @@ MAPPING = {
 }
 
 def setup_dataset():
+    """
+    Initializes the local training dataset. Reads raw images from Classification_Images/
+    marketplace classification folder, copies and organizes them into Category___SubCategory format
+    under target directory.
+    """
     if not os.path.exists(SOURCE_DIR):
         print(f"Source dir {SOURCE_DIR} not found.")
         return

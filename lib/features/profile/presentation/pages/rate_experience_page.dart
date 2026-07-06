@@ -29,12 +29,51 @@ class _RateExperiencePageState extends State<RateExperiencePage> {
   final TextEditingController _commentController = TextEditingController();
   bool _isSubmitting = false;
 
+  @override
+  void dispose() {
+    _commentController.dispose();
+    super.dispose();
+  }
+
   final List<String> _tags = ['Friendly', 'Punctual', 'Good Condition', 'Responsive', 'Polite'];
   final Set<String> _selectedTags = {};
 
+  void _showErrorSnackBar(BuildContext context, String message) {
+    final theme = Theme.of(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message, style: GoogleFonts.outfit()),
+        backgroundColor: theme.colorScheme.error,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  void _showSuccessSnackBar(BuildContext context, String message) {
+    final theme = Theme.of(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message, style: GoogleFonts.outfit()),
+        backgroundColor: theme.colorScheme.primary,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  String _getFriendlyErrorMessage(dynamic e) {
+    final message = e.toString();
+    if (message.contains('SocketException') || message.contains('Connection error') || message.contains('Failed host lookup')) {
+      return 'Network error. Please check your internet connection and try again.';
+    }
+    if (message.contains('TimeoutException') || message.contains('Connection timed out')) {
+      return 'Connection timed out. Please check your network and try again.';
+    }
+    return message.replaceAll(RegExp(r'^Exception:\s*'), '').replaceAll(RegExp(r'^ApiException:\s*'), '');
+  }
+
   void _submitReview() async {
     if (_rating == 0) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a star rating.'), backgroundColor: Colors.red));
+      _showErrorSnackBar(context, 'Please select a star rating.');
       return;
     }
 
@@ -58,12 +97,12 @@ class _RateExperiencePageState extends State<RateExperiencePage> {
 
       if (mounted) {
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Review Submitted! 🎉', style: GoogleFonts.outfit()), backgroundColor: Colors.green));
+        _showSuccessSnackBar(context, 'Review Submitted! 🎉');
         widget.onSubmitted();
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
+        _showErrorSnackBar(context, 'Submission failed: ${_getFriendlyErrorMessage(e)}');
       }
     } finally {
       if (mounted) setState(() => _isSubmitting = false);

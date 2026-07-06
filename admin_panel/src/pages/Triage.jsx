@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Lock, AlertTriangle, CheckCircle, ChevronRight } from 'lucide-react';
-import api from '../services/api';
+import api, { IMAGE_BASE_URL } from '../services/api';
 
 const Triage = () => {
     const [tasks, setTasks] = useState([]);
@@ -173,7 +173,7 @@ const Triage = () => {
                                         <div className="flex gap-6 mb-6">
                                             <div style={{ width: '120px', height: '120px', background: '#f3f4f6', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9ca3af', overflow: 'hidden' }}>
                                                 {selectedTask.raw.product.image_urls && selectedTask.raw.product.image_urls[0] ? (
-                                                    <img src={`http://localhost:3000${selectedTask.raw.product.image_urls[0]}`} alt="Product" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                    <img src={`${IMAGE_BASE_URL}${selectedTask.raw.product.image_urls[0]}`} alt="Product" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                                 ) : (
                                                     'No Image'
                                                 )}

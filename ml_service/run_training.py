@@ -7,6 +7,10 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from model_vision import fine_tune_model, FLAT_CLASSES
 
 def main():
+    """
+    Offline model training entrypoint. Automatically discovers corrective feedback dataset folders,
+    runs Mobilenet V2 backbone fine-tuning, calculates validation metrics, and writes files atomically.
+    """
     print("==================================================")
     print("Campus Swap ML Offline Model Training")
     print("==================================================")

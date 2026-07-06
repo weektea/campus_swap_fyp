@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 import 'package:http/http.dart' as http;
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -26,73 +27,109 @@ class ApiClient {
   } 
 
   Future<dynamic> get(String endpoint) async {
-    final response = await http.get(
-      Uri.parse('$baseUrl$endpoint'),
-      headers: _getHeaders(),
-    );
-    return _handleResponse(response);
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl$endpoint'),
+        headers: _getHeaders(),
+      ).timeout(const Duration(seconds: 15));
+      return _handleResponse(response);
+    } on TimeoutException {
+      throw ApiException('Connection timed out. Please check your network.');
+    } catch (e) {
+      throw ApiException('Connection error: ${e.toString()}');
+    }
   }
 
   Future<dynamic> post(String endpoint, Map<String, dynamic> data) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl$endpoint'),
-      headers: _getHeaders(),
-      body: jsonEncode(data),
-    );
-    return _handleResponse(response);
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl$endpoint'),
+        headers: _getHeaders(),
+        body: jsonEncode(data),
+      ).timeout(const Duration(seconds: 15));
+      return _handleResponse(response);
+    } on TimeoutException {
+      throw ApiException('Connection timed out. Please check your network.');
+    } catch (e) {
+      throw ApiException('Connection error: ${e.toString()}');
+    }
   }
 
   Future<dynamic> put(String endpoint, Map<String, dynamic> data) async {
-    final response = await http.put(
-      Uri.parse('$baseUrl$endpoint'),
-      headers: _getHeaders(),
-      body: jsonEncode(data),
-    );
-    return _handleResponse(response);
+    try {
+      final response = await http.put(
+        Uri.parse('$baseUrl$endpoint'),
+        headers: _getHeaders(),
+        body: jsonEncode(data),
+      ).timeout(const Duration(seconds: 15));
+      return _handleResponse(response);
+    } on TimeoutException {
+      throw ApiException('Connection timed out. Please check your network.');
+    } catch (e) {
+      throw ApiException('Connection error: ${e.toString()}');
+    }
   }
 
   Future<dynamic> patch(String endpoint, Map<String, dynamic> data) async {
-    final response = await http.patch(
-      Uri.parse('$baseUrl$endpoint'),
-      headers: _getHeaders(),
-      body: jsonEncode(data),
-    );
-    return _handleResponse(response);
+    try {
+      final response = await http.patch(
+        Uri.parse('$baseUrl$endpoint'),
+        headers: _getHeaders(),
+        body: jsonEncode(data),
+      ).timeout(const Duration(seconds: 15));
+      return _handleResponse(response);
+    } on TimeoutException {
+      throw ApiException('Connection timed out. Please check your network.');
+    } catch (e) {
+      throw ApiException('Connection error: ${e.toString()}');
+    }
   }
 
   Future<dynamic> delete(String endpoint) async {
-    final response = await http.delete(
-      Uri.parse('$baseUrl$endpoint'),
-      headers: _getHeaders(),
-    );
-    return _handleResponse(response);
+    try {
+      final response = await http.delete(
+        Uri.parse('$baseUrl$endpoint'),
+        headers: _getHeaders(),
+      ).timeout(const Duration(seconds: 15));
+      return _handleResponse(response);
+    } on TimeoutException {
+      throw ApiException('Connection timed out. Please check your network.');
+    } catch (e) {
+      throw ApiException('Connection error: ${e.toString()}');
+    }
   }
 
   Future<dynamic> postMultipart(String endpoint, XFile file) async {
-    var request = http.MultipartRequest('POST', Uri.parse('$baseUrl$endpoint'));
-    
-    if (kIsWeb) {
-      // Web: Use bytes
-      final bytes = await file.readAsBytes();
-      request.files.add(http.MultipartFile.fromBytes(
-        'file', 
-        bytes, 
-        filename: file.name
-      ));
-    } else {
-      // Mobile/Desktop: Use path (if available, otherwise fallback to bytes)
-      request.files.add(await http.MultipartFile.fromPath('file', file.path));
-    }
-    
-    // Add Authorization header
-    final token = UserSession().token;
-    if (token != null) {
-      request.headers['Authorization'] = 'Bearer $token';
-    }
+    try {
+      var request = http.MultipartRequest('POST', Uri.parse('$baseUrl$endpoint'));
+      
+      if (kIsWeb) {
+        // Web: Use bytes
+        final bytes = await file.readAsBytes();
+        request.files.add(http.MultipartFile.fromBytes(
+          'file', 
+          bytes, 
+          filename: file.name
+        ));
+      } else {
+        // Mobile/Desktop: Use path (if available, otherwise fallback to bytes)
+        request.files.add(await http.MultipartFile.fromPath('file', file.path));
+      }
+      
+      // Add Authorization header
+      final token = UserSession().token;
+      if (token != null) {
+        request.headers['Authorization'] = 'Bearer $token';
+      }
 
-    final streamedResponse = await request.send();
-    final response = await http.Response.fromStream(streamedResponse);
-    return _handleResponse(response);
+      final streamedResponse = await request.send().timeout(const Duration(seconds: 30));
+      final response = await http.Response.fromStream(streamedResponse);
+      return _handleResponse(response);
+    } on TimeoutException {
+      throw ApiException('Upload timed out. Please try again.');
+    } catch (e) {
+      throw ApiException('Upload connection error: ${e.toString()}');
+    }
   }
 
   dynamic _handleResponse(http.Response response) {

@@ -74,14 +74,59 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error loading details: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading details: ${_getFriendlyErrorMessage(e)}'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
         setState(() => _isLoading = false);
       }
     }
   }
 
+  String _getFriendlyErrorMessage(dynamic e) {
+    final message = e.toString();
+    if (message.contains('SocketException') || message.contains('Connection error') || message.contains('Failed host lookup')) {
+      return 'Network error. Please check your internet connection and try again.';
+    }
+    if (message.contains('TimeoutException') || message.contains('Connection timed out')) {
+      return 'Connection timed out. Please check your network and try again.';
+    }
+    return message.replaceAll(RegExp(r'^Exception:\s*'), '').replaceAll(RegExp(r'^ApiException:\s*'), '');
+  }
+
   Future<void> _updateStatus(String newStatus, [Map<String, dynamic>? extraData]) async {
       if (_isUpdatingStatus) return;
+
+      // Destructive Confirmation Dialog for Cancelled or Disputed status
+      if (newStatus == 'Cancelled' || newStatus == 'Disputed') {
+          final title = newStatus == 'Cancelled' ? 'Cancel Transaction?' : 'Dispute Transaction?';
+          final message = newStatus == 'Cancelled' 
+              ? 'Are you sure you want to cancel this transaction? This action is irreversible.'
+              : 'Are you sure you want to open a dispute for this transaction? Support staff will review this request.';
+          
+          final confirm = await showDialog<bool>(
+              context: context,
+              builder: (context) => AlertDialog(
+                  title: Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                  content: Text(message),
+                  actions: [
+                      TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: const Text('Go Back'),
+                      ),
+                      TextButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          child: Text(newStatus == 'Cancelled' ? 'Cancel Order' : 'Open Dispute', style: TextStyle(color: Theme.of(context).colorScheme.error, fontWeight: FontWeight.bold)),
+                      ),
+                  ],
+              ),
+          );
+          if (confirm != true) return;
+      }
+
       setState(() => _isUpdatingStatus = true);
       try {
           final apiClient = ApiClient();
@@ -92,9 +137,25 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
           final res = await apiClient.patch('/transactions/${widget.transactionId}/status', body);
           _fetchTransactionDetails(); // Refresh
           final msg = (res != null && res['message'] != null) ? res['message'].toString() : 'Status updated to $newStatus';
-          if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+          if(mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(msg),
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+          }
       } catch (e) {
-          if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+          if(mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Failed: ${_getFriendlyErrorMessage(e)}'),
+                  backgroundColor: Theme.of(context).colorScheme.error,
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+          }
       } finally {
           if (mounted) {
               setState(() => _isUpdatingStatus = false);
@@ -116,12 +177,24 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
                   _uploadedProofUrl = uploadRes['url'];
               });
               if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Payment proof uploaded successfully!')));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: const Text('Payment proof uploaded successfully!'),
+                      backgroundColor: Theme.of(context).colorScheme.primary,
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
               }
           }
       } catch (e) {
           if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Upload failed: $e')));
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Upload failed: ${_getFriendlyErrorMessage(e)}'),
+                  backgroundColor: Theme.of(context).colorScheme.error,
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
           }
       } finally {
           setState(() => _isUploadingProof = false);
@@ -771,7 +844,13 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
                     child: ElevatedButton(
                       onPressed: () {
                           if (_uploadedProofUrl == null) {
-                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please upload payment proof image first!'), backgroundColor: Colors.red));
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: const Text('Please upload payment proof image first!'),
+                                  backgroundColor: Theme.of(context).colorScheme.error,
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
                               return;
                           }
                           _updateStatus('To Confirm', {'payment_proof_url': _uploadedProofUrl});

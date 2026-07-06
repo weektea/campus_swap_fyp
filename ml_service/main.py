@@ -26,16 +26,34 @@ for category in FLAT_CLASSES:
     os.makedirs(os.path.join(DATASET_DIR, category), exist_ok=True)
 
 class PredictResponse(BaseModel):
+    """
+    Schema for the ML prediction response.
+    """
     category: str
     sub_category: str
     confidence: float
 
 class FeedbackResponse(BaseModel):
+    """
+    Schema for user corrective feedback storage status.
+    """
     message: str
     saved_path: str
 
 @app.post("/predict/image", response_model=PredictResponse)
 async def predict(file: UploadFile = File(...)):
+    """
+    Accepts an uploaded marketplace image, processes prediction, and returns category tags.
+
+    Args:
+        file (UploadFile): The raw image file to evaluate.
+
+    Returns:
+        PredictResponse: Predicted category, sub-category, and confidence metrics.
+
+    Raises:
+        HTTPException: 400 error if file extension is not supported (.png, .jpg, .jpeg).
+    """
     if not file.filename.lower().endswith(('.png', '.jpg', '.jpeg')):
         raise HTTPException(status_code=400, detail="Invalid file type")
         
@@ -59,6 +77,19 @@ async def feedback(
     file: UploadFile = File(...),
     correct_category: str = Form(...) # Expects "Category___SubCategory"
 ):
+    """
+    Saves an uploaded image in a feedback dataset folder to be utilized in shadow training.
+
+    Args:
+        file (UploadFile): The raw user feedback image.
+        correct_category (str): The actual corrected class in "Category___SubCategory" format.
+
+    Returns:
+        FeedbackResponse: Success message and the relative path where image was saved.
+
+    Raises:
+        None
+    """
     if correct_category not in FLAT_CLASSES:
         # Fallback to Others___Miscellaneous if not found
         correct_category = "Others___Miscellaneous"
@@ -76,7 +107,14 @@ async def feedback(
 
 @app.on_event("startup")
 def startup_event():
+    """
+    FastAPI startup lifecycle event listener. Triggers background model-file hot-swapper thread.
+    """
     def watch_model_files():
+        """
+        Periodically checks the modification time of 'custom_model.pth'.
+        Triggers LiveModelContainer reload if model has been rebuilt.
+        """
         model_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "custom_model.pth")
         classes_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "custom_model_classes.json")
         
@@ -109,8 +147,20 @@ def startup_event():
 
 @app.post("/train/image-model")
 async def train_model():
+    """
+    Initiates shadow training pipeline in a daemon thread.
+
+    Returns:
+        dict: A confirmation message indicating the training has started.
+
+    Raises:
+        None
+    """
     print("[ML-SHADOW-TRAINING] Shadow Training triggered in background.")
     def train_task():
+        """
+        Executes categories load and shadow model training in the background.
+        """
         from model_vision import fetch_categories_from_api, fine_tune_model, FLAT_CLASSES
         # Fetch dynamic categories from the database API to find updates
         fetch_categories_from_api()
@@ -128,6 +178,15 @@ async def train_model():
 
 @app.get("/admin/ml-metrics")
 async def get_ml_metrics():
+    """
+    Retrieves the metrics history of previously executed model training runs and calculated pending samples.
+
+    Returns:
+        dict: Object containing history metrics array, pending sample counts, and total sample counts.
+
+    Raises:
+        None
+    """
     import json
     metrics_file = os.path.join(DATASET_DIR, "metrics_history.json")
     
@@ -172,25 +231,49 @@ async def get_ml_metrics():
 # --- FYP AI/ML Pricing & Description Generation Additions ---
 
 class PriceSuggestionRequest(BaseModel):
+    """
+    Schema for pricing suggestion request body.
+    """
     category: str
     condition: str
 
 class PriceSuggestionResponse(BaseModel):
+    """
+    Schema for suggested price return payload.
+    """
     estimated_price: float
     currency: str
     note: str
 
 class DescriptionRequest(BaseModel):
+    """
+    Schema for description generation request parameters.
+    """
     title: str
     category: str
     condition: str
     type: str
 
 class DescriptionResponse(BaseModel):
+    """
+    Schema for generated description return payload.
+    """
     description: str
 
 @app.post("/predict-price", response_model=PriceSuggestionResponse)
 async def predict_price(req: PriceSuggestionRequest):
+    """
+    Suggests a market price estimate based on category and item condition.
+
+    Args:
+        req (PriceSuggestionRequest): Request object with category and condition.
+
+    Returns:
+        PriceSuggestionResponse: Object containing estimated_price, currency, and note.
+
+    Raises:
+        None
+    """
     category = req.category
     condition = req.condition
     
@@ -229,6 +312,9 @@ async def predict_price(req: PriceSuggestionRequest):
     }
 
 class DescriptionRequest(BaseModel):
+    """
+    Overriding schema for description generation request parameters, including optional fields.
+    """
     title: str
     category: str
     condition: str
@@ -237,6 +323,9 @@ class DescriptionRequest(BaseModel):
     location: str = None
 
 class DescriptionResponse(BaseModel):
+    """
+    Overriding schema for description generation return payload.
+    """
     description: str
 
 TEMPLATES = {
@@ -304,6 +393,19 @@ TEMPLATES = {
 
 @app.post("/generate-description", response_model=DescriptionResponse)
 async def generate_description(req: DescriptionRequest):
+    """
+    Generates a creative, randomized marketplace description based on item title, category,
+    condition, location, price, and listing type (Sale or Rent).
+
+    Args:
+        req (DescriptionRequest): Input parameters including title, category, condition, type, price, and location.
+
+    Returns:
+        DescriptionResponse: Object containing the formatted, generated description string.
+
+    Raises:
+        None
+    """
     import random
     title = req.title
     category = req.category

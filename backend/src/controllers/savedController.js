@@ -1,6 +1,13 @@
 import { SavedItem, Product, User, Report } from '../models/index.js';
 
-// Toggle Save (Like/Unlike)
+/**
+ * Toggles the saved status of a product for the authenticated user (saves or unsaves).
+ *
+ * @param {import('express').Request} req - The Express request object containing `product_id` in the body.
+ * @param {import('express').Response} res - The Express response object.
+ * @returns {Promise<Response>} - Responds with a JSON status indicating if the item is saved.
+ * @throws {Error} - Responds with HTTP 500 if database operations fail.
+ */
 export const toggleSave = async (req, res) => {
     try {
         const user_id = req.user.id;
@@ -25,7 +32,14 @@ export const toggleSave = async (req, res) => {
     }
 };
 
-// Get User's Saved Items
+/**
+ * Retrieves the list of products saved by the authenticated user, excluding any that they have reported.
+ *
+ * @param {import('express').Request} req - The Express request object.
+ * @param {import('express').Response} res - The Express response object.
+ * @returns {Promise<void>} - Responds with a JSON array of saved products.
+ * @throws {Error} - Responds with HTTP 500 if database queries fail.
+ */
 export const getSavedItems = async (req, res) => {
     try {
         const user_id = req.user.id; // Secure from token

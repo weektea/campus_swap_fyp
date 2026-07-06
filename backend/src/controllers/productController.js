@@ -4,6 +4,8 @@ import fs from 'fs';
 import FormData from 'form-data';
 import axios from 'axios';
 
+const ML_SERVICE_URL = process.env.ML_SERVICE_URL || 'http://localhost:5000';
+
 export const createProduct = async (req, res) => {
     try {
         const { title, description, price, category, sub_category_id, condition, seller_id, image_urls, video_url, type, rental_price_per_day, max_rental_duration, rental_deposit } = req.body;
@@ -75,7 +77,7 @@ export const createProduct = async (req, res) => {
                     const mlCategory = sub_category_id ? `${category}___${sub_category_id}` : `${category}___Others`;
                     formData.append('correct_category', mlCategory);
 
-                    axios.post('http://127.0.0.1:5000/feedback/image', formData, {
+                    axios.post(`${ML_SERVICE_URL}/feedback/image`, formData, {
                         headers: formData.getHeaders(),
                     }).catch(err => console.error("ML Feedback Background Task Failed:", err.message));
                 }
@@ -362,7 +364,7 @@ export const classifyImage = async (req, res) => {
         const formData = new FormData();
         formData.append('file', fs.createReadStream(req.file.path), req.file.originalname);
 
-        const response = await axios.post('http://127.0.0.1:5000/predict/image', formData, {
+        const response = await axios.post(`${ML_SERVICE_URL}/predict/image`, formData, {
             headers: formData.getHeaders(),
         });
 
@@ -402,7 +404,7 @@ export const getPriceSuggestion = async (req, res) => {
         
         try {
             console.log('Forwarding price suggestion request to ML service...');
-            const response = await axios.post('http://127.0.0.1:5000/predict-price', { category, condition });
+            const response = await axios.post(`${ML_SERVICE_URL}/predict-price`, { category, condition });
             return res.json(response.data);
         } catch (mlErr) {
             console.warn('ML Price Suggestion Service down, using local fallback:', mlErr.message);
@@ -435,7 +437,7 @@ export const generateDescription = async (req, res) => {
         
         try {
             console.log('Forwarding description generation request to ML service...');
-            const response = await axios.post('http://127.0.0.1:5000/generate-description', { title, category, condition, type, price, location });
+            const response = await axios.post(`${ML_SERVICE_URL}/generate-description`, { title, category, condition, type, price, location });
             return res.json(response.data);
         } catch (mlErr) {
             console.warn('ML Description Service down, using local fallback:', mlErr.message);

@@ -17,10 +17,17 @@ export const SocketProvider = ({ children }) => {
             return;
         }
 
-        const user = JSON.parse(userStr);
+        let user = {};
+        try {
+            user = JSON.parse(userStr);
+        } catch (e) {
+            console.error('SocketContext: Failed to parse user JSON', e);
+            return;
+        }
         console.log('SocketContext: Initializing connection for role:', user.role);
 
-        const socketInstance = io('http://localhost:3000', {
+        const wsUrl = import.meta.env.VITE_WS_URL || import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:3000';
+        const socketInstance = io(wsUrl, {
             transports: ['websocket'],
             auth: {
                 token: token

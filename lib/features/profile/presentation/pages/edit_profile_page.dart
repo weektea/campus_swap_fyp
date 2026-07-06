@@ -86,16 +86,48 @@ class _EditProfilePageState extends State<EditProfilePage> {
               session.avatarUrl = imageUrl;
               _isUploading = false;
           });
-          
           if (mounted) {
-             ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Avatar Updated!')));
+             _showSuccessSnackBar(context, 'Avatar Updated!');
           }
       } catch (e) {
           if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Upload Failed: $e')));
+              _showErrorSnackBar(context, 'Upload Failed: ${_getFriendlyErrorMessage(e)}');
               setState(() => _isUploading = false);
           }
       }
+  }
+
+  void _showErrorSnackBar(BuildContext context, String message) {
+    final theme = Theme.of(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message, style: GoogleFonts.outfit()),
+        backgroundColor: theme.colorScheme.error,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  void _showSuccessSnackBar(BuildContext context, String message) {
+    final theme = Theme.of(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message, style: GoogleFonts.outfit()),
+        backgroundColor: theme.colorScheme.primary,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  String _getFriendlyErrorMessage(dynamic e) {
+    final message = e.toString();
+    if (message.contains('SocketException') || message.contains('Connection error') || message.contains('Failed host lookup')) {
+      return 'Network error. Please check your internet connection and try again.';
+    }
+    if (message.contains('TimeoutException') || message.contains('Connection timed out')) {
+      return 'Connection timed out. Please check your network and try again.';
+    }
+    return message.replaceAll(RegExp(r'^Exception:\s*'), '').replaceAll(RegExp(r'^ApiException:\s*'), '');
   }
 
   Future<void> _saveProfile() async {
@@ -108,15 +140,15 @@ class _EditProfilePageState extends State<EditProfilePage> {
         'privacy_setting': _privacySetting,
       });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profile updated successfully!')));
+        _showSuccessSnackBar(context, 'Profile updated successfully!');
         Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Update failed: $e')));
+        _showErrorSnackBar(context, 'Update failed: ${_getFriendlyErrorMessage(e)}');
       }
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 

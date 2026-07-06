@@ -26,6 +26,7 @@ class _LoginPageState extends State<LoginPage> {
   bool _isPasswordVisible = false;
   bool _isLoading = false;
   bool _rememberMe = false;
+  bool _rememberPassword = false;
 
 
   @override
@@ -34,24 +35,37 @@ class _LoginPageState extends State<LoginPage> {
     _loadUserCredentials();
   }
 
+  @override
+  void dispose() {
+    _studentIdController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
   Future<void> _loadUserCredentials() async {
     final prefs = await SharedPreferences.getInstance();
-    final remember = prefs.getBool('remember_me') ?? false;
+    final rememberMe = prefs.getBool('remember_me') ?? false;
+    final rememberPassword = prefs.getBool('remember_password') ?? false;
     
     String studentId = '';
     String password = '';
     
-    if (remember) {
-        studentId = prefs.getString('student_id') ?? '';
-        password = prefs.getString('password') ?? '';
+    if (rememberMe) {
+      studentId = prefs.getString('student_id') ?? '';
+    }
+    if (rememberPassword) {
+      password = prefs.getString('password') ?? '';
     }
 
     if (mounted) {
       setState(() {
-        _rememberMe = remember;
-        if (remember) {
-            _studentIdController.text = studentId;
-            _passwordController.text = password;
+        _rememberMe = rememberMe;
+        _rememberPassword = rememberPassword;
+        if (rememberMe) {
+          _studentIdController.text = studentId;
+        }
+        if (rememberPassword) {
+          _passwordController.text = password;
         }
       });
     }
@@ -59,15 +73,60 @@ class _LoginPageState extends State<LoginPage> {
 
   Future<void> _saveUserCredentials() async {
     final prefs = await SharedPreferences.getInstance();
+    
+    // Remember Student ID
     if (_rememberMe) {
       await prefs.setBool('remember_me', true);
       await prefs.setString('student_id', _studentIdController.text);
-      await prefs.setString('password', _passwordController.text);
     } else {
       await prefs.remove('remember_me');
       await prefs.remove('student_id');
+    }
+    
+    // Remember Password
+    if (_rememberPassword) {
+      await prefs.setBool('remember_password', true);
+      await prefs.setString('password', _passwordController.text);
+    } else {
+      await prefs.remove('remember_password');
       await prefs.remove('password');
     }
+  }
+
+  void _showErrorSnackBar(BuildContext context, String message) {
+    final theme = Theme.of(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: theme.colorScheme.error,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  void _showSuccessSnackBar(BuildContext context, String message) {
+    final theme = Theme.of(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: theme.colorScheme.primary,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  String _getFriendlyErrorMessage(dynamic e) {
+    final message = e.toString();
+    if (message.contains('SocketException') || message.contains('Connection error') || message.contains('Failed host lookup')) {
+      return 'Network error. Please check your internet connection and try again.';
+    }
+    if (message.contains('TimeoutException') || message.contains('Connection timed out')) {
+      return 'Connection timed out. Please check your network and try again.';
+    }
+    if (message.contains('API Error: 401') || message.contains('Invalid student ID or password') || message.contains('Invalid credentials')) {
+      return 'Incorrect Student ID or Password. Please try again.';
+    }
+    return message.replaceAll(RegExp(r'^Exception:\s*'), '').replaceAll(RegExp(r'^ApiException:\s*'), '');
   }
 
   void _login() async {
@@ -109,9 +168,7 @@ class _LoginPageState extends State<LoginPage> {
           } else if (e is ApiException && (e.message == 'Account Suspended' || e.responseData?['errorCode'] == 'ACCOUNT_SUSPENDED')) {
             _showSuspendedBottomSheet(e.responseData, e.responseData?['token']);
           } else {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Login Failed: ${e.toString()}')),
-            );
+            _showErrorSnackBar(context, 'Login Failed: ${_getFriendlyErrorMessage(e)}');
           }
         }
       } finally {
@@ -379,20 +436,13 @@ class _LoginPageState extends State<LoginPage> {
                                 context,
                                 MaterialPageRoute(builder: (context) => const HomePage()),
                               );
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Account reactivated successfully. Welcome back!'),
-                                  backgroundColor: Colors.green,
-                                ),
-                              );
+                              _showSuccessSnackBar(context, 'Account reactivated successfully. Welcome back!');
                             }
                           } catch (e) {
                             UserSession().token = originalToken;
                             if (context.mounted) {
                               setDialogState(() => isReactivating = false);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('Reactivation failed: $e'), backgroundColor: Colors.red),
-                              );
+                              _showErrorSnackBar(context, 'Reactivation failed: ${_getFriendlyErrorMessage(e)}');
                             }
                           }
                         },
@@ -508,16 +558,36 @@ class _LoginPageState extends State<LoginPage> {
                             ),
     
                             Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Checkbox(
-                                  value: _rememberMe,
-                                  onChanged: (value) {
-                                    setState(() {
-                                      _rememberMe = value ?? false;
-                                    });
-                                  },
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Checkbox(
+                                      value: _rememberMe,
+                                      onChanged: (value) {
+                                        setState(() {
+                                          _rememberMe = value ?? false;
+                                        });
+                                      },
+                                    ),
+                                    Text('Remember ID', style: GoogleFonts.outfit(fontSize: 13)),
+                                  ],
                                 ),
-                                const Flexible(child: Text('Remember Me', overflow: TextOverflow.ellipsis)),
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Checkbox(
+                                      value: _rememberPassword,
+                                      onChanged: (value) {
+                                        setState(() {
+                                          _rememberPassword = value ?? false;
+                                        });
+                                      },
+                                    ),
+                                    Text('Remember PW', style: GoogleFonts.outfit(fontSize: 13)),
+                                  ],
+                                ),
                               ],
                             ),
                             Align(

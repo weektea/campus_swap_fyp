@@ -84,10 +84,43 @@ class _RegisterPageState extends State<RegisterPage> {
     });
   }
 
+  void _showErrorSnackBar(BuildContext context, String message) {
+    final theme = Theme.of(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: theme.colorScheme.error,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  void _showSuccessSnackBar(BuildContext context, String message) {
+    final theme = Theme.of(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: theme.colorScheme.primary,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  String _getFriendlyErrorMessage(dynamic e) {
+    final message = e.toString();
+    if (message.contains('SocketException') || message.contains('Connection error') || message.contains('Failed host lookup')) {
+      return 'Network error. Please check your internet connection and try again.';
+    }
+    if (message.contains('TimeoutException') || message.contains('Connection timed out')) {
+      return 'Connection timed out. Please check your network and try again.';
+    }
+    return message.replaceAll(RegExp(r'^Exception:\s*'), '').replaceAll(RegExp(r'^ApiException:\s*'), '');
+  }
+
   Future<void> _register() async {
     if (_formKey.currentState!.validate()) {
       if (_passwordController.text != _confirmPasswordController.text) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Passwords do not match')));
+        _showErrorSnackBar(context, 'Passwords do not match');
         return;
       }
 
@@ -101,17 +134,16 @@ class _RegisterPageState extends State<RegisterPage> {
           'university_id': _universityIdController.text.toUpperCase(),
           'email': _emailController.text,
           'password': _passwordController.text,
-          // Combine +60 prefix with the user input (e.g. 16-1234567 -> +6016-1234567)
           'phone_number': '+60${_phoneController.text}',
         });
 
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Registration Successful! Please Login.')));
+          _showSuccessSnackBar(context, 'Registration Successful! Please Login.');
           Navigator.pop(context); // Go back to login
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+          _showErrorSnackBar(context, 'Registration Failed: ${_getFriendlyErrorMessage(e)}');
         }
       } finally {
         if (mounted) setState(() => _isLoading = false);

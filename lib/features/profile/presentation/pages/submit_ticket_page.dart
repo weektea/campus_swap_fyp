@@ -16,9 +16,51 @@ class _SubmitTicketPageState extends State<SubmitTicketPage> {
   final List<String> _categories = ['Account', 'Bug', 'General', 'Dispute'];
   bool _isSubmitting = false;
 
+  @override
+  void dispose() {
+    _subjectController.dispose();
+    _descController.dispose();
+    super.dispose();
+  }
+
+
+
+  void _showErrorSnackBar(BuildContext context, String message) {
+    final theme = Theme.of(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message, style: GoogleFonts.outfit()),
+        backgroundColor: theme.colorScheme.error,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  void _showSuccessSnackBar(BuildContext context, String message) {
+    final theme = Theme.of(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message, style: GoogleFonts.outfit()),
+        backgroundColor: theme.colorScheme.primary,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  String _getFriendlyErrorMessage(dynamic e) {
+    final message = e.toString();
+    if (message.contains('SocketException') || message.contains('Connection error') || message.contains('Failed host lookup')) {
+      return 'Network error. Please check your internet connection and try again.';
+    }
+    if (message.contains('TimeoutException') || message.contains('Connection timed out')) {
+      return 'Connection timed out. Please check your network and try again.';
+    }
+    return message.replaceAll(RegExp(r'^Exception:\s*'), '').replaceAll(RegExp(r'^ApiException:\s*'), '');
+  }
+
   void _submitTicket() async {
     if (_subjectController.text.trim().isEmpty || _descController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please fill all required fields.')));
+      _showErrorSnackBar(context, 'Please fill all required fields.');
       return;
     }
 
@@ -31,15 +73,15 @@ class _SubmitTicketPageState extends State<SubmitTicketPage> {
         'description': _descController.text,
       });
       if (mounted) {
-         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Support ticket submitted successfully!')));
+         _showSuccessSnackBar(context, 'Support ticket submitted successfully!');
          Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {
-         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Submission failed: $e')));
+         _showErrorSnackBar(context, 'Submission failed: ${_getFriendlyErrorMessage(e)}');
       }
     } finally {
-      setState(() => _isSubmitting = false);
+      if (mounted) setState(() => _isSubmitting = false);
     }
   }
 

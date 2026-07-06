@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:campus_swap/core/api/api_client.dart';
 import 'package:campus_swap/core/session/user_session.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
@@ -25,6 +24,16 @@ class _SellPageState extends State<SellPage> {
   final TextEditingController _descController = TextEditingController();
   final TextEditingController _maxDurationController = TextEditingController();
   final TextEditingController _depositController = TextEditingController();
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _priceController.dispose();
+    _descController.dispose();
+    _maxDurationController.dispose();
+    _depositController.dispose();
+    super.dispose();
+  }
 
   final List<XFile> _imageFiles = [];
   XFile? _videoFile;
@@ -72,15 +81,16 @@ class _SellPageState extends State<SellPage> {
     }
   }
 
+
   Future<void> _pickImages() async {
     if (_imageFiles.length >= _maxImages) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Maximum $_maxImages images allowed.')));
+        _showErrorSnackBar(context, 'Maximum $_maxImages images allowed.');
         return;
     }
 
     final List<XFile> images = await _picker.pickMultiImage(
         maxWidth: 1024,
-        imageQuality: 80 // Compression is key for size limit
+        imageQuality: 80
     );
     
     if (images.isNotEmpty) {
@@ -89,13 +99,12 @@ class _SellPageState extends State<SellPage> {
         
         if (images.length > remainingSlots) {
              if (mounted) {
-               ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Only added first $remainingSlots images. Max $_maxImages allowed.')));
+               _showErrorSnackBar(context, 'Only added first $remainingSlots images. Max $_maxImages allowed.');
              }
         }
 
         setState(() {
             _imageFiles.addAll(imagesToAdd);
-            // If first image added and no category, analyze it
             if (_imageFiles.length == imagesToAdd.length && _selectedCategory == null) {
                 _analyzeImage(_imageFiles.first);
             }
@@ -105,7 +114,7 @@ class _SellPageState extends State<SellPage> {
 
   Future<void> _pickVideo() async {
     if (_videoFile != null) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Only 1 video allowed. Remove existing to change.')));
+        _showErrorSnackBar(context, 'Only 1 video allowed. Remove existing to change.');
         return;
     }
     
@@ -193,6 +202,7 @@ class _SellPageState extends State<SellPage> {
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setModalState) {
+            final theme = Theme.of(context);
             final categories = _categoriesMap.keys.toList();
             return Container(
               padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
@@ -202,13 +212,16 @@ class _SellPageState extends State<SellPage> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('1. Select Category', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold)),
+                    Text(
+                      '1. Select Category',
+                      style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                    ),
                     const SizedBox(height: 12),
                     Wrap(
                       spacing: 8,
                       runSpacing: 4,
                       children: categories.map((c) => ChoiceChip(
-                         label: Text(c, style: GoogleFonts.outfit()),
+                         label: Text(c, style: theme.textTheme.bodyMedium),
                          selected: _selectedCategory == c,
                          onSelected: (sel) {
                             if (sel) {
@@ -223,15 +236,25 @@ class _SellPageState extends State<SellPage> {
                     ),
                     const SizedBox(height: 24),
                     if (_selectedCategory != null) ...[
-                        Text('2. Select Sub-Category', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold)),
+                        Text(
+                          '2. Select Sub-Category',
+                          style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                        ),
                         const SizedBox(height: 12),
                         Wrap(
                           spacing: 8,
                           runSpacing: 4,
                           children: _categoriesMap[_selectedCategory!]!.map((sub) => ChoiceChip(
-                             label: Text(sub, style: GoogleFonts.outfit(color: _selectedSubCategory == sub ? Colors.white : Theme.of(context).colorScheme.onSurface)),
+                             label: Text(
+                               sub,
+                               style: theme.textTheme.bodyMedium?.copyWith(
+                                 color: _selectedSubCategory == sub
+                                     ? theme.colorScheme.onPrimary
+                                     : theme.colorScheme.onSurface,
+                               ),
+                             ),
                              selected: _selectedSubCategory == sub,
-                             selectedColor: Theme.of(context).colorScheme.primary,
+                             selectedColor: theme.colorScheme.primary,
                              onSelected: (sel) {
                                 if (sel) {
                                    setModalState(() => _selectedSubCategory = sub);
@@ -254,7 +277,7 @@ class _SellPageState extends State<SellPage> {
 
   Future<void> _fetchPriceSuggestion() async {
       if (_selectedCategory == null) {
-           ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Please select a category first', style: GoogleFonts.outfit())));
+           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a category first')));
            return;
       }
       
@@ -275,7 +298,7 @@ class _SellPageState extends State<SellPage> {
               setState(() {
                   _priceController.text = finalPrice.toStringAsFixed(2);
               });
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Price Suggested!', style: GoogleFonts.outfit())));
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Price Suggested!')));
           }
       } catch (e) {
           if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to get suggestion: $e')));
@@ -284,7 +307,7 @@ class _SellPageState extends State<SellPage> {
 
   void _generateDescription() async {
      if (_titleController.text.isEmpty || _selectedCategory == null) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Please enter title and select category', style: GoogleFonts.outfit())));
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter title and select category')));
           return;
      }
 
@@ -336,9 +359,16 @@ class _SellPageState extends State<SellPage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Scaffold(
       appBar: AppBar(
-        title: Text('New Listing', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+        title: Text(
+          'New Listing',
+          style: theme.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.bold,
+            color: theme.colorScheme.onPrimary,
+          ),
+        ),
         automaticallyImplyLeading: widget.isPushed,
         actions: [
           IconButton(
@@ -366,17 +396,22 @@ class _SellPageState extends State<SellPage> {
                                 height: 120,
                                 margin: const EdgeInsets.only(right: 12),
                                 decoration: BoxDecoration(
-                                    color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1E1E1E) : Colors.grey[100],
+                                    color: theme.colorScheme.surfaceContainer,
                                     borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF2C2C2C) : Colors.grey[300]!)
+                                    border: Border.all(color: theme.colorScheme.outlineVariant)
                                 ),
                                 child: Column(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                        Icon(Icons.add_a_photo_rounded, color: Theme.of(context).colorScheme.primary),
+                                        Icon(Icons.add_a_photo_rounded, color: theme.colorScheme.primary),
                                         const SizedBox(height: 4),
-                                        Text("Add Photos", style: GoogleFonts.outfit(fontSize: 12)),
-                                        Text("(Max $_maxImages)", style: GoogleFonts.outfit(fontSize: 10, color: Colors.grey))
+                                        Text("Add Photos", style: theme.textTheme.bodySmall),
+                                        Text(
+                                          "(Max $_maxImages)",
+                                          style: theme.textTheme.labelSmall?.copyWith(
+                                            color: theme.colorScheme.onSurfaceVariant,
+                                          ),
+                                        )
                                     ],
                                 ),
                             ),
@@ -389,17 +424,22 @@ class _SellPageState extends State<SellPage> {
                                 height: 120,
                                 margin: const EdgeInsets.only(right: 12),
                                 decoration: BoxDecoration(
-                                    color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1E1E1E) : Colors.grey[100],
+                                    color: theme.colorScheme.surfaceContainer,
                                     borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF2C2C2C) : Colors.grey[300]!)
+                                    border: Border.all(color: theme.colorScheme.outlineVariant)
                                 ),
                                 child: Column(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                        Icon(Icons.video_call_rounded, color: Theme.of(context).colorScheme.primary),
+                                        Icon(Icons.video_call_rounded, color: theme.colorScheme.primary),
                                         const SizedBox(height: 4),
-                                        Text("Add Video", style: GoogleFonts.outfit(fontSize: 12)),
-                                        Text("(Max 15s)", style: GoogleFonts.outfit(fontSize: 10, color: Colors.grey))
+                                        Text("Add Video", style: theme.textTheme.bodySmall),
+                                        Text(
+                                          "(Max 15s)",
+                                          style: theme.textTheme.labelSmall?.copyWith(
+                                            color: theme.colorScheme.onSurfaceVariant,
+                                          ),
+                                        )
                                     ],
                                 ),
                             ),
@@ -428,12 +468,17 @@ class _SellPageState extends State<SellPage> {
                                         right: 12, // Match margin
                                         child: Container(
                                           decoration: BoxDecoration(
-                                            color: Colors.black.withValues(alpha: 0.6),
+                                            color: theme.colorScheme.primaryContainer,
                                             borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
                                           ),
                                           alignment: Alignment.center,
                                           padding: const EdgeInsets.symmetric(vertical: 2),
-                                          child: Text("Cover", style: GoogleFonts.outfit(color: Colors.white, fontSize: 10)),
+                                          child: Text(
+                                            "Cover",
+                                            style: theme.textTheme.labelSmall?.copyWith(
+                                              color: theme.colorScheme.onPrimaryContainer,
+                                            ),
+                                          ),
                                         ),
                                       ),
                                     Positioned(
@@ -447,8 +492,11 @@ class _SellPageState extends State<SellPage> {
                                             },
                                             child: Container(
                                                 padding: const EdgeInsets.all(4),
-                                                decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
-                                                child: const Icon(Icons.close, color: Colors.white, size: 14)
+                                                decoration: BoxDecoration(
+                                                  color: theme.colorScheme.scrim.withValues(alpha: 0.54),
+                                                  shape: BoxShape.circle,
+                                                ),
+                                                child: Icon(Icons.close, color: theme.colorScheme.onInverseSurface, size: 14)
                                             ),
                                         ),
                                     ),
@@ -469,15 +517,21 @@ class _SellPageState extends State<SellPage> {
                                         height: 120,
                                         margin: const EdgeInsets.only(right: 12),
                                         decoration: BoxDecoration(
-                                            color: Colors.black87,
+                                            color: theme.colorScheme.surfaceContainer,
                                             borderRadius: BorderRadius.circular(12),
                                         ),
                                         child: Column(
                                             mainAxisAlignment: MainAxisAlignment.center,
                                             children: [
-                                                const Icon(Icons.videocam_rounded, color: Colors.white, size: 32),
+                                                Icon(Icons.videocam_rounded, color: theme.colorScheme.onSurfaceVariant, size: 32),
                                                 const SizedBox(height: 8),
-                                                Text("Video Selected", style: GoogleFonts.outfit(color: Colors.white, fontSize: 10), textAlign: TextAlign.center),
+                                                Text(
+                                                  "Video Selected",
+                                                  style: theme.textTheme.labelSmall?.copyWith(
+                                                    color: theme.colorScheme.onSurfaceVariant,
+                                                  ),
+                                                  textAlign: TextAlign.center,
+                                                ),
                                             ],
                                         ),
                                     ),
@@ -490,8 +544,11 @@ class _SellPageState extends State<SellPage> {
                                             },
                                             child: Container(
                                                 padding: const EdgeInsets.all(4),
-                                                decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
-                                                child: const Icon(Icons.close, color: Colors.white, size: 14)
+                                                decoration: BoxDecoration(
+                                                  color: theme.colorScheme.scrim.withValues(alpha: 0.54),
+                                                  shape: BoxShape.circle,
+                                                ),
+                                                child: Icon(Icons.close, color: theme.colorScheme.onInverseSurface, size: 14)
                                             ),
                                         ),
                                     ),
@@ -524,7 +581,7 @@ class _SellPageState extends State<SellPage> {
                 child: Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                    color: theme.colorScheme.primary.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Row(
@@ -532,11 +589,15 @@ class _SellPageState extends State<SellPage> {
                       const Icon(Icons.auto_awesome, size: 20),
                       const SizedBox(width: 8),
                       Expanded(
-                          child: Text('Category: $_selectedCategory > ${_selectedSubCategory ?? ""}', style: GoogleFonts.outfit(), overflow: TextOverflow.ellipsis),
+                          child: Text(
+                            'Category: $_selectedCategory > ${_selectedSubCategory ?? ""}',
+                            style: theme.textTheme.bodyMedium,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                       ),
                       TextButton(
                           onPressed: _showCategoryPicker, 
-                          child: Text('Edit', style: GoogleFonts.outfit())
+                          child: const Text('Edit')
                       )
                     ],
                   ),
@@ -548,11 +609,10 @@ class _SellPageState extends State<SellPage> {
               value: _selectedCondition,
               decoration: InputDecoration(
                 labelText: 'Condition',
-                labelStyle: GoogleFonts.outfit(),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               ),
-              items: _conditions.map((c) => DropdownMenuItem(value: c, child: Text(c, style: GoogleFonts.outfit()))).toList(),
+              items: _conditions.map((c) => DropdownMenuItem(value: c, child: Text(c, style: theme.textTheme.bodyMedium))).toList(),
               onChanged: (val) {
                 if (val != null) setState(() => _selectedCondition = val);
               },
@@ -562,12 +622,11 @@ class _SellPageState extends State<SellPage> {
             TextFormField(
               controller: _titleController,
               maxLength: 50,
-              decoration: InputDecoration(
+              decoration: const InputDecoration(
                 labelText: 'Title',
                 hintText: 'e.g. Calculus Textbook',
-                labelStyle: GoogleFonts.outfit(),
               ),
-              style: GoogleFonts.outfit(),
+              style: theme.textTheme.bodyMedium,
             ),
             const SizedBox(height: 16),
              TextFormField(
@@ -575,43 +634,40 @@ class _SellPageState extends State<SellPage> {
               decoration: InputDecoration(
                 labelText: _listingType == 'Sale' ? 'Price (RM)' : 'Rental Price (RM / Day)',
                 prefixText: 'RM ',
-                labelStyle: GoogleFonts.outfit(),
               ),
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               inputFormatters: [
                  FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
               ],
-              style: GoogleFonts.outfit(),
+              style: theme.textTheme.bodyMedium,
             ),
 
             if (_listingType == 'Rent') ...[
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _maxDurationController,
-                  decoration: InputDecoration(
+                  decoration: const InputDecoration(
                     labelText: 'Max Duration (Days)',
                     hintText: 'e.g. 7',
-                    labelStyle: GoogleFonts.outfit(),
                   ),
                   keyboardType: TextInputType.number,
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                   maxLength: 3,
-                  style: GoogleFonts.outfit(),
+                  style: theme.textTheme.bodyMedium,
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _depositController,
-                  decoration: InputDecoration(
+                  decoration: const InputDecoration(
                     labelText: 'Deposit (RM)',
                     hintText: 'e.g. 50.00',
                     prefixText: 'RM ',
-                    labelStyle: GoogleFonts.outfit(),
                   ),
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   inputFormatters: [
                      FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
                   ],
-                  style: GoogleFonts.outfit(),
+                  style: theme.textTheme.bodyMedium,
                 ),
             ],
 
@@ -621,21 +677,24 @@ class _SellPageState extends State<SellPage> {
                 child: TextButton.icon(
                   onPressed: _fetchPriceSuggestion,
                   icon: const Icon(Icons.analytics_outlined, size: 16),
-                  label: Text('Get Price Suggestion', style: GoogleFonts.outfit()),
+                  label: const Text('Get Price Suggestion'),
                 ),
               ),
 
               const SizedBox(height: 16),
-              Text('Accepted Payment Methods', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 16)),
+              Text(
+                'Accepted Payment Methods',
+                style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+              ),
               const SizedBox(height: 8),
               ..._paymentMethods.map((method) {
                   return CheckboxListTile(
-                      title: Text(method, style: GoogleFonts.outfit(fontSize: 14)),
+                      title: Text(method, style: theme.textTheme.bodyMedium),
                       value: _selectedPaymentMethods.contains(method),
                       dense: true,
                       controlAffinity: ListTileControlAffinity.leading,
                       contentPadding: EdgeInsets.zero,
-                      activeColor: Theme.of(context).colorScheme.primary,
+                      activeColor: theme.colorScheme.primary,
                       onChanged: (bool? checked) {
                           setState(() {
                               if (checked == true) {
@@ -659,7 +718,6 @@ class _SellPageState extends State<SellPage> {
               maxLength: 1000,
               decoration: InputDecoration(
                 labelText: 'Description',
-                labelStyle: GoogleFonts.outfit(),
                 alignLabelWithHint: true,
                 suffixIcon: IconButton(
                   icon: const Icon(Icons.auto_fix_high),
@@ -667,18 +725,18 @@ class _SellPageState extends State<SellPage> {
                   onPressed: _generateDescription,
                 )
               ),
-              style: GoogleFonts.outfit(),
+              style: theme.textTheme.bodyMedium,
             ),
             const SizedBox(height: 32),
             ElevatedButton(
               onPressed: _postItem, 
               child: _isSubmitting 
-                  ? const SizedBox(
+                  ? SizedBox(
                       height: 20, 
                       width: 20, 
-                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
+                      child: CircularProgressIndicator(color: theme.colorScheme.onPrimary, strokeWidth: 2)
                     )
-                  : Text('Post Item', style: GoogleFonts.outfit()),
+                  : const Text('Post Item'),
             )
           ],
         ),
@@ -688,43 +746,76 @@ class _SellPageState extends State<SellPage> {
 
   bool _isSubmitting = false;
 
+  void _showErrorSnackBar(BuildContext context, String message) {
+    final theme = Theme.of(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: theme.colorScheme.error,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  void _showSuccessSnackBar(BuildContext context, String message) {
+    final theme = Theme.of(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: theme.colorScheme.primary,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  String _getFriendlyErrorMessage(dynamic e) {
+    final message = e.toString();
+    if (message.contains('SocketException') || message.contains('Connection error') || message.contains('Failed host lookup')) {
+      return 'Network error. Please check your internet connection and try again.';
+    }
+    if (message.contains('TimeoutException') || message.contains('Connection timed out')) {
+      return 'Connection timed out. Please check your network and try again.';
+    }
+    return message.replaceAll(RegExp(r'^Exception:\s*'), '').replaceAll(RegExp(r'^ApiException:\s*'), '');
+  }
+
   void _postItem() async {
     final session = UserSession();
     if (!session.isLoggedIn) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Please login to post items', style: GoogleFonts.outfit())));
+        _showErrorSnackBar(context, 'Please login to post items');
         return;
     }
 
     if (_titleController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Please provide a descriptive title', style: GoogleFonts.outfit())));
+      _showErrorSnackBar(context, 'Please provide a descriptive title');
       return;
     }
 
     if (_priceController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Please enter a price', style: GoogleFonts.outfit())));
+      _showErrorSnackBar(context, 'Please enter a price');
       return;
     }
 
     if (_selectedCategory == null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Please select a category', style: GoogleFonts.outfit())));
+      _showErrorSnackBar(context, 'Please select a category');
       return;
     }
 
     if (_imageFiles.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Please upload at least one image of the item', style: GoogleFonts.outfit())));
+      _showErrorSnackBar(context, 'Please upload at least one image of the item');
       return;
     }
 
     final double price = double.tryParse(_priceController.text) ?? 0.0;
     if (price <= 0) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Price must be greater than 0', style: GoogleFonts.outfit())));
+        _showErrorSnackBar(context, 'Price must be greater than 0');
         return;
     }
 
     if (_listingType == 'Rent') {
         int maxDays = int.tryParse(_maxDurationController.text) ?? 0;
         if (maxDays < 1) {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Max rental duration must be at least 1 day', style: GoogleFonts.outfit())));
+            _showErrorSnackBar(context, 'Max rental duration must be at least 1 day');
             return;
         }
     }
@@ -734,7 +825,7 @@ class _SellPageState extends State<SellPage> {
     try {
       final apiClient = ApiClient();
       
-      // 1. Upload Images (Optimized for Performance: Concurrent Uploads)
+      // 1. Upload Images (Concurrent Uploads)
       List<String> uploadedImageUrls = [];
       if (_imageFiles.isNotEmpty) {
           try {
@@ -770,7 +861,7 @@ class _SellPageState extends State<SellPage> {
         'title': _titleController.text,
         'description': _descController.text,
         'category': _selectedCategory ?? 'Others',
-        'sub_category_id': _selectedSubCategory ?? 'Others', // Use name as value for MVP if UUID not strictly required
+        'sub_category_id': _selectedSubCategory ?? 'Others', 
         'condition': _selectedCondition, 
         'seller_id': session.userId,
         'type': _listingType,
@@ -790,7 +881,7 @@ class _SellPageState extends State<SellPage> {
       await apiClient.post('/products', body);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Item Posted Successfully!', style: GoogleFonts.outfit())));
+        _showSuccessSnackBar(context, 'Item posted successfully!');
         // Reset form or nav back
         _titleController.clear();
         _priceController.clear();
@@ -805,7 +896,7 @@ class _SellPageState extends State<SellPage> {
        }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+        _showErrorSnackBar(context, 'Post failed: ${_getFriendlyErrorMessage(e)}');
       }
     } finally {
       if (mounted) setState(() => _isSubmitting = false);

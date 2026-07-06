@@ -4,6 +4,15 @@ import jwt from 'jsonwebtoken';
 const userSockets = new Map(); // userId -> Set of socketId
 let io;
 
+/**
+ * Initializes the Socket.io Server instance on top of the HTTP Server.
+ * Adds authentication middleware to verify JWT token during handshake,
+ * and sets up rooms based on roles.
+ *
+ * @param {Object} httpServer - The HTTP Server instance to attach Socket.io to.
+ * @returns {import('socket.io').Server} - The initialized Socket.io Server instance.
+ * @throws {Error} - If token verification or validation fails during socket handshake.
+ */
 export const initSocket = (httpServer) => {
     io = new Server(httpServer, {
         cors: {
@@ -75,6 +84,14 @@ export const initSocket = (httpServer) => {
     return io;
 };
 
+/**
+ * Emits an event with data to a specific authenticated user.
+ *
+ * @param {string|number} userId - The unique identifier of the target user.
+ * @param {string} event - The Socket.io event name.
+ * @param {any} data - The payload to send.
+ * @returns {void}
+ */
 export const emitToUser = (userId, event, data) => {
     if (!io) return;
     const uIdStr = userId?.toString();
@@ -85,14 +102,33 @@ export const emitToUser = (userId, event, data) => {
     }
 };
 
+/**
+ * Emits an event with data to all staff users (admin or moderator room).
+ *
+ * @param {string} event - The Socket.io event name.
+ * @param {any} data - The payload to send.
+ * @returns {void}
+ */
 export const emitToAdmins = (event, data) => {
     if (!io) return;
     io.to('admins').emit(event, data);
 };
 
+/**
+ * Emits an event with data to strictly administrator room members.
+ *
+ * @param {string} event - The Socket.io event name.
+ * @param {any} data - The payload to send.
+ * @returns {void}
+ */
 export const emitToStrictlyAdmins = (event, data) => {
     if (!io) return;
     io.to('strictly_admins').emit(event, data);
 };
 
+/**
+ * Retrieves the global Socket.io Server instance.
+ *
+ * @returns {import('socket.io').Server|undefined} - The active Server instance, or undefined.
+ */
 export const getIo = () => io;

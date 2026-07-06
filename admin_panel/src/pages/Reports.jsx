@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { AlertTriangle, CheckCircle } from 'lucide-react';
-import api from '../services/api';
+import api, { IMAGE_BASE_URL } from '../services/api';
 
 const Reports = () => {
     const location = useLocation();
@@ -193,10 +193,10 @@ const Reports = () => {
                                         <div style={{ width: '120px', height: '120px', background: '#f3f4f6', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9ca3af', overflow: 'hidden', border: '1px solid var(--border)' }}>
                                             {selectedReport.raw.product.image_urls && selectedReport.raw.product.image_urls[0] ? (
                                                 <img 
-                                                    src={`http://localhost:3000${selectedReport.raw.product.image_urls[0]}`} 
+                                                    src={`${IMAGE_BASE_URL}${selectedReport.raw.product.image_urls[0]}`} 
                                                     alt="Product" 
                                                     style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'zoom-in', transition: 'transform 0.2s' }} 
-                                                    onClick={() => setLightboxImage(`http://localhost:3000${selectedReport.raw.product.image_urls[0]}`)}
+                                                    onClick={() => setLightboxImage(`${IMAGE_BASE_URL}${selectedReport.raw.product.image_urls[0]}`)}
                                                     onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'}
                                                     onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
                                                 />
@@ -224,7 +224,7 @@ const Reports = () => {
                                         <div style={{ width: '120px', height: '120px', background: '#e0f2fe', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0284c7', overflow: 'hidden', border: '1px solid #bae6fd', fontSize: '2.5rem', fontWeight: 'bold' }}>
                                             {selectedReport.raw.reported_user.profile_image_url ? (
                                                 <img 
-                                                    src={`http://localhost:3000${selectedReport.raw.reported_user.profile_image_url}`} 
+                                                    src={`${IMAGE_BASE_URL}${selectedReport.raw.reported_user.profile_image_url}`} 
                                                     alt="User Avatar" 
                                                     style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
                                                 />
@@ -263,11 +263,11 @@ const Reports = () => {
                                                 <div 
                                                     key={i} 
                                                     style={{ width: '80px', height: '80px', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border)', cursor: 'zoom-in', transition: 'transform 0.2s' }}
-                                                    onClick={() => setLightboxImage(`http://localhost:3000${url}`)}
+                                                    onClick={() => setLightboxImage(`${IMAGE_BASE_URL}${url}`)}
                                                     onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'}
                                                     onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
                                                 >
-                                                    <img src={`http://localhost:3000${url}`} alt={`Evidence ${i+1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                    <img src={`${IMAGE_BASE_URL}${url}`} alt={`Evidence ${i+1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                                 </div>
                                             ))}
                                         </div>

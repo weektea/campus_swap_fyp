@@ -16,11 +16,53 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
 
+  @override
+  void dispose() {
+    _oldPassController.dispose();
+    _newPassController.dispose();
+    _confirmPassController.dispose();
+    super.dispose();
+  }
+
+
+  void _showErrorSnackBar(BuildContext context, String message) {
+    final theme = Theme.of(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: theme.colorScheme.error,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  void _showSuccessSnackBar(BuildContext context, String message) {
+    final theme = Theme.of(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: theme.colorScheme.primary,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  String _getFriendlyErrorMessage(dynamic e) {
+    final message = e.toString();
+    if (message.contains('SocketException') || message.contains('Connection error') || message.contains('Failed host lookup')) {
+      return 'Network error. Please check your internet connection and try again.';
+    }
+    if (message.contains('TimeoutException') || message.contains('Connection timed out')) {
+      return 'Connection timed out. Please check your network and try again.';
+    }
+    return message.replaceAll(RegExp(r'^Exception:\s*'), '').replaceAll(RegExp(r'^ApiException:\s*'), '');
+  }
+
   void _submit() async {
       if (!_formKey.currentState!.validate()) return;
       
       if (_newPassController.text != _confirmPassController.text) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('New passwords do not match')));
+          _showErrorSnackBar(context, 'New passwords do not match');
           return;
       }
 
@@ -34,11 +76,11 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
           });
 
           if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Password Changed Successfully')));
+              _showSuccessSnackBar(context, 'Password changed successfully!');
               Navigator.pop(context);
           }
       } catch (e) {
-          if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+          if (mounted) _showErrorSnackBar(context, 'Change password failed: ${_getFriendlyErrorMessage(e)}');
       } finally {
           if (mounted) setState(() => _isLoading = false);
       }
@@ -78,7 +120,9 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                             width: double.infinity,
                             child: ElevatedButton(
                                 onPressed: _isLoading ? null : _submit,
-                                child: _isLoading ? const CircularProgressIndicator() : const Text('Update Password'),
+                                child: _isLoading 
+                                    ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) 
+                                    : const Text('Update Password'),
                             ),
                         )
                     ],

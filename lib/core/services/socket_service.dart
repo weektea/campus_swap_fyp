@@ -1,11 +1,11 @@
-import 'package:socket_io_client/socket_io_client.dart' as IO;
+import 'package:socket_io_client/socket_io_client.dart' as socket_io;
 import 'package:campus_swap/core/api/api_client.dart';
 import 'package:campus_swap/core/session/user_session.dart';
 import 'package:flutter/foundation.dart';
 
 class SocketService {
   static final SocketService _instance = SocketService._internal();
-  IO.Socket? socket;
+  socket_io.Socket? socket;
 
   factory SocketService() {
     return _instance;
@@ -27,7 +27,7 @@ class SocketService {
     final socketUrl = httpUrl.replaceAll('/api', '');
 
     debugPrint('SocketService: Connecting to $socketUrl');
-    socket = IO.io(socketUrl, IO.OptionBuilder()
+    socket = socket_io.io(socketUrl, socket_io.OptionBuilder()
       .setTransports(['websocket'])
       .disableAutoConnect()
       .setAuth({

@@ -9,11 +9,25 @@ import threading
 
 FLAT_CLASSES = []
 
+BACKEND_API_URL = os.getenv('BACKEND_API_URL', 'http://localhost:3000/api')
+
 def fetch_categories_from_api():
+    """
+    Fetches the hierarchical product categories and subcategories from the backend database API,
+    flattens them into a combined format (Category___SubCategory), and updates the global FLAT_CLASSES list.
+    If the API is unavailable, it attempts to load categories from the local dataset folder names,
+    falling back to a default category if both checks fail.
+
+    Returns:
+        None
+
+    Raises:
+        None (catches exceptions internally and prints warnings)
+    """
     global FLAT_CLASSES
     try:
         print("Fetching categories from Node.js API...")
-        response = requests.get('http://localhost:3000/api/categories', timeout=5)
+        response = requests.get(f"{BACKEND_API_URL}/categories", timeout=5)
         if response.status_code == 200:
             categories = response.json()
             classes = []
@@ -61,12 +75,34 @@ data_transforms = transforms.Compose([
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 class LiveModelContainer:
+    """
+    A thread-safe container that holds the loaded PyTorch model and its class mapping.
+    Allows atomic swapping of model instances when a new model has been trained.
+    """
     def __init__(self):
+        """
+        Initializes the LiveModelContainer with empty weights, class map, and an RLock.
+        """
         self.model = None
         self.classes = []
         self.lock = threading.RLock() # Reentrant lock for strict safety
 
     def load_model(self, model_path: str, classes_path: str) -> bool:
+        """
+        Reconstructs the model architecture, loads weights from the specified path,
+        and atomically swaps the active model under a reentrant lock.
+
+        Args:
+            model_path (str): The absolute or relative path to the custom PyTorch weights file (.pth).
+            classes_path (str): The path to the sidecar JSON file containing the list of output classes.
+
+        Returns:
+            bool: True if the model reloaded successfully, False otherwise.
+
+        Raises:
+            FileNotFoundError: If the model weights or class files are missing from disk.
+            Exception: If PyTorch fails to load the state dict or parsing JSON fails.
+        """
         with self.lock:
             print(f"[ML-HOT-SWAP] Hot Swap initiated. Loading weights from {model_path}...")
             if not os.path.exists(model_path) or not os.path.exists(classes_path):
@@ -142,6 +178,20 @@ else:
     print(f"No custom model found at {MODEL_PATH}. Hot Swapper waiting for first training run.")
 
 def predict_image(image_path: str):
+    """
+    Inferences the model to predict the category and subcategory of a given image file.
+    Runs under the thread-safety lock of the live model container.
+
+    Args:
+        image_path (str): The absolute filesystem path to the target image file.
+
+    Returns:
+        dict: A dictionary containing 'category', 'sub_category', and 'confidence'.
+              Defaults to "Others", "Others", 0.0 if loading or inference fails.
+
+    Raises:
+        None (catches exceptions internally and returns fallback dictionary)
+    """
     # Enforce strict thread-safety during inference per Code Safety requirement
     with live_model_container.lock:
         try:
@@ -175,6 +225,20 @@ def predict_image(image_path: str):
             return {"category": "Others", "sub_category": "Others", "confidence": 0.0}
 
 def fine_tune_model(dataset_dir: str, target_classes: list = None) -> bool:
+    """
+    Fine-tunes a MobileNet V2 shadow model using corrective feedback dataset, calculates metrics,
+    and updates model weights/classes JSON sidecar using atomic renaming.
+
+    Args:
+        dataset_dir (str): The path containing subdirectories named Category___SubCategory with feedback images.
+        target_classes (list, optional): Explicit target list of categories. If None, defaults to FLAT_CLASSES.
+
+    Returns:
+        bool: True if training, evaluation, and weights swap completed successfully, False otherwise.
+
+    Raises:
+        None (catches exceptions internally and cleans up temp files)
+    """
     from torch.utils.data import Dataset, DataLoader
     import torch.optim as optim
     import glob
@@ -185,7 +249,18 @@ def fine_tune_model(dataset_dir: str, target_classes: list = None) -> bool:
     print(f"[ML-SHADOW-TRAINING] Starting Shadow Training for {len(classes_to_train)} subcategories...")
     
     class CustomImageDataset(Dataset):
-        def __init__(self, root_dir, transform=None):
+        """
+        A custom PyTorch Dataset implementation for parsing and loading user feedback
+        corrective images grouped by category subfolders.
+        """
+        def __init__(self, root_dir: str, transform=None):
+            """
+            Initializes the dataset, loading image filepaths and mapping them to class indexes.
+
+            Args:
+                root_dir (str): The root directory containing category directories.
+                transform (callable, optional): The transform pipeline (e.g. data_transforms).
+            """
             self.root_dir = root_dir
             self.transform = transform
             self.image_paths = []
@@ -199,10 +274,25 @@ def fine_tune_model(dataset_dir: str, target_classes: list = None) -> bool:
                             self.image_paths.append(file_path)
                             self.labels.append(idx)
                             
-        def __len__(self):
+        def __len__(self) -> int:
+            """
+            Returns the total number of images found.
+
+            Returns:
+                int: Total number of images.
+            """
             return len(self.image_paths)
             
-        def __getitem__(self, idx):
+        def __getitem__(self, idx: int):
+            """
+            Loads, transforms, and returns a single (image_tensor, label_index) pair.
+
+            Args:
+                idx (int): The index of the target sample.
+
+            Returns:
+                tuple: (transformed_image_tensor, label_index).
+            """
             img_path = self.image_paths[idx]
             image = Image.open(img_path).convert('RGB')
             if self.transform:

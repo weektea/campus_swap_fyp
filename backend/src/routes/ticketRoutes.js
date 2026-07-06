@@ -160,17 +160,29 @@ router.get('/thread/:reference_id/status', verifyToken, async (req, res) => {
     try {
         let status = 'Open';
         let type = 'SupportTicket';
+        const refId = req.params.reference_id;
         
-        const dispute = await Dispute.findByPk(req.params.reference_id);
+        const dispute = await Dispute.findByPk(refId);
         if (dispute) {
+            const tx = await Transaction.findByPk(dispute.transaction_id);
+            if (!tx || (String(req.user.id) !== String(dispute.complainant_id) && 
+                        String(req.user.id) !== String(tx.buyer_id) && 
+                        String(req.user.id) !== String(tx.seller_id) && 
+                        !isStaff(req.user))) {
+                return sendError(res, 403, 'Access Denied: You are not authorized to view this dispute status.');
+            }
             status = dispute.status;
             type = 'Dispute';
         } else {
-            const ticket = await SupportTicket.findByPk(req.params.reference_id);
-            if (ticket) {
-                status = ticket.status;
-                type = 'SupportTicket';
+            const ticket = await SupportTicket.findByPk(refId);
+            if (!ticket) {
+                return sendError(res, 404, 'Thread not found.');
             }
+            if (String(req.user.id) !== String(ticket.user_id) && !isStaff(req.user)) {
+                return sendError(res, 403, 'Access Denied: You are not authorized to view this support ticket status.');
+            }
+            status = ticket.status;
+            type = 'SupportTicket';
         }
         res.json({ status, type });
     } catch (error) {

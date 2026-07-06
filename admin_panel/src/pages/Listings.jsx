@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Search, Edit, Trash2 } from 'lucide-react';
-import api from '../services/api';
+import api, { IMAGE_BASE_URL } from '../services/api';
 
 const Listings = () => {
     const location = useLocation();
@@ -146,7 +146,7 @@ const Listings = () => {
                                 <td style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                                     <div style={{ width: '40px', height: '40px', background: '#f3f4f6', borderRadius: '8px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                         {item.image_urls && item.image_urls.length > 0 ? (
-                                            <img src={`http://localhost:3000${item.image_urls[0]}`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                            <img src={`${IMAGE_BASE_URL}${item.image_urls[0]}`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                         ) : (
                                             <span style={{ color: '#9ca3af', fontSize: '0.6rem' }}>No Img</span>
                                         )}
@@ -228,7 +228,7 @@ const Listings = () => {
                         <div style={{ display: 'flex', gap: '1.25rem', marginBottom: '1.5rem', background: '#f8fafc', padding: '16px', borderRadius: '12px', border: '1px solid var(--border)' }}>
                             <div style={{ width: '90px', height: '90px', background: '#e2e8f0', borderRadius: '8px', overflow: 'hidden', flexShrink: 0 }}>
                                 {selectedListing.image_urls && selectedListing.image_urls.length > 0 ? (
-                                    <img src={`http://localhost:3000${selectedListing.image_urls[0]}`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                    <img src={`${IMAGE_BASE_URL}${selectedListing.image_urls[0]}`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                 ) : (
                                     <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', fontSize: '0.8rem' }}>No Image</div>
                                 )}

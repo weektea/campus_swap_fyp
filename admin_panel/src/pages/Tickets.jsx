@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Lock, CheckCircle } from 'lucide-react';
-import api from '../services/api';
+import api, { IMAGE_BASE_URL } from '../services/api';
 import { useSocket } from '../context/SocketContext';
 
 const getStatusBadgeStyle = (status) => {
@@ -35,7 +35,7 @@ const Tickets = () => {
     const getImageUrl = (url) => {
         if (!url) return '';
         if (url.startsWith('http://') || url.startsWith('https://')) return url;
-        return `http://localhost:3000${url.startsWith('/') ? '' : '/'}${url}`;
+        return `${IMAGE_BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
     };
 
     const formatChatTimestamp = (createdAtStr) => {
