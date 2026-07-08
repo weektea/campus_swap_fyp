@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:campus_swap/core/api/api_client.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:campus_swap/features/profile/presentation/pages/ticket_chat_page.dart';
 import 'package:campus_swap/features/profile/presentation/pages/submit_ticket_page.dart';
 import 'package:campus_swap/features/profile/presentation/pages/help_category_detail_page.dart';
@@ -339,7 +340,12 @@ class _HelpCenterPageState extends State<HelpCenterPage> with SingleTickerProvid
     String esgMessage = '';
     
     if (type == 'Report') {
-      title = 'Reported Listing #${item['id'].toString().substring(0, 6).toUpperCase()}';
+      if (item['reported_user'] != null) {
+        final username = item['reported_user']['username'] ?? 'User';
+        title = 'Reported User @$username';
+      } else {
+        title = 'Reported Listing #${item['id'].toString().substring(0, 6).toUpperCase()}';
+      }
       if (status == 'Uphold') {
         esgMessage = "Thank you for your contribution to a safer, greener campus.";
       }
@@ -366,27 +372,76 @@ class _HelpCenterPageState extends State<HelpCenterPage> with SingleTickerProvid
             context: context,
             builder: (_) => AlertDialog(
               title: const Text('Report Details'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
-                  Text('Reason: ${item['violation_type'] ?? 'Violation'}'),
-                  const SizedBox(height: 8),
-                  Text('Status: $status'),
-                  if (esgMessage.isNotEmpty) ...[
-                    const SizedBox(height: 16),
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.green.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(8),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    Text('Reason: ${item['violation_type'] ?? 'Violation'}'),
+                    const SizedBox(height: 8),
+                    Text('Status: $status'),
+                    if (item['description'] != null && item['description'].toString().isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Text('Details: ${item['description']}'),
+                    ],
+                    if (item['evidence_urls'] != null && (item['evidence_urls'] as List).isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      const Text('Evidence:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      const SizedBox(height: 6),
+                      SizedBox(
+                        height: 60,
+                        child: ListView.builder(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: (item['evidence_urls'] as List).length,
+                          itemBuilder: (context, idx) {
+                            final imgUrl = item['evidence_urls'][idx];
+                            final host = ApiClient.baseUrl.replaceAll('/api', '');
+                            final fullUrl = imgUrl.toString().startsWith('http')
+                                ? imgUrl.toString()
+                                : '$host${imgUrl.toString()}';
+                            return Padding(
+                              padding: const EdgeInsets.only(right: 8.0),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(6),
+                                child: CachedNetworkImage(
+                                  imageUrl: fullUrl,
+                                  width: 60,
+                                  height: 60,
+                                  fit: BoxFit.cover,
+                                  placeholder: (context, url) => Container(
+                                    width: 60,
+                                    height: 60,
+                                    color: Colors.grey[200],
+                                    child: const Center(child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))),
+                                  ),
+                                  errorWidget: (context, url, error) => Container(
+                                    width: 60,
+                                    height: 60,
+                                    color: Colors.grey[300],
+                                    child: const Icon(Icons.broken_image, size: 20, color: Colors.grey),
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
                       ),
-                      child: Text(esgMessage, style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
-                    )
-                  ]
-                ],
+                    ],
+                    if (esgMessage.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.green.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(esgMessage, style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+                      )
+                    ]
+                  ],
+                ),
               ),
               actions: [
                 TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close'))

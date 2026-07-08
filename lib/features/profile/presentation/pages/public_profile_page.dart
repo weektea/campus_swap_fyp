@@ -5,6 +5,7 @@ import 'package:campus_swap/features/product/presentation/pages/product_details_
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:campus_swap/core/session/user_session.dart';
+import 'package:campus_swap/features/profile/presentation/pages/report_user_page.dart';
 
 class PublicProfilePage extends StatefulWidget {
   final String userId;
@@ -381,100 +382,15 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
   }
 
   void _showReportUserDialog(BuildContext context) {
-      showDialog(
-          context: context,
-          builder: (context) {
-              String description = '';
-              String violationType = 'Harassment';
-              bool isSubmitting = false;
-              return StatefulBuilder(
-                  builder: (context, setState) {
-                      return AlertDialog(
-                          title: Text('Report @${widget.userName}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                          content: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                  DropdownButtonFormField<String>(
-                                      value: violationType,
-                                      decoration: const InputDecoration(
-                                          labelText: 'Reason for Report',
-                                          border: OutlineInputBorder(),
-                                      ),
-                                      items: const [
-                                          DropdownMenuItem(value: 'Harassment', child: Text('Offline Harassment')),
-                                          DropdownMenuItem(value: 'No-show', child: Text('No-show / Flaked')),
-                                          DropdownMenuItem(value: 'Scam', child: Text('Scam / Fraud')),
-                                          DropdownMenuItem(value: 'Spam', child: Text('Spamming')),
-                                          DropdownMenuItem(value: 'Other', child: Text('Other Misbehavior')),
-                                      ],
-                                      onChanged: (val) {
-                                          if (val != null) {
-                                              setState(() => violationType = val);
-                                          }
-                                      },
-                                  ),
-                                  const SizedBox(height: 12),
-                                  TextField(
-                                      onChanged: (val) => description = val,
-                                      maxLines: 3,
-                                      decoration: const InputDecoration(
-                                          labelText: 'Details of Misconduct',
-                                          hintText: 'Explain the issue or behavior...',
-                                          border: OutlineInputBorder(),
-                                      ),
-                                  ),
-                              ],
-                          ),
-                          actions: [
-                              TextButton(
-                                  onPressed: isSubmitting ? null : () => Navigator.pop(context),
-                                  child: const Text('Cancel'),
-                              ),
-                              ElevatedButton(
-                                  onPressed: isSubmitting
-                                      ? null
-                                      : () async {
-                                          if (description.trim().isEmpty) {
-                                              ScaffoldMessenger.of(context).showSnackBar(
-                                                  const SnackBar(content: Text('Please provide details of misconduct')),
-                                              );
-                                              return;
-                                          }
-                                          setState(() => isSubmitting = true);
-                                          try {
-                                              final apiClient = ApiClient();
-                                              await apiClient.post('/auth/user/${widget.userId}/report', {
-                                                  'violation_type': violationType,
-                                                  'description': description.trim(),
-                                              });
-                                              if (context.mounted) {
-                                                  ScaffoldMessenger.of(context).showSnackBar(
-                                                      const SnackBar(content: Text('User reported successfully.'), backgroundColor: Colors.green),
-                                                  );
-                                                  Navigator.pop(context);
-                                              }
-                                          } catch (e) {
-                                              if (context.mounted) {
-                                                  ScaffoldMessenger.of(context).showSnackBar(
-                                                      SnackBar(content: Text('Failed to submit report: $e'), backgroundColor: Colors.red),
-                                                  );
-                                              }
-                                          } finally {
-                                              if (context.mounted) {
-                                                  setState(() => isSubmitting = false);
-                                              }
-                                          }
-                                      },
-                                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF006940)),
-                                  child: isSubmitting
-                                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                                      : const Text('Submit', style: TextStyle(color: Colors.white)),
-                              ),
-                          ],
-                      );
-                  },
-              );
-          },
+      Navigator.push(
+          context,
+          MaterialPageRoute(
+              builder: (context) => ReportUserPage(
+                  userId: widget.userId,
+                  username: widget.userName,
+                  profilePicture: _userProfile?['profile_image_url'],
+              ),
+          ),
       );
   }
 

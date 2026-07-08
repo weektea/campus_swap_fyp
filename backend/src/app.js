@@ -499,6 +499,11 @@ if (process.env.NODE_ENV !== 'test') {
                         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='Transactions' AND column_name='co_renter_id') THEN
                             ALTER TABLE "Transactions" ADD COLUMN "co_renter_id" UUID;
                         END IF;
+
+                        -- 16. Ensure product_id in Reports table is nullable
+                        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='Reports' AND column_name='product_id' AND is_nullable='NO') THEN
+                            ALTER TABLE "Reports" ALTER COLUMN "product_id" DROP NOT NULL;
+                        END IF;
                     END $$;
                 `);
 

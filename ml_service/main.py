@@ -1,6 +1,11 @@
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from typing import List, Dict, Optional
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.neighbors import NearestNeighbors
+import numpy as np
 import shutil
 import os
 import uuid
@@ -572,6 +577,148 @@ async def generate_description(req: DescriptionRequest):
     )
     
     return {"description": desc}
+
+# --- Hybrid Recommendation Engine Models & Endpoint ---
+
+class InteractionItem(BaseModel):
+    user_id: str
+    product_id: str
+    weight: float
+
+class ProductItem(BaseModel):
+    id: str
+    title: str
+    description: str
+    category: str
+    subcategory: Optional[str] = None
+
+class HybridRecommendRequest(BaseModel):
+    user_id: str
+    interactions: List[InteractionItem]
+    products: List[ProductItem]
+
+class HybridRecommendResponse(BaseModel):
+    recommended_product_ids: List[str]
+
+@app.post("/api/recommend/hybrid", response_model=HybridRecommendResponse)
+async def get_hybrid_recommendations(req: HybridRecommendRequest):
+    """
+    Generate recommendations for a user using a hybrid approach (Content-Based + Collaborative Filtering).
+    
+    Deep Learning models (Wide & Deep, NCF) are bypassed in this MVP version to mitigate the Cold Start problem 
+    and data sparsity inherent in new campus platforms, favoring this Hybrid TF-IDF + KNN approach for better initial accuracy.
+    """
+    # Justification Note: Deep Learning models (Wide & Deep, NCF) are bypassed in this MVP version to mitigate 
+    # the Cold Start problem and data sparsity inherent in new campus platforms, favoring this Hybrid TF-IDF + KNN 
+    # approach for better initial accuracy.
+    user_id = req.user_id
+    interactions_data = [i.dict() for i in req.interactions]
+    products_data = [p.dict() for p in req.products]
+    
+    product_ids = [p['id'] for p in products_data]
+    if not product_ids:
+        return {"recommended_product_ids": []}
+        
+    # 1. Content-Based Filtering (TF-IDF + Cosine Similarity)
+    documents = []
+    for p in products_data:
+        title = p.get('title', '') or ''
+        desc = p.get('description', '') or ''
+        cat = p.get('category', '') or ''
+        subcat = p.get('subcategory', '') or ''
+        documents.append(f"{title} {desc} {cat} {subcat}".lower())
+        
+    try:
+        vectorizer = TfidfVectorizer(stop_words='english')
+        tfidf_matrix = vectorizer.fit_transform(documents)
+    except Exception as vec_err:
+        print(f"TF-IDF Vectorization warning: {vec_err}. Falling back to default list.")
+        return {"recommended_product_ids": product_ids[:10]}
+        
+    product_id_to_idx = {pid: idx for idx, pid in enumerate(product_ids)}
+    
+    user_interactions = [i for i in interactions_data if i['user_id'] == user_id]
+    
+    content_scores = np.zeros(len(products_data))
+    if user_interactions:
+        user_profile_vec = np.zeros(tfidf_matrix.shape[1])
+        for interaction in user_interactions:
+            pid = interaction['product_id']
+            if pid in product_id_to_idx:
+                idx = product_id_to_idx[pid]
+                weight = interaction.get('weight', 1.0)
+                user_profile_vec += tfidf_matrix[idx].toarray()[0] * weight
+                
+        if np.any(user_profile_vec):
+            user_profile_vec = user_profile_vec.reshape(1, -1)
+            content_sims = cosine_similarity(user_profile_vec, tfidf_matrix)[0]
+            max_sim = np.max(content_sims)
+            if max_sim > 0:
+                content_scores = content_sims / max_sim
+            else:
+                content_scores = content_sims
+
+    # 2. Collaborative Filtering (KNN based on Cosine similarity)
+    all_users = list(set([i['user_id'] for i in interactions_data]))
+    all_products = list(set([i['product_id'] for i in interactions_data]))
+    
+    cf_scores = np.zeros(len(products_data))
+    if user_id in all_users and len(all_users) > 1 and len(all_products) > 0:
+        user_to_row = {uid: idx for idx, uid in enumerate(all_users)}
+        prod_to_col = {pid: idx for idx, pid in enumerate(all_products)}
+        
+        interaction_matrix = np.zeros((len(all_users), len(all_products)))
+        for interaction in interactions_data:
+            uid = interaction['user_id']
+            pid = interaction['product_id']
+            weight = interaction.get('weight', 1.0)
+            if uid in user_to_row and pid in prod_to_col:
+                interaction_matrix[user_to_row[uid], prod_to_col[pid]] += weight
+                
+        n_neighbors = min(5, len(all_users))
+        knn = NearestNeighbors(metric='cosine', algorithm='brute')
+        knn.fit(interaction_matrix)
+        
+        target_user_row = interaction_matrix[user_to_row[user_id]].reshape(1, -1)
+        distances, indices = knn.kneighbors(target_user_row, n_neighbors=n_neighbors)
+        
+        similarities = 1.0 - distances[0]
+        neighbor_indices = indices[0]
+        
+        collaborative_predictions = np.zeros(len(all_products))
+        sum_similarities = 0.0
+        
+        for sim, neighbor_idx in zip(similarities, neighbor_indices):
+            neighbor_uid = all_users[neighbor_idx]
+            if neighbor_uid == user_id:
+                continue
+            collaborative_predictions += interaction_matrix[neighbor_idx] * sim
+            sum_similarities += sim
+            
+        if sum_similarities > 0:
+            collaborative_predictions /= sum_similarities
+            
+        product_cf_raw = np.zeros(len(products_data))
+        for idx, pid in enumerate(product_ids):
+            if pid in prod_to_col:
+                product_cf_raw[idx] = collaborative_predictions[prod_to_col[pid]]
+                
+        max_cf = np.max(product_cf_raw)
+        if max_cf > 0:
+            cf_scores = product_cf_raw / max_cf
+        else:
+            cf_scores = product_cf_raw
+
+    # 3. Hybrid Score Combination
+    # Combine content-based (0.7) and collaborative filtering (0.3)
+    final_scores = 0.7 * content_scores + 0.3 * cf_scores
+    
+    scored_products = list(zip(product_ids, final_scores))
+    scored_products.sort(key=lambda x: x[1], reverse=True)
+    
+    recommended_ids = [pid for pid, score in scored_products[:10]]
+    
+    return {"recommended_product_ids": recommended_ids}
 
 if __name__ == "__main__":
     import uvicorn

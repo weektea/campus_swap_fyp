@@ -1,5 +1,5 @@
 import { Op } from 'sequelize';
-import { Transaction, Product, SupportTicket, Review, ActivityLog, User } from '../models/index.js';
+import { Transaction, Product, SupportTicket, Review, ActivityLog, User, Category } from '../models/index.js';
 
 export const getProfileAnalytics = async (req, res) => {
     try {

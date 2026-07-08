@@ -163,10 +163,21 @@ class _RegisterPageState extends State<RegisterPage> {
             children: [
               TextFormField(
                 controller: _fullNameController,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Full Name',
-                  prefixIcon: Icon(Icons.badge_outlined),
+                  prefixIcon: const Icon(Icons.badge_outlined),
                   hintText: 'e.g., Zhang Xiao Ming',
+                  suffixIcon: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: const [
+                      Tooltip(
+                        message: 'Please use your real name as it will be verified against your university ID.',
+                        triggerMode: TooltipTriggerMode.tap,
+                        child: Icon(Icons.info_outline, size: 20),
+                      ),
+                      SizedBox(width: 12),
+                    ],
+                  ),
                 ),
                 validator: (v) {
                   if (v == null || v.trim().isEmpty) return 'Required';
@@ -184,21 +195,36 @@ class _RegisterPageState extends State<RegisterPage> {
                 decoration: InputDecoration(
                   labelText: 'Username (Unique ID)', 
                   prefixIcon: const Icon(Icons.person_outline),
-                  suffixIcon: _isCheckingUsername
-                      ? const Padding(
-                          padding: EdgeInsets.all(12.0),
+                  suffixIcon: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Tooltip(
+                        message: 'Used for your profile link and tagging. Letters, numbers, and underscores only. Cannot be changed later.',
+                        triggerMode: TooltipTriggerMode.tap,
+                        child: Icon(Icons.info_outline, size: 20),
+                      ),
+                      if (_isCheckingUsername)
+                        const Padding(
+                          padding: EdgeInsets.only(left: 8.0, right: 12.0),
                           child: SizedBox(
                             width: 16,
                             height: 16,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           ),
                         )
-                      : _usernameFeedback == null
-                          ? null
-                          : Icon(
-                              _isUsernameValid ? Icons.check_circle : Icons.cancel,
-                              color: _isUsernameValid ? Colors.green : Colors.red,
-                            ),
+                      else if (_usernameFeedback != null)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 8.0, right: 12.0),
+                          child: Icon(
+                            _isUsernameValid ? Icons.check_circle : Icons.cancel,
+                            color: _isUsernameValid ? Colors.green : Colors.red,
+                            size: 20,
+                          ),
+                        )
+                      else
+                        const SizedBox(width: 12),
+                    ],
+                  ),
                   helperText: _isUsernameValid && _usernameFeedback != null ? _usernameFeedback : null,
                   helperStyle: const TextStyle(color: Colors.green),
                   errorText: !_isUsernameValid && _usernameFeedback != null ? _usernameFeedback : null,
@@ -208,26 +234,6 @@ class _RegisterPageState extends State<RegisterPage> {
                   if (!_isUsernameValid) return _usernameFeedback ?? 'Username is not available';
                   return null;
                 },
-              ),
-              Padding(
-                padding: const EdgeInsets.only(top: 6, left: 12, right: 12),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Used for your profile link and tagging. Cannot be changed later. Letters, numbers, and underscores only.',
-                        style: TextStyle(fontSize: 11, color: Colors.grey[600]),
-                      ),
-                      const SizedBox(height: 2),
-                      const Text(
-                        'This is your system ID, not your real name.',
-                        style: TextStyle(fontSize: 11, color: Colors.redAccent, fontWeight: FontWeight.w500),
-                      ),
-                    ],
-                  ),
-                ),
               ),
               const SizedBox(height: 16),
               

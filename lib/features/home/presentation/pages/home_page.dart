@@ -14,6 +14,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:campus_swap/core/services/notification_service.dart';
 import 'package:campus_swap/core/session/user_session.dart';
+import 'package:shimmer/shimmer.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -210,6 +211,7 @@ class HomePageState extends State<HomePage> {
   String _selectedListingType = 'All'; // 'All', 'Sale', 'Rent'
 
   List<Product> _recommendedProducts = [];
+  bool _isLoadingRecommendations = false;
   List<Product> _trendingProducts = [];
 
   final List<String> _tabs = ['For You', 'All Listings', 'Popular', 'Newest'];
@@ -244,6 +246,12 @@ class HomePageState extends State<HomePage> {
     // Only fetch for logged-in users? Or generic
     if (!UserSession().isLoggedIn) return;
 
+    if (mounted) {
+      setState(() {
+        _isLoadingRecommendations = true;
+      });
+    }
+
     try {
        final apiClient = ApiClient();
        final response = await apiClient.get('/recommendations');
@@ -254,6 +262,12 @@ class HomePageState extends State<HomePage> {
        }
     } catch(e) {
        // print("Rec Error: $e");
+    } finally {
+       if (mounted) {
+          setState(() {
+             _isLoadingRecommendations = false;
+          });
+       }
     }
   }
 
@@ -989,7 +1003,86 @@ class HomePageState extends State<HomePage> {
                   ),
                 ),
             ] else ...[
-              if (_isLoading)
+              if (_selectedTab == 'For You' && _isLoadingRecommendations)
+                SliverPadding(
+                  padding: const EdgeInsets.all(20),
+                  sliver: SliverGrid(
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      childAspectRatio: 0.70,
+                      crossAxisSpacing: 16,
+                      mainAxisSpacing: 16,
+                    ),
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                        final isDark = Theme.of(context).brightness == Brightness.dark;
+                        return Shimmer.fromColors(
+                          baseColor: isDark ? Colors.grey[800]! : Colors.grey[300]!,
+                          highlightColor: isDark ? Colors.grey[700]! : Colors.grey[100]!,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Image space placeholder
+                                Expanded(
+                                  flex: 6,
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      color: isDark ? Colors.grey[850]! : Colors.white,
+                                      borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                                    ),
+                                  ),
+                                ),
+                                // Text space placeholder
+                                Padding(
+                                  padding: const EdgeInsets.all(12.0),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Container(
+                                        height: 14,
+                                        width: double.infinity,
+                                        color: isDark ? Colors.grey[850]! : Colors.white,
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Container(
+                                        height: 12,
+                                        width: 80,
+                                        color: isDark ? Colors.grey[850]! : Colors.white,
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Container(
+                                            height: 16,
+                                            width: 60,
+                                            color: isDark ? Colors.grey[850]! : Colors.white,
+                                          ),
+                                          Container(
+                                            height: 16,
+                                            width: 40,
+                                            color: isDark ? Colors.grey[850]! : Colors.white,
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                      childCount: 6,
+                    ),
+                  ),
+                )
+              else if (_isLoading)
                 const SliverFillRemaining(
                   child: Center(child: CircularProgressIndicator()),
                 )

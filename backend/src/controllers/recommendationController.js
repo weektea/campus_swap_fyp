@@ -1,6 +1,9 @@
 import { UserInteraction, Product, User, Report, Category, SubCategory } from '../models/index.js';
 import { Op } from 'sequelize';
 import sequelize from '../config/database.js';
+import axios from 'axios';
+
+const ML_SERVICE_URL = process.env.ML_SERVICE_URL || 'http://localhost:5000';
 
 // Track a user action
 export const trackInteraction = async (req, res) => {
@@ -30,7 +33,7 @@ export const trackInteraction = async (req, res) => {
     }
 };
 
-// Get Recommendations (Content-Based + Simple Collaborative)
+// Get Recommendations (Hybrid Content-Based + KNN Collaborative)
 export const getRecommendations = async (req, res) => {
     try {
         const user_id = req.user.id;
@@ -44,10 +47,10 @@ export const getRecommendations = async (req, res) => {
             where: { reporter_id: user_id },
             attributes: ['product_id']
         });
-        const reportedIds = reportedItems.map(r => r.product_id);
+        const reportedIds = reportedItems.map(r => r.product_id).filter(Boolean);
 
-        // 2. Cold Start Fallback: If user has no interactions, return global trending items
-        if (userInteractions.length === 0) {
+        // Helper function for cold-start / fallback trending list
+        const getFallbackRecommendations = async () => {
             const trendingQuery = await sequelize.query(`
                 SELECT ui.product_id, 
                        COUNT(CASE WHEN ui.interaction_type = 'view' THEN 1 END) as view_count,
@@ -91,14 +94,11 @@ export const getRecommendations = async (req, res) => {
                     }]
                 });
                 
-                // Sort products by score order
-                const sortedTrending = productIds
+                return productIds
                     .map(id => trendingProducts.find(p => p.id === id))
                     .filter(Boolean);
-                return res.json(sortedTrending);
             } else {
-                // Absolute fallback (newest items)
-                const fallback = await Product.findAll({
+                return await Product.findAll({
                     where: {
                         status: 'Available',
                         seller_id: { [Op.ne]: user_id },
@@ -108,11 +108,15 @@ export const getRecommendations = async (req, res) => {
                     order: [['createdAt', 'DESC']],
                     limit: 10
                 });
-                return res.json(fallback);
             }
+        };
+
+        // Cold Start Fallback: If user has no interactions, return global trending items
+        if (userInteractions.length === 0) {
+            const fallbackList = await getFallbackRecommendations();
+            return res.json(fallbackList);
         }
 
-        // 3. User has history: Implement TF-IDF + Cosine Similarity recommendation
         // Fetch all available products (excluding user's own listings and reported listings)
         const availableProducts = await Product.findAll({
             where: {
@@ -137,105 +141,61 @@ export const getRecommendations = async (req, res) => {
             return res.json([]);
         }
 
-        // Preprocess text documents
-
-        const documents = availableProducts.map(p => {
-            const catName = p.categoryModel ? p.categoryModel.name : (p.category || '');
-            const subcatName = p.subcategoryModel ? p.subcategoryModel.name : '';
-            const text = `${p.title} ${p.description} ${catName} ${subcatName}`.toLowerCase();
-            const tokens = text.replace(/[^\w\s]/g, ' ').split(/\s+/).filter(t => t.length > 0);
-            return {
-                id: p.id,
-                tokens,
-                termFreqs: tokens.reduce((acc, t) => {
-                    acc[t] = (acc[t] || 0) + 1;
-                    return acc;
-                }, {})
-            };
+        // Fetch all interactions for Collaborative Filtering (KNN) matrix building
+        const allInteractions = await UserInteraction.findAll({
+            attributes: ['user_id', 'product_id', 'weight']
         });
 
-        // Compute Document Frequency (DF)
-        const df = {};
-        documents.forEach(doc => {
-            Object.keys(doc.termFreqs).forEach(term => {
-                df[term] = (df[term] || 0) + 1;
-            });
+        const productsPayload = availableProducts.map(p => ({
+            id: p.id,
+            title: p.title,
+            description: p.description || '',
+            category: p.categoryModel ? p.categoryModel.name : (p.category || ''),
+            subcategory: p.subcategoryModel ? p.subcategoryModel.name : ''
+        }));
+
+        let recommendedIds = [];
+        try {
+            const pythonRes = await axios.post(`${ML_SERVICE_URL}/api/recommend/hybrid`, {
+                user_id: user_id,
+                interactions: allInteractions.map(i => ({
+                    user_id: i.user_id,
+                    product_id: i.product_id,
+                    weight: parseFloat(i.weight) || 1.0
+                })),
+                products: productsPayload
+            }, { timeout: 4000 });
+
+            recommendedIds = pythonRes.data.recommended_product_ids || [];
+        } catch (pyError) {
+            console.error('Python ML recommendation service call failed, falling back to database list:', pyError.message);
+            const fallbackList = await getFallbackRecommendations();
+            return res.json(fallbackList);
+        }
+
+        if (recommendedIds.length === 0) {
+            const fallbackList = await getFallbackRecommendations();
+            return res.json(fallbackList);
+        }
+
+        // Fetch recommendations from DB and maintain python's exact hybrid scoring sorting order
+        const recommendedProducts = await Product.findAll({
+            where: {
+                id: { [Op.in]: recommendedIds },
+                status: 'Available'
+            },
+            include: [{
+                model: User,
+                as: 'seller',
+                attributes: ['username', 'full_name', 'reputation_score', 'profile_image_url']
+            }]
         });
 
-        const N = documents.length;
-        // Compute Inverse Document Frequency (IDF)
-        const idf = {};
-        Object.keys(df).forEach(term => {
-            idf[term] = Math.log(N / (1 + df[term])) + 1;
-        });
+        const sortedRecommendations = recommendedIds
+            .map(id => recommendedProducts.find(p => p.id === id))
+            .filter(Boolean);
 
-        // Compute TF-IDF vectors for all products
-        const tfIdfVectors = {};
-        documents.forEach(doc => {
-            const vector = {};
-            const totalTokens = doc.tokens.length || 1;
-            Object.keys(doc.termFreqs).forEach(term => {
-                const tf = doc.termFreqs[term] / totalTokens;
-                vector[term] = tf * idf[term];
-            });
-            tfIdfVectors[doc.id] = vector;
-        });
-
-        // Build User Profile Vector
-        const userProfile = {};
-        userInteractions.forEach(interaction => {
-            const vector = tfIdfVectors[interaction.product_id];
-            if (vector) {
-                const weight = interaction.weight || 1;
-                Object.keys(vector).forEach(term => {
-                    userProfile[term] = (userProfile[term] || 0) + (vector[term] * weight);
-                });
-            }
-        });
-
-        // Compute magnitude of User Profile
-        let userMagnitude = 0;
-        Object.keys(userProfile).forEach(term => {
-            userMagnitude += userProfile[term] * userProfile[term];
-        });
-        userMagnitude = Math.sqrt(userMagnitude);
-
-        // Compute Cosine Similarity for each available product
-        const similarities = [];
-        availableProducts.forEach(p => {
-            const vector = tfIdfVectors[p.id];
-            if (!vector) return;
-
-            let dotProduct = 0;
-            let productMagnitude = 0;
-
-            Object.keys(vector).forEach(term => {
-                productMagnitude += vector[term] * vector[term];
-                if (userProfile[term]) {
-                    dotProduct += userProfile[term] * vector[term];
-                }
-            });
-
-            productMagnitude = Math.sqrt(productMagnitude);
-
-            let score = 0;
-            if (userMagnitude > 0 && productMagnitude > 0) {
-                score = dotProduct / (userMagnitude * productMagnitude);
-            }
-
-            similarities.push({
-                product: p,
-                score
-            });
-        });
-
-        // Sort by similarity score descending
-        similarities.sort((a, b) => b.score - a.score);
-
-        // Map to products array
-        const recommendedProducts = similarities.slice(0, 10).map(s => s.product);
-
-        res.json(recommendedProducts);
+        res.json(sortedRecommendations);
     } catch (error) {
         console.error('Recommendation Error:', error);
         res.status(500).json({ error: 'Failed to get recommendations' });

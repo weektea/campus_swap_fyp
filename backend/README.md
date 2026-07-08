@@ -55,13 +55,18 @@ Stop-Process -Id (Get-NetTCPConnection -LocalPort 5000).OwningProcess -Force -Er
 
 # Email: 
 admin@campus-swap.edu.my
+ADMIN-001
 # Password: 
 password123
+Admin@123
 
 # Test Register
-Test Student6     21/ 22/ 23/ 24/ 25/ 26/ 27/  29
-24PMR01666        02111/  
-016-1122666         2211222/   
+24PMR12345
+TestPassword@123
+
+Test Student6     
+24PMR01666         
+016-1122666       
 stu6@tarc.edu.my
 Test1234@
 
@@ -69,3 +74,7 @@ Test1234@
 flutter run --dart-define=API_HOST=192.168.100.23
 
 flutter build apk --dart-define=API_HOST=192.168.100.23
+
+
+# fake data
+node seed_ml_data.js

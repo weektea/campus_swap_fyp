@@ -74,7 +74,10 @@ router.get('/my-reports', verifyToken, async (req, res) => {
     try {
         const reports = await Report.findAll({
             where: { reporter_id: req.user.id },
-            include: [{ model: Product, as: 'product', attributes: ['id', 'title', 'price', 'image_urls'] }],
+            include: [
+                { model: Product, as: 'product', attributes: ['id', 'title', 'price', 'image_urls'] },
+                { model: User, as: 'reported_user', attributes: ['id', 'username', 'full_name', 'profile_image_url'] }
+            ],
             order: [['createdAt', 'DESC']]
         });
         res.json(reports);
