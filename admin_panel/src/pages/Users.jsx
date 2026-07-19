@@ -9,6 +9,7 @@ const Users = () => {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [filterStatus, setFilterStatus] = useState('All');
+    const [viewTab, setViewTab] = useState('active'); // 'active' or 'archived'
     
     const [currentUser, setCurrentUser] = useState(null);
 
@@ -32,13 +33,17 @@ const Users = () => {
         if (userStr) {
             setCurrentUser(JSON.parse(userStr));
         }
-        fetchUsers();
     }, []);
+
+    useEffect(() => {
+        fetchUsers();
+    }, [viewTab]);
 
     const fetchUsers = async () => {
         setLoading(true);
         try {
-            const res = await api.get('/admin/users');
+            const endpoint = viewTab === 'active' ? '/admin/users' : '/admin/users/archived';
+            const res = await api.get(endpoint);
             setUsers(res.data);
         } catch (err) {
             console.error('Failed to fetch users', err);
@@ -78,6 +83,19 @@ const Users = () => {
             fetchUsers();
         } catch (err) {
             alert(err.response?.data?.error || 'Failed to deactivate user');
+        }
+    };
+
+    const handlePermanentDeleteUser = async () => {
+        if (!selectedUser) return;
+        if (!window.confirm('WARNING: Are you sure you want to PERMANENTLY delete and anonymize this user? This will remove all their personal identification data, suspend their listings, but preserve transaction history for integrity. This action CANNOT be undone!')) return;
+        
+        try {
+            await api.delete(`/admin/users/${selectedUser.id}/permanent`);
+            setIsEditModalOpen(false);
+            fetchUsers();
+        } catch (err) {
+            alert(err.response?.data?.error || 'Failed to permanently delete user');
         }
     };
 
@@ -125,17 +143,19 @@ const Users = () => {
                             style={{ border: 'none', background: 'transparent', outline: 'none', width: '100%' }}
                         />
                     </div>
-                    <select 
-                        className="input" 
-                        style={{ width: '150px', marginBottom: 0 }}
-                        value={filterStatus}
-                        onChange={(e) => setFilterStatus(e.target.value)}
-                    >
-                        <option value="All">All Status</option>
-                        <option value="Active">Active</option>
-                        <option value="Banned">Banned</option>
-                    </select>
-                    {currentUser?.role === 'admin' && (
+                    {viewTab === 'active' && (
+                        <select 
+                            className="input" 
+                            style={{ width: '150px', marginBottom: 0 }}
+                            value={filterStatus}
+                            onChange={(e) => setFilterStatus(e.target.value)}
+                        >
+                            <option value="All">All Status</option>
+                            <option value="Active">Active</option>
+                            <option value="Banned">Banned</option>
+                        </select>
+                    )}
+                    {viewTab === 'active' && currentUser?.role === 'admin' && (
                         <button 
                             className="btn flex items-center gap-2" 
                             onClick={() => setIsAddModalOpen(true)}
@@ -146,6 +166,34 @@ const Users = () => {
                 </div>
             </div>
 
+            {/* View Tabs */}
+            <div style={{ display: 'flex', gap: '16px', marginBottom: '20px', borderBottom: '1px solid var(--border)', paddingBottom: '8px' }}>
+                <button 
+                    style={{ 
+                        background: 'none', border: 'none', 
+                        fontSize: '1.0rem', fontWeight: viewTab === 'active' ? 'bold' : 'normal',
+                        color: viewTab === 'active' ? 'var(--primary)' : 'var(--text-muted)',
+                        borderBottom: viewTab === 'active' ? '2px solid var(--primary)' : 'none',
+                        padding: '4px 12px', cursor: 'pointer'
+                    }}
+                    onClick={() => setViewTab('active')}
+                >
+                    Active Directory
+                </button>
+                <button 
+                    style={{ 
+                        background: 'none', border: 'none', 
+                        fontSize: '1.0rem', fontWeight: viewTab === 'archived' ? 'bold' : 'normal',
+                        color: viewTab === 'archived' ? 'var(--primary)' : 'var(--text-muted)',
+                        borderBottom: viewTab === 'archived' ? '2px solid var(--primary)' : 'none',
+                        padding: '4px 12px', cursor: 'pointer'
+                    }}
+                    onClick={() => setViewTab('archived')}
+                >
+                    Archived Users (Auditing)
+                </button>
+            </div>
+
             <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
                 <table>
                     <thead>
@@ -154,6 +202,7 @@ const Users = () => {
                             <th>NAME/EMAIL</th>
                             <th>ROLE</th>
                             <th>ECO-SCORE</th>
+                            <th>FOLLOWERS</th>
                             <th>STATUS</th>
                             <th>ACTIONS</th>
                         </tr>
@@ -186,8 +235,13 @@ const Users = () => {
                                     </span>
                                 </td>
                                 <td style={{ color: 'var(--primary)', fontWeight: 'bold' }}>{typeof user.total_carbon_saved === 'number' ? user.total_carbon_saved.toFixed(1) : (user.total_carbon_saved || 0)}</td>
+                                <td style={{ fontWeight: 'bold' }}>{user.follower_count || 0}</td>
                                 <td>
-                                    {user.is_active ? (
+                                    {user.status === 'PERMANENTLY_DELETED' ? (
+                                        <span style={{ padding: '4px 12px', background: '#f3f4f6', borderRadius: '12px', color: '#9ca3af', fontSize: '0.75rem', fontWeight: 'bold' }}>
+                                            Deleted
+                                        </span>
+                                    ) : user.is_active ? (
                                         <span style={{ padding: '4px 12px', background: '#dcfce7', borderRadius: '12px', color: '#16a34a', fontSize: '0.75rem', fontWeight: 'bold' }}>
                                             Active
                                         </span>
@@ -198,12 +252,16 @@ const Users = () => {
                                     )}
                                 </td>
                                 <td>
-                                    <button 
-                                        onClick={() => handleManageClick(user)}
-                                        style={{ background: 'none', border: 'none', color: 'var(--primary)', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
-                                    >
-                                        <Edit size={14} /> Manage
-                                    </button>
+                                    {viewTab === 'active' ? (
+                                        <button 
+                                            onClick={() => handleManageClick(user)}
+                                            style={{ background: 'none', border: 'none', color: 'var(--primary)', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                                        >
+                                            <Edit size={14} /> Manage
+                                        </button>
+                                    ) : (
+                                        <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>No Actions</span>
+                                    )}
                                 </td>
                             </tr>
                         ))}
@@ -219,7 +277,7 @@ const Users = () => {
             {/* Edit Modal */}
             {isEditModalOpen && selectedUser && (
                 <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}>
-                    <div className="card" style={{ width: '400px', background: 'white' }}>
+                    <div className="card" style={{ width: '450px', background: 'white' }}>
                         <h2 style={{ marginTop: 0 }}>Manage User</h2>
                         <div style={{ marginBottom: '16px' }}>
                             <div style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>{selectedUser.full_name || 'No Name'}</div>
@@ -262,19 +320,35 @@ const Users = () => {
                             </div>
                         )}
 
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            {currentUser?.role === 'admin' && selectedUser.role !== 'admin' ? (
-                                <button className="btn" style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5', display: 'flex', alignItems: 'center', gap: '8px' }} onClick={handleDeleteUser}>
-                                    <UserX size={16} /> Deactivate
-                                </button>
-                            ) : <div></div>}
-
-                            <div style={{ display: 'flex', gap: '12px' }}>
-                                <button className="btn" style={{ background: '#e5e7eb', color: '#374151' }} onClick={() => setIsEditModalOpen(false)}>Cancel</button>
-                                {currentUser?.role === 'admin' && (
-                                    <button className="btn" style={{ background: 'var(--primary)' }} onClick={handleUpdateUser}>Save Changes</button>
-                                )}
+                        {/* Danger Zone */}
+                        {currentUser?.role === 'admin' && (selectedUser.role !== 'admin' || currentUser.email === 'admin@campus.edu.my') && currentUser.id !== selectedUser.id && (
+                            <div style={{ 
+                                padding: '16px', 
+                                background: '#fef2f2', 
+                                border: '1px solid #fee2e2', 
+                                borderRadius: '12px', 
+                                marginBottom: '24px' 
+                            }}>
+                                <span style={{ display: 'block', color: '#991b1b', fontWeight: 'bold', fontSize: '0.85rem', marginBottom: '12px' }}>
+                                    Danger Zone
+                                </span>
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                    <button className="btn" style={{ background: 'white', color: '#dc2626', border: '1px solid #fca5a5', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', padding: '8px 12px', flex: 1, justifyContent: 'center' }} onClick={handleDeleteUser}>
+                                        <UserX size={14} /> Deactivate
+                                    </button>
+                                    <button className="btn" style={{ background: '#fee2e2', color: '#dc2626', border: '1px solid #f87171', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', padding: '8px 12px', flex: 1.2, justifyContent: 'center' }} onClick={handlePermanentDeleteUser}>
+                                        <Trash2 size={14} /> Delete Permanently
+                                    </button>
+                                </div>
                             </div>
+                        )}
+
+                        {/* Footer Controls */}
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '20px', borderTop: '1px solid #e5e7eb', paddingTop: '16px' }}>
+                            <button className="btn" style={{ background: '#e5e7eb', color: '#374151', padding: '8px 16px' }} onClick={() => setIsEditModalOpen(false)}>Cancel</button>
+                            {currentUser?.role === 'admin' && (
+                                <button className="btn" style={{ background: 'var(--primary)', padding: '8px 16px' }} onClick={handleUpdateUser}>Save Changes</button>
+                            )}
                         </div>
                     </div>
                 </div>

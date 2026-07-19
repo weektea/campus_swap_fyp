@@ -60,6 +60,24 @@ const User = sequelize.define('User', {
         type: DataTypes.BOOLEAN,
         defaultValue: false,
     },
+    is_email_verified: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false,
+        allowNull: false,
+    },
+    is_anonymized: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false,
+        allowNull: false,
+    },
+    otp: {
+        type: DataTypes.STRING,
+        allowNull: true,
+    },
+    otp_expiry: {
+        type: DataTypes.DATE,
+        allowNull: true,
+    },
     role: {
         type: DataTypes.ENUM('student', 'admin', 'moderator'),
         defaultValue: 'student',
@@ -78,7 +96,7 @@ const User = sequelize.define('User', {
         defaultValue: 'Public', // From UC04
     },
     status: {
-        type: DataTypes.ENUM('active', 'deactivated', 'suspended'),
+        type: DataTypes.ENUM('active', 'deactivated', 'suspended', 'PERMANENTLY_DELETED'),
         defaultValue: 'active',
         allowNull: false,
     },

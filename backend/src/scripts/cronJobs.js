@@ -1,6 +1,7 @@
 import cron from 'node-cron';
 import { Op } from 'sequelize';
 import { Transaction, User, Review } from '../models/index.js';
+import { executeBackup, pruneOldBackups } from '../utils/backupHelper.js';
 
 const updateReputation = async (userId) => {
     try {
@@ -60,6 +61,20 @@ export const startCronJobs = () => {
             }
         } catch (error) {
             console.error('Error in timeout cron job:', error);
+        }
+    });
+
+    // Automated database backup daily at midnight
+    cron.schedule('0 0 * * *', async () => {
+        console.log('Running scheduled daily database backup...');
+        try {
+            const log = await executeBackup('Auto');
+            console.log(`Daily auto-backup completed successfully. Backup Log ID: ${log.id}`);
+            
+            // Clean up files older than 7 days
+            await pruneOldBackups();
+        } catch (err) {
+            console.error('Scheduled database backup failed:', err);
         }
     });
 };

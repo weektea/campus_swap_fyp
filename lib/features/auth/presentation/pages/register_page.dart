@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
 import 'package:campus_swap/core/api/api_client.dart';
+import 'package:campus_swap/features/auth/presentation/pages/otp_verification_page.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -45,10 +46,38 @@ class _RegisterPageState extends State<RegisterPage> {
   void _onUsernameChanged(String val) {
     if (_usernameDebounce?.isActive ?? false) _usernameDebounce!.cancel();
 
-    if (val.trim().length < 3) {
+    final cleanVal = val.trim();
+
+    if (cleanVal.length < 3) {
       setState(() {
         _isUsernameValid = false;
         _usernameFeedback = 'Username must be at least 3 characters';
+      });
+      return;
+    }
+
+    if (cleanVal.length > 30) {
+      setState(() {
+        _isUsernameValid = false;
+        _usernameFeedback = 'Username must be at most 30 characters';
+      });
+      return;
+    }
+
+    final usernameRegex = RegExp(r'^[a-zA-Z0-9_]+$');
+    if (!usernameRegex.hasMatch(cleanVal)) {
+      setState(() {
+        _isUsernameValid = false;
+        _usernameFeedback = 'Only letters, numbers, and underscores are allowed. No spaces.';
+      });
+      return;
+    }
+
+    final reserved = ['admin', 'system', 'moderator', 'support', 'root', 'campus_swap'];
+    if (reserved.contains(cleanVal.toLowerCase())) {
+      setState(() {
+        _isUsernameValid = false;
+        _usernameFeedback = 'This username is reserved';
       });
       return;
     }
@@ -61,7 +90,7 @@ class _RegisterPageState extends State<RegisterPage> {
     _usernameDebounce = Timer(const Duration(milliseconds: 500), () async {
       try {
         final client = ApiClient();
-        final res = await client.get('/auth/check-username?username=${Uri.encodeComponent(val.trim())}');
+        final res = await client.get('/auth/check-username?username=${Uri.encodeComponent(cleanVal)}');
         
         if (mounted) {
           setState(() {
@@ -138,8 +167,49 @@ class _RegisterPageState extends State<RegisterPage> {
         });
 
         if (mounted) {
-          _showSuccessSnackBar(context, 'Registration Successful! Please Login.');
-          Navigator.pop(context); // Go back to login
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => AlertDialog(
+              title: Row(
+                children: [
+                  Icon(Icons.mark_email_unread_rounded, color: Theme.of(context).colorScheme.primary),
+                  const SizedBox(width: 8),
+                  const Text('Verify Your Email'),
+                ],
+              ),
+              content: const Text(
+                'Registration successful! A verification code has been sent to your student email. Please check your email and verify your account before logging in.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(context); // Close dialog
+                    Navigator.pop(context); // Go back to login page
+                  },
+                  child: const Text('Verify Later'),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.primary,
+                    foregroundColor: Colors.white,
+                  ),
+                  onPressed: () {
+                    Navigator.pop(context); // Close dialog
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => OtpVerificationPage(
+                          email: _emailController.text.trim(),
+                        ),
+                      ),
+                    );
+                  },
+                  child: const Text('Verify Now'),
+                ),
+              ],
+            ),
+          );
         }
       } catch (e) {
         if (mounted) {

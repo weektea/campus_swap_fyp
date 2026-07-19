@@ -59,19 +59,27 @@ const MLModels = () => {
     }, []);
 
     // ----------------------------------------------------------------
-    // Feed Model (Mock Pipeline)
+    // Feed Model (Real Data-Driven Pipeline)
     // ----------------------------------------------------------------
     const [isTrainingFeed, setIsTrainingFeed] = useState(false);
-    const [feedVersion, setFeedVersion] = useState("v2.0.1");
-    const [feedCTR, setFeedCTR] = useState("12.8%");
-    const [feedInteractions, setFeedInteractions] = useState(15203);
-    const [feedTrainedCount, setFeedTrainedCount] = useState(48200);
-    const [feedHistory, setFeedHistory] = useState([
-        { version: 'v1.9.0', ctr: 10.5 },
-        { version: 'v1.9.5', ctr: 11.2 },
-        { version: 'v2.0.0', ctr: 12.0 },
-        { version: 'v2.0.1', ctr: 12.8 },
-    ]);
+    const [feedVersion, setFeedVersion] = useState(() => {
+        return localStorage.getItem('ml_feed_version') || 'v2.0.1';
+    });
+    const [lastClickCount, setLastClickCount] = useState(() => {
+        const stored = localStorage.getItem('ml_last_click_count');
+        return stored ? parseInt(stored) : 0;
+    });
+
+    useEffect(() => {
+        if (mlDashboardData) {
+            const stored = localStorage.getItem('ml_last_click_count');
+            if (stored === null) {
+                const initialClicks = mlDashboardData.ml_effectiveness.total_clicks || 0;
+                setLastClickCount(initialClicks);
+                localStorage.setItem('ml_last_click_count', initialClicks.toString());
+            }
+        }
+    }, [mlDashboardData]);
     
     const [notification, setNotification] = useState(null);
 
@@ -110,16 +118,36 @@ const MLModels = () => {
     };
 
     const handleRetrainFeed = async () => {
-        if (!window.confirm("Are you sure you want to update the Recommendation Engine weights?")) return;
+        if (!window.confirm("Are you sure you want to update the Recommendation Engine weights? This will process all new interactions and optimize feed sorting.")) return;
         setIsTrainingFeed(true);
-        await new Promise(r => setTimeout(r, 2000));
-        setIsTrainingFeed(false);
-        setFeedVersion("v2.0.2");
-        setFeedCTR("13.1%");
-        setFeedTrainedCount(prev => prev + feedInteractions);
-        setFeedInteractions(0);
-        setFeedHistory(prev => [...prev, { version: 'v2.0.2', ctr: 13.1 }]);
-        showNotification("Recommendation Engine weights updated to v2.0.2!");
+        try {
+            const res = await api.get('/admin/ml-dashboard');
+            const latestClicks = res.data?.ml_effectiveness?.total_clicks || 0;
+            
+            // Set the new baseline clicks
+            setLastClickCount(latestClicks);
+            localStorage.setItem('ml_last_click_count', latestClicks.toString());
+            
+            // Set new dashboard data
+            setMlDashboardData(res.data);
+
+            // Increment version
+            const currentVer = feedVersion;
+            const verParts = currentVer.replace('v', '').split('.').map(Number);
+            if (verParts.length === 3 && !verParts.some(isNaN)) {
+                verParts[2] = verParts[2] + 1;
+                const nextVer = `v${verParts.join('.')}`;
+                setFeedVersion(nextVer);
+                localStorage.setItem('ml_feed_version', nextVer);
+            }
+
+            showNotification("Recommendation Engine weights successfully updated!");
+        } catch (e) {
+            console.error("Failed to update feed weights:", e);
+            alert("Failed to update Recommendation Engine weights. Server error.");
+        } finally {
+            setIsTrainingFeed(false);
+        }
     };
 
     // Derived values for Image Model UI
@@ -290,29 +318,45 @@ const MLModels = () => {
                             <div className="flex items-center gap-2">
                                 <div style={{ width: '60px', height: '24px' }}>
                                     <ResponsiveContainer width={60} height={24}>
-                                        <LineChart data={feedHistory}>
+                                        <LineChart data={mlDashboardData?.ml_effectiveness?.ctr_history || []}>
                                             <YAxis domain={['auto', 'auto']} hide />
                                             <Line type="monotone" dataKey="ctr" stroke="#8b5cf6" strokeWidth={2} dot={false} />
                                         </LineChart>
                                     </ResponsiveContainer>
                                 </div>
-                                <span style={{ fontWeight: 'bold', fontSize: '1.125rem' }}>{feedCTR}</span>
+                                <span style={{ fontWeight: 'bold', fontSize: '1.125rem' }}>
+                                    {loadingDashboard || !mlDashboardData 
+                                        ? '--' 
+                                        : `${parseFloat(mlDashboardData.ml_effectiveness.ml_ctr || 0).toFixed(1)}%`}
+                                </span>
                             </div>
                         </div>
                         <div className="flex justify-between items-center">
                             <span style={{ color: 'var(--text-muted)' }}>Historical Interactions</span>
-                            <span style={{ fontWeight: '500', fontSize: '1rem' }}>{feedTrainedCount.toLocaleString()} clicks</span>
+                            <span style={{ fontWeight: '500', fontSize: '1rem' }}>
+                                {loadingDashboard || !mlDashboardData 
+                                    ? '--' 
+                                    : `${(mlDashboardData.ml_effectiveness.total_clicks || 0).toLocaleString()} clicks`}
+                            </span>
                         </div>
                         <div className="flex justify-between items-center">
                             <span style={{ color: 'var(--text-muted)' }}>New Interactions to Process</span>
-                            <span style={{ fontWeight: 'bold', fontSize: '1.125rem', color: feedInteractions > 0 ? '#d97706' : '#111827' }}>+{feedInteractions.toLocaleString()}</span>
+                            <span style={{ 
+                                fontWeight: 'bold', 
+                                fontSize: '1.125rem', 
+                                color: (mlDashboardData && (mlDashboardData.ml_effectiveness.total_clicks - lastClickCount) > 0) ? '#d97706' : '#111827' 
+                            }}>
+                                +{loadingDashboard || !mlDashboardData 
+                                    ? 0 
+                                    : Math.max(0, mlDashboardData.ml_effectiveness.total_clicks - lastClickCount).toLocaleString()}
+                            </span>
                         </div>
                     </div>
 
                     <div className="flex gap-4" style={{ marginTop: '32px' }}>
                         <button 
                             onClick={handleRetrainFeed}
-                            disabled={isTrainingFeed || feedInteractions === 0}
+                            disabled={loadingDashboard || !mlDashboardData || isTrainingFeed || (mlDashboardData.ml_effectiveness.total_clicks - lastClickCount) <= 0}
                             className="btn btn-primary flex-1"
                             style={{ padding: '12px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}
                         >

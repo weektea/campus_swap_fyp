@@ -114,6 +114,12 @@ const UserDetail = () => {
 
                         <div style={{ color: 'var(--text-muted)', fontWeight: 'bold' }}>Carbon Saved</div>
                         <div>{user.total_carbon_saved} kg CO2e</div>
+
+                        <div style={{ color: 'var(--text-muted)', fontWeight: 'bold' }}>Followers</div>
+                        <div>{user.follower_count || 0}</div>
+
+                        <div style={{ color: 'var(--text-muted)', fontWeight: 'bold' }}>Following</div>
+                        <div>{user.following_count || 0}</div>
                     </div>
                 </div>
 

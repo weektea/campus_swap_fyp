@@ -22,6 +22,7 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
   List<Product> _listings = [];
   List<dynamic> _reviews = [];
   bool _isLoading = true;
+  bool _isFollowing = false;
 
   @override
   void initState() {
@@ -37,6 +38,7 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
         final userRes = await apiClient.get('/auth/user/${widget.userId}');
         if (userRes != null && userRes['user'] != null) {
             _userProfile = userRes['user'];
+            _isFollowing = _userProfile?['is_following'] ?? false;
         }
 
         // 2. Fetch User Listings
@@ -75,6 +77,47 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
       } catch (e) {
           return 'N/A';
       }
+  }
+
+  Future<void> _toggleFollow() async {
+    if (!UserSession().isLoggedIn) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please log in to follow sellers')),
+      );
+      return;
+    }
+
+    final apiClient = ApiClient();
+    final originalState = _isFollowing;
+
+    setState(() {
+      _isFollowing = !_isFollowing;
+      if (_userProfile != null) {
+        final currentFollowers = _userProfile!['follower_count'] ?? 0;
+        _userProfile!['follower_count'] = _isFollowing ? currentFollowers + 1 : currentFollowers - 1;
+      }
+    });
+
+    try {
+      if (originalState) {
+        await apiClient.post('/auth/user/${widget.userId}/unfollow', {});
+      } else {
+        await apiClient.post('/auth/user/${widget.userId}/follow', {});
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isFollowing = originalState;
+          if (_userProfile != null) {
+            final currentFollowers = _userProfile!['follower_count'] ?? 0;
+            _userProfile!['follower_count'] = originalState ? currentFollowers + 1 : currentFollowers - 1;
+          }
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to update follow status: $e')),
+        );
+      }
+    }
   }
 
   @override
@@ -132,7 +175,65 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
                                       ),
                                     ],
                                     const SizedBox(height: 8),
-                                    Text("Member since ${_formatDate(_userProfile?['createdAt'])}", style: GoogleFonts.outfit(color: Colors.grey))
+                                    Text("Member since ${_formatDate(_userProfile?['createdAt'])}", style: GoogleFonts.outfit(color: Colors.grey)),
+                                    const SizedBox(height: 12),
+                                    Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                            Column(
+                                                children: [
+                                                    Text(
+                                                        '${_userProfile?['follower_count'] ?? 0}',
+                                                        style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold),
+                                                    ),
+                                                    Text(
+                                                        'Followers',
+                                                        style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey),
+                                                    ),
+                                                ],
+                                            ),
+                                            const SizedBox(width: 32),
+                                            Column(
+                                                children: [
+                                                    Text(
+                                                        '${_userProfile?['following_count'] ?? 0}',
+                                                        style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold),
+                                                    ),
+                                                    Text(
+                                                        'Following',
+                                                        style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey),
+                                                    ),
+                                                ],
+                                            ),
+                                        ],
+                                    ),
+                                    if (UserSession().isLoggedIn && UserSession().userId != widget.userId) ...[
+                                        const SizedBox(height: 16),
+                                        ElevatedButton.icon(
+                                            onPressed: _toggleFollow,
+                                            icon: Icon(
+                                                _isFollowing ? Icons.check_circle : Icons.person_add_alt_1_rounded,
+                                                color: _isFollowing ? Colors.teal : Colors.white,
+                                            ),
+                                            label: Text(
+                                                _isFollowing ? 'Following' : 'Follow',
+                                                style: GoogleFonts.outfit(
+                                                    fontWeight: FontWeight.bold,
+                                                    color: _isFollowing ? Colors.teal : Colors.white,
+                                                ),
+                                            ),
+                                            style: ElevatedButton.styleFrom(
+                                                backgroundColor: _isFollowing ? Colors.teal.shade50 : Colors.teal,
+                                                foregroundColor: _isFollowing ? Colors.teal : Colors.white,
+                                                elevation: 0,
+                                                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+                                                shape: RoundedRectangleBorder(
+                                                    borderRadius: BorderRadius.circular(20),
+                                                    side: const BorderSide(color: Colors.teal),
+                                                ),
+                                            ),
+                                        ),
+                                    ]
                                 ],
                             ),
                         ),

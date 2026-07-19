@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:campus_swap/core/api/api_client.dart';
 import 'package:campus_swap/core/session/user_session.dart';
 import 'package:campus_swap/features/auth/presentation/pages/login_page.dart';
@@ -406,6 +407,8 @@ class _ProfilePageState extends State<ProfilePage> {
                 SocketService().disconnect();
                 NotificationService().stopPolling();
                 UserSession().clear();
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setBool('auto_login', false);
                 if (context.mounted) {
                   Navigator.pushAndRemoveUntil(
                     context, 

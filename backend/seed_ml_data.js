@@ -73,6 +73,7 @@ async function seed() {
             role: 'student',
             phone_number: '+6012-3456789',
             is_verified: true,
+            is_email_verified: true,
             university_id: '24PMR12345',
             status: 'active'
         });
@@ -88,6 +89,7 @@ async function seed() {
                 role: 'student',
                 university_id: `24TEC${String(i + 1).padStart(5, '0')}`, // e.g., 24TEC00001
                 is_verified: true,
+                is_email_verified: true,
                 reputation_score: 4.5 + Math.random() * 0.5,
                 bio: `Tech enthusiast. Love tinkering with hardware. Persona A (i=${i}).`,
                 year_of_study: 2,
@@ -106,6 +108,7 @@ async function seed() {
                 role: 'student',
                 university_id: `24STD${String(i + 1).padStart(5, '0')}`, // e.g., 24STD00001
                 is_verified: true,
+                is_email_verified: true,
                 reputation_score: 4.8 + Math.random() * 0.2,
                 bio: `Dean's lister. Bookworm. Focus on exams. Persona B (i=${i}).`,
                 year_of_study: 3,
@@ -124,6 +127,7 @@ async function seed() {
                 role: 'student',
                 university_id: `24ACT${String(i + 1).padStart(5, '0')}`, // e.g., 24ACT00001
                 is_verified: true,
+                is_email_verified: true,
                 reputation_score: 4.2 + Math.random() * 0.8,
                 bio: `Active lifestyle. Outdoor workouts. Persona C (i=${i}).`,
                 year_of_study: 1,

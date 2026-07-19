@@ -8,7 +8,9 @@ import 'package:campus_swap/core/services/socket_service.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'package:campus_swap/features/auth/presentation/pages/forgot_password_page.dart';
+import 'package:campus_swap/features/auth/presentation/pages/otp_verification_page.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter/services.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -26,7 +28,6 @@ class _LoginPageState extends State<LoginPage> {
   bool _isPasswordVisible = false;
   bool _isLoading = false;
   bool _rememberMe = false;
-  bool _rememberPassword = false;
 
 
   @override
@@ -45,51 +46,48 @@ class _LoginPageState extends State<LoginPage> {
   Future<void> _loadUserCredentials() async {
     final prefs = await SharedPreferences.getInstance();
     final rememberMe = prefs.getBool('remember_me') ?? false;
-    final rememberPassword = prefs.getBool('remember_password') ?? false;
     
     String studentId = '';
     String password = '';
     
     if (rememberMe) {
       studentId = prefs.getString('student_id') ?? '';
-    }
-    if (rememberPassword) {
       password = prefs.getString('password') ?? '';
     }
 
     if (mounted) {
       setState(() {
         _rememberMe = rememberMe;
-        _rememberPassword = rememberPassword;
         if (rememberMe) {
           _studentIdController.text = studentId;
-        }
-        if (rememberPassword) {
           _passwordController.text = password;
         }
       });
+
+      final autoLogin = prefs.getBool('auto_login') ?? false;
+      if (rememberMe && autoLogin && studentId.isNotEmpty && password.isNotEmpty) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            _login();
+          }
+        });
+      }
     }
   }
 
   Future<void> _saveUserCredentials() async {
     final prefs = await SharedPreferences.getInstance();
     
-    // Remember Student ID
     if (_rememberMe) {
       await prefs.setBool('remember_me', true);
       await prefs.setString('student_id', _studentIdController.text);
+      await prefs.setString('password', _passwordController.text);
+      await prefs.setBool('auto_login', true);
     } else {
       await prefs.remove('remember_me');
       await prefs.remove('student_id');
-    }
-    
-    // Remember Password
-    if (_rememberPassword) {
-      await prefs.setBool('remember_password', true);
-      await prefs.setString('password', _passwordController.text);
-    } else {
-      await prefs.remove('remember_password');
       await prefs.remove('password');
+      await prefs.remove('auto_login');
     }
   }
 
@@ -162,9 +160,20 @@ class _LoginPageState extends State<LoginPage> {
           );
         }
       } catch (e) {
+        final isNetworkError = e.toString().contains('SocketException') || 
+                               e.toString().contains('Connection error') || 
+                               e.toString().contains('Failed host lookup') ||
+                               e.toString().contains('TimeoutException');
+        if (!isNetworkError) {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setBool('auto_login', false);
+        }
+
         if (mounted) {
           if (e is ApiException && e.responseData?['errorCode'] == 'ACCOUNT_DEACTIVATED') {
             _showReactivateDialog(e.responseData?['token']);
+          } else if (e is ApiException && e.responseData?['errorCode'] == 'EMAIL_NOT_VERIFIED') {
+            _showEmailVerificationDialog(e.responseData?['email'] ?? _studentIdController.text);
           } else if (e is ApiException && (e.message == 'Account Suspended' || e.responseData?['errorCode'] == 'ACCOUNT_SUSPENDED')) {
             _showSuspendedBottomSheet(e.responseData, e.responseData?['token']);
           } else {
@@ -175,6 +184,161 @@ class _LoginPageState extends State<LoginPage> {
         if (mounted) setState(() => _isLoading = false);
       }
     }
+  }
+
+  void _showEmailVerificationDialog(String email) {
+    final otpInputController = TextEditingController();
+    final dialogFormKey = GlobalKey<FormState>();
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        bool isResending = false;
+        bool isVerifying = false;
+
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: Row(
+                children: [
+                  Icon(Icons.mark_email_unread_rounded, color: Theme.of(context).colorScheme.primary),
+                  const SizedBox(width: 8),
+                  const Text('Email Verification'),
+                ],
+              ),
+              content: Form(
+                key: dialogFormKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Your email address is not verified yet. Please enter the OTP verification code below.',
+                      style: TextStyle(fontSize: 14),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Email: $email',
+                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: otpInputController,
+                      keyboardType: TextInputType.number,
+                      textAlign: TextAlign.center,
+                      maxLength: 6,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                      ],
+                      style: GoogleFonts.outfit(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 8.0,
+                      ),
+                      decoration: const InputDecoration(
+                        hintText: '000000',
+                        hintStyle: TextStyle(color: Colors.grey, letterSpacing: 8.0),
+                        counterText: '',
+                        contentPadding: EdgeInsets.symmetric(vertical: 12),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.all(Radius.circular(8)),
+                        ),
+                      ),
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return 'Please enter OTP';
+                        }
+                        if (value.trim().length != 6) {
+                          return 'Must be 6 digits';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    if (isResending)
+                      const Center(
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(vertical: 8.0),
+                          child: CircularProgressIndicator(),
+                        ),
+                      )
+                    else if (isVerifying)
+                      const Center(
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(vertical: 8.0),
+                          child: CircularProgressIndicator(),
+                        ),
+                      )
+                    else
+                      const Text(
+                        'If you did not receive the code, click Resend Code.',
+                        style: TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                  ],
+                ),
+              ),
+              actions: (isResending || isVerifying)
+                  ? []
+                  : [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Cancel'),
+                      ),
+                      TextButton(
+                        onPressed: () async {
+                          setDialogState(() => isResending = true);
+                          try {
+                            final apiClient = ApiClient();
+                            await apiClient.post('/auth/resend-otp', {'email': email});
+                            if (context.mounted) {
+                              _showSuccessSnackBar(context, 'Verification email resent successfully.');
+                            }
+                          } catch (e) {
+                            if (context.mounted) {
+                              _showErrorSnackBar(context, 'Failed to resend: ${_getFriendlyErrorMessage(e)}');
+                            }
+                          } finally {
+                            setDialogState(() => isResending = false);
+                          }
+                        },
+                        child: const Text('Resend Code'),
+                      ),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Theme.of(context).colorScheme.primary,
+                          foregroundColor: Colors.white,
+                        ),
+                        onPressed: () async {
+                          if (dialogFormKey.currentState!.validate()) {
+                            setDialogState(() => isVerifying = true);
+                            try {
+                              final apiClient = ApiClient();
+                              await apiClient.post('/auth/verify-otp', {
+                                'email': email,
+                                'otp': otpInputController.text.trim()
+                              });
+                              if (context.mounted) {
+                                Navigator.pop(context); // Close dialog
+                                _showSuccessSnackBar(context, 'Email verified successfully! You can now log in.');
+                              }
+                            } catch (e) {
+                              if (context.mounted) {
+                                _showErrorSnackBar(context, 'Verification Failed: ${_getFriendlyErrorMessage(e)}');
+                              }
+                            } finally {
+                              setDialogState(() => isVerifying = false);
+                            }
+                          }
+                        },
+                        child: const Text('Verify'),
+                      ),
+                    ],
+            );
+          },
+        );
+      },
+    );
   }
 
   void _showSuspendedBottomSheet(Map<String, dynamic>? data, String? appealToken) {
@@ -565,39 +729,23 @@ class _LoginPageState extends State<LoginPage> {
                                   children: [
                                     Checkbox(
                                       value: _rememberMe,
+                                      activeColor: Theme.of(context).colorScheme.primary,
                                       onChanged: (value) {
                                         setState(() {
                                           _rememberMe = value ?? false;
                                         });
                                       },
                                     ),
-                                    Text('Remember ID', style: GoogleFonts.outfit(fontSize: 13)),
+                                    Text('Remember Me', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w500)),
                                   ],
                                 ),
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Checkbox(
-                                      value: _rememberPassword,
-                                      onChanged: (value) {
-                                        setState(() {
-                                          _rememberPassword = value ?? false;
-                                        });
-                                      },
-                                    ),
-                                    Text('Remember PW', style: GoogleFonts.outfit(fontSize: 13)),
-                                  ],
+                                TextButton(
+                                  onPressed: () {
+                                      Navigator.push(context, MaterialPageRoute(builder: (_) => const ForgotPasswordPage()));
+                                  },
+                                  child: const Text('Forgot Password?'),
                                 ),
                               ],
-                            ),
-                            Align(
-                              alignment: Alignment.centerRight,
-                              child: TextButton(
-                                onPressed: () {
-                                    Navigator.push(context, MaterialPageRoute(builder: (_) => const ForgotPasswordPage()));
-                                },
-                                child: const Text('Forgot Password?'),
-                              ),
                             ),
                           ],
                         ),

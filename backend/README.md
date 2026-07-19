@@ -54,10 +54,8 @@ Stop-Process -Id (Get-NetTCPConnection -LocalPort 5000).OwningProcess -Force -Er
 3. npm run dev
 
 # Email: 
-admin@campus-swap.edu.my
-ADMIN-001
-# Password: 
-password123
+admin@campus.edu.my
+# Password:
 Admin@123
 
 # Test Register

@@ -35,6 +35,8 @@ class ApiClient {
       return _handleResponse(response);
     } on TimeoutException {
       throw ApiException('Connection timed out. Please check your network.');
+    } on ApiException {
+      rethrow;
     } catch (e) {
       throw ApiException('Connection error: ${e.toString()}');
     }
@@ -50,6 +52,8 @@ class ApiClient {
       return _handleResponse(response);
     } on TimeoutException {
       throw ApiException('Connection timed out. Please check your network.');
+    } on ApiException {
+      rethrow;
     } catch (e) {
       throw ApiException('Connection error: ${e.toString()}');
     }
@@ -65,6 +69,8 @@ class ApiClient {
       return _handleResponse(response);
     } on TimeoutException {
       throw ApiException('Connection timed out. Please check your network.');
+    } on ApiException {
+      rethrow;
     } catch (e) {
       throw ApiException('Connection error: ${e.toString()}');
     }
@@ -80,6 +86,8 @@ class ApiClient {
       return _handleResponse(response);
     } on TimeoutException {
       throw ApiException('Connection timed out. Please check your network.');
+    } on ApiException {
+      rethrow;
     } catch (e) {
       throw ApiException('Connection error: ${e.toString()}');
     }
@@ -94,6 +102,8 @@ class ApiClient {
       return _handleResponse(response);
     } on TimeoutException {
       throw ApiException('Connection timed out. Please check your network.');
+    } on ApiException {
+      rethrow;
     } catch (e) {
       throw ApiException('Connection error: ${e.toString()}');
     }
@@ -127,6 +137,8 @@ class ApiClient {
       return _handleResponse(response);
     } on TimeoutException {
       throw ApiException('Upload timed out. Please try again.');
+    } on ApiException {
+      rethrow;
     } catch (e) {
       throw ApiException('Upload connection error: ${e.toString()}');
     }

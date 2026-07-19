@@ -12,6 +12,12 @@
 .swiftpm/
 migrate_working_dir/
 
+# Backend — DB backups (large SQL files, should stay local)
+backend/backups/
+
+# Backend secrets
+backend/.env
+
 # IntelliJ related
 *.iml
 *.ipr

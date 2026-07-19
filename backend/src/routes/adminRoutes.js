@@ -59,11 +59,13 @@ router.get('/export-report', authenticateToken, isAdminOrModerator, exportEnviro
 router.get('/ml-dashboard', authenticateToken, isAdmin, adminController.getMLDashboardMetrics);
 
 // Full User Administration (Promoting, Banning)
+router.get('/users/archived', authenticateToken, isAdmin, adminController.getArchivedUsers);
 router.get('/users', authenticateToken, isAdmin, adminController.getAllUsers);
 router.get('/users/:id', authenticateToken, isAdmin, adminController.getUserDetails);
 router.post('/users', authenticateToken, isAdmin, adminController.createUser);
 router.put('/users/:id', authenticateToken, isAdmin, adminController.manageUserRoleOrBan);
 router.delete('/users/:id', authenticateToken, isAdmin, adminController.deleteUser);
+router.delete('/users/:id/permanent', authenticateToken, isAdmin, adminController.deleteUserPermanent);
 
 // DB Management
 router.get('/backups', authenticateToken, isAdmin, adminController.getBackups);

@@ -447,6 +447,17 @@ if (process.env.NODE_ENV !== 'test') {
                         -- Force all existing users to false to align with "default hide" policy
                         UPDATE "Users" SET "show_full_name" = FALSE, "show_phone_number" = FALSE;
 
+                        -- Ensure is_email_verified, otp, and otp_expiry columns exist in Users table
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='Users' AND column_name='is_email_verified') THEN
+                            ALTER TABLE "Users" ADD COLUMN "is_email_verified" BOOLEAN DEFAULT FALSE NOT NULL;
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='Users' AND column_name='otp') THEN
+                            ALTER TABLE "Users" ADD COLUMN "otp" VARCHAR(255);
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='Users' AND column_name='otp_expiry') THEN
+                            ALTER TABLE "Users" ADD COLUMN "otp_expiry" TIMESTAMP WITH TIME ZONE;
+                        END IF;
+
                         -- 6. Ensure awarded_carbon_points exists in Transactions table
                         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='Transactions' AND column_name='awarded_carbon_points') THEN
                             ALTER TABLE "Transactions" ADD COLUMN "awarded_carbon_points" DOUBLE PRECISION;

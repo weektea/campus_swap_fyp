@@ -8,6 +8,7 @@ import SafeMeetupZone from './SafeMeetupZone.js';
 import Review from './Review.js';
 import Notification from './Notification.js';
 import BackupLog from './BackupLog.js';
+import Follow from './Follow.js';
 
 // User <-> Product (Seller relationship)
 User.hasMany(Product, { foreignKey: 'seller_id', as: 'listings' });
@@ -41,6 +42,12 @@ SavedItem.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 
 Product.hasMany(SavedItem, { foreignKey: 'product_id', as: 'saved_by_users' });
 SavedItem.belongsTo(Product, { foreignKey: 'product_id', as: 'product' });
+
+// Follow Relationships
+User.hasMany(Follow, { foreignKey: 'follower_id', as: 'following_relations' });
+User.hasMany(Follow, { foreignKey: 'following_id', as: 'follower_relations' });
+Follow.belongsTo(User, { foreignKey: 'follower_id', as: 'follower' });
+Follow.belongsTo(User, { foreignKey: 'following_id', as: 'following' });
 
 // Messages
 User.hasMany(Message, { foreignKey: 'sender_id', as: 'sent_messages' });
@@ -106,5 +113,6 @@ ActivityLog.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 export { 
     User, Product, Transaction, SavedItem, Message, Review, 
     Notification, UserInteraction, Category, SubCategory, 
-    Report, SupportTicket, Dispute, SafeMeetupZone, BackupLog, TicketMessage, ActivityLog
+    Report, SupportTicket, Dispute, SafeMeetupZone, BackupLog, TicketMessage, ActivityLog,
+    Follow
 };

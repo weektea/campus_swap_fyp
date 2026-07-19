@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'package:campus_swap/core/session/user_session.dart';
@@ -60,15 +61,19 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
-  void _logout() {
+  void _logout() async {
     SocketService().disconnect();
     NotificationService().stopPolling();
     UserSession().clear();
-    Navigator.pushAndRemoveUntil(
-      context, 
-      MaterialPageRoute(builder: (_) => const LoginPage()), 
-      (route) => false
-    );
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('auto_login', false);
+    if (mounted) {
+      Navigator.pushAndRemoveUntil(
+        context, 
+        MaterialPageRoute(builder: (_) => const LoginPage()), 
+        (route) => false
+      );
+    }
   }
 
   @override
