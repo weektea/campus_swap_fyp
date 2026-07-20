@@ -9,6 +9,8 @@ import Review from './Review.js';
 import Notification from './Notification.js';
 import BackupLog from './BackupLog.js';
 import Follow from './Follow.js';
+import SystemSetting from './SystemSetting.js';
+import PlatformPolicy from './PlatformPolicy.js';
 
 // User <-> Product (Seller relationship)
 User.hasMany(Product, { foreignKey: 'seller_id', as: 'listings' });
@@ -114,5 +116,5 @@ export {
     User, Product, Transaction, SavedItem, Message, Review, 
     Notification, UserInteraction, Category, SubCategory, 
     Report, SupportTicket, Dispute, SafeMeetupZone, BackupLog, TicketMessage, ActivityLog,
-    Follow
+    Follow, SystemSetting, PlatformPolicy
 };

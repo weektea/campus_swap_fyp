@@ -5,6 +5,12 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:image_picker/image_picker.dart';
 import 'package:campus_swap/core/session/user_session.dart';
+import 'package:campus_swap/core/services/socket_service.dart';
+import 'package:campus_swap/core/services/notification_service.dart';
+import 'package:campus_swap/main.dart' show navigatorKey;
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/material.dart';
+import 'package:campus_swap/features/auth/presentation/pages/login_page.dart';
 
 class ApiClient {
   static const String _envHost = String.fromEnvironment('API_HOST', defaultValue: '');
@@ -157,7 +163,66 @@ class ApiClient {
           errorMessage = errorBody['error'];
         }
       } catch (_) {}
+
+      // Intercept active session suspension / revocation
+      if (response.statusCode == 403 && (errorMessage.toLowerCase().contains('suspended') || errorMessage.toLowerCase().contains('revoked'))) {
+        _handleSessionSuspended(errorMessage);
+      }
+
       throw ApiException(errorMessage, responseData: errorData);
+    }
+  }
+
+  void _handleSessionSuspended(String message) async {
+    // Prevent multiple concurrent redirects
+    if (!UserSession().isLoggedIn) return;
+
+    // Disconnect socket & stop polling
+    SocketService().disconnect();
+    NotificationService().stopPolling();
+    UserSession().clear();
+    
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('auto_login', false);
+    } catch (_) {}
+
+    // Show a dialog on the current UI navigator context and redirect to login screen
+    final context = navigatorKey.currentContext;
+    if (context != null) {
+      Future.delayed(Duration.zero, () {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (dialogContext) => AlertDialog(
+            title: const Row(
+              children: [
+                Icon(Icons.gavel, color: Colors.red),
+                SizedBox(width: 8),
+                Text('Account Suspended'),
+              ],
+            ),
+            content: const Text('Your account has been suspended due to policy violations. You have been logged out.'),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(dialogContext).pop();
+                  navigatorKey.currentState?.pushAndRemoveUntil(
+                    MaterialPageRoute(builder: (_) => const LoginPage()),
+                    (route) => false,
+                  );
+                },
+                child: const Text('OK', style: TextStyle(color: Colors.red)),
+              ),
+            ],
+          ),
+        );
+      });
+    } else {
+      navigatorKey.currentState?.pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const LoginPage()),
+        (route) => false,
+      );
     }
   }
 
@@ -166,6 +231,10 @@ class ApiClient {
     final token = UserSession().token;
     if (token != null) {
       headers['Authorization'] = 'Bearer $token';
+    }
+    final sessionInteractions = UserSession().sessionInteractions;
+    if (sessionInteractions.isNotEmpty) {
+      headers['X-Session-Interactions'] = sessionInteractions.join(',');
     }
     return headers;
   }

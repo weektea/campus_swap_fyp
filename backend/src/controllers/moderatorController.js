@@ -47,13 +47,25 @@ export const updateReportStatus = async (req, res) => {
             const user = await User.findByPk(report.reported_user_id);
             if (user) {
                 user.reputation_score = Math.max(1.0, user.reputation_score - 1.0);
+                user.warning_count = (user.warning_count || 0) + 1;
+                
+                let isSuspended = false;
+                if (user.warning_count >= 3) {
+                    user.status = 'suspended';
+                    user.is_active = false;
+                    isSuspended = true;
+                }
                 await user.save();
 
-                // Notify the reported user
+                // Notify the reported user with Community Guidelines citation
+                const messageText = isSuspended
+                    ? `Your account has been suspended following report #${report.id.toString().substring(0, 8).toUpperCase()} due to accumulating ${user.warning_count} warnings for violating Campus Swap Community Guidelines.`
+                    : `A formal warning has been issued to your account following report #${report.id.toString().substring(0, 8).toUpperCase()} for violating Campus Swap Community Guidelines. You have received ${user.warning_count}/3 warnings. Receiving 3 warnings will result in automatic account suspension.`;
+
                 await Notification.create({
                     user_id: user.id,
-                    title: 'Account Warning Issued',
-                    message: `A formal warning has been issued to your account following report #${report.id.toString().substring(0, 8).toUpperCase()}. Your reputation score was decreased.`,
+                    title: isSuspended ? 'Account Suspended' : 'Account Warning Issued',
+                    message: messageText,
                     type: 'System',
                     related_id: report.id
                 });

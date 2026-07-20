@@ -184,6 +184,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
   }
 
   void _trackView() {
+    UserSession().addSessionInteraction(widget.product.id);
     if (UserSession().isLoggedIn) {
        ApiClient().post('/recommendations/track', {
          'product_id': widget.product.id,
@@ -755,8 +756,24 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                   child: const Text('Chat'),
                 ),
               ),
-              const SizedBox(width: 16),
+              if (widget.product.type == 'Sale') ...[
+                const SizedBox(width: 12),
+                Expanded(
+                  flex: 2,
+                  child: OutlinedButton(
+                    onPressed: () => _showMakeOfferConfirmation(context),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      side: const BorderSide(color: Colors.orange, width: 1.5),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: const Text('Make Offer', style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ],
+              const SizedBox(width: 12),
               Expanded(
+                flex: 2,
                 child: ElevatedButton(
                   onPressed: () => _showBuyConfirmation(context),
                   style: ElevatedButton.styleFrom(
@@ -922,6 +939,167 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
         Navigator.pop(context, 'reported');
       }
     });
+  }
+
+  void _showMakeOfferConfirmation(BuildContext context) {
+    if (!UserSession().isLoggedIn) {
+       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+         content: Text('Please login first'),
+         behavior: SnackBarBehavior.floating,
+       ));
+       return;
+    }
+
+    final theme = Theme.of(context);
+    final offerPriceController = TextEditingController(text: widget.product.price.toStringAsFixed(2));
+    String? selectedLocation = _selectedLocation;
+    if (_campusLocations.isNotEmpty && !_campusLocations.contains(selectedLocation)) {
+        selectedLocation = _campusLocations.first;
+    }
+    String? selectedPaymentMethod;
+    if (widget.product.acceptedPaymentMethods.isNotEmpty) {
+        selectedPaymentMethod = widget.product.acceptedPaymentMethods.first;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                  left: 24, 
+                  right: 24, 
+                  top: 24, 
+                  bottom: MediaQuery.of(context).viewInsets.bottom + 24
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Make a Custom Offer', style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 16),
+                    
+                    Text("Your Proposed Offer Price (RM)", style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      controller: offerPriceController,
+                      decoration: const InputDecoration(
+                        hintText: 'Enter your offer price',
+                        prefixText: 'RM ',
+                        border: OutlineInputBorder(),
+                      ),
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                    const SizedBox(height: 16),
+
+                    Text("Select Meetup Location", style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        decoration: BoxDecoration(
+                            border: Border.all(color: theme.colorScheme.outline),
+                            borderRadius: BorderRadius.circular(12)
+                        ),
+                        child: DropdownButtonHideUnderline(
+                            child: DropdownButton<String>(
+                                value: selectedLocation,
+                                isExpanded: true,
+                                items: _campusLocations.map((loc) => DropdownMenuItem(
+                                    value: loc,
+                                    child: Row(
+                                        children: [
+                                            Icon(Icons.location_on, color: theme.colorScheme.primary, size: 18),
+                                            const SizedBox(width: 8),
+                                            Text(loc, style: theme.textTheme.bodyMedium),
+                                        ],
+                                    )
+                                )).toList(),
+                                onChanged: (val) {
+                                    if (val != null) setModalState(() => selectedLocation = val);
+                                }
+                            ),
+                        ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    Text("Select Payment Method", style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        decoration: BoxDecoration(
+                            border: Border.all(color: theme.colorScheme.outline),
+                            borderRadius: BorderRadius.circular(12)
+                        ),
+                        child: DropdownButtonHideUnderline(
+                            child: DropdownButton<String>(
+                                value: selectedPaymentMethod,
+                                isExpanded: true,
+                                items: widget.product.acceptedPaymentMethods.map((method) => DropdownMenuItem(
+                                    value: method,
+                                    child: Row(
+                                        children: [
+                                            Icon(
+                                                method == 'Cash' 
+                                                    ? Icons.money_outlined 
+                                                    : (method == 'TNG' ? Icons.account_balance_wallet_outlined : Icons.account_balance_outlined), 
+                                                color: theme.colorScheme.primary, 
+                                                size: 18
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Text(method, style: theme.textTheme.bodyMedium),
+                                        ],
+                                    )
+                                )).toList(),
+                                onChanged: (val) {
+                                    if (val != null) setModalState(() => selectedPaymentMethod = val);
+                                }
+                            ),
+                        ),
+                    ),
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: _isBuying ? null : () {
+                          final double? enteredPrice = double.tryParse(offerPriceController.text);
+                          if (enteredPrice == null || enteredPrice <= 0) {
+                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                                  content: Text('Please enter a valid price greater than 0'),
+                                  backgroundColor: Colors.red,
+                              ));
+                              return;
+                          }
+                          Navigator.pop(context); // Close the bottom sheet first
+                          _buyNow(
+                            context,
+                            enteredPrice,
+                            paymentMethod: selectedPaymentMethod,
+                          );
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orange,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        child: _isBuying
+                            ? Center(child: CircularProgressIndicator(color: theme.colorScheme.onPrimary))
+                            : const Text('Submit Offer'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   void _showBuyConfirmation(BuildContext context) {

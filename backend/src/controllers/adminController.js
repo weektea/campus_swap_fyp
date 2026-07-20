@@ -154,13 +154,25 @@ export const resolveReport = async (req, res) => {
             const user = await User.findByPk(report.reported_user_id);
             if (user) {
                 user.reputation_score = Math.max(1.0, user.reputation_score - 1.0);
+                user.warning_count = (user.warning_count || 0) + 1;
+                
+                let isSuspended = false;
+                if (user.warning_count >= 3) {
+                    user.status = 'suspended';
+                    user.is_active = false;
+                    isSuspended = true;
+                }
                 await user.save();
 
-                // Notify the reported user
+                // Notify the reported user with Community Guidelines citation
+                const messageText = isSuspended
+                    ? `Your account has been suspended following report #${report.id.toString().substring(0, 8).toUpperCase()} due to accumulating ${user.warning_count} warnings for violating Campus Swap Community Guidelines.`
+                    : `A formal warning has been issued to your account following report #${report.id.toString().substring(0, 8).toUpperCase()} for violating Campus Swap Community Guidelines. You have received ${user.warning_count}/3 warnings. Receiving 3 warnings will result in automatic account suspension.`;
+
                 await Notification.create({
                     user_id: user.id,
-                    title: 'Account Warning Issued',
-                    message: `A formal warning has been issued to your account following report #${report.id.toString().substring(0, 8).toUpperCase()}. Your reputation score was decreased.`,
+                    title: isSuspended ? 'Account Suspended' : 'Account Warning Issued',
+                    message: messageText,
                     type: 'System',
                     related_id: report.id
                 });
@@ -169,6 +181,75 @@ export const resolveReport = async (req, res) => {
 
         res.json({ message: 'Report updated', report });
     } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+};
+
+export const getChatTranscript = async (req, res) => {
+    try {
+        const { senderId, receiverId } = req.params;
+        const requesterId = req.user.id;
+        const requesterRole = req.user.role;
+
+        // Ensure requester is Admin or Moderator
+        if (requesterRole !== 'admin' && requesterRole !== 'moderator') {
+            return res.status(403).json({ error: 'Access denied' });
+        }
+
+        // Strict Privacy Audit Check: Verify if there is an active Dispute or Report involving these two users
+        const activeDispute = await Dispute.findOne({
+            include: [{
+                model: Transaction,
+                as: 'transaction',
+                where: {
+                    [Op.or]: [
+                        { buyer_id: senderId, seller_id: receiverId },
+                        { buyer_id: receiverId, seller_id: senderId }
+                    ]
+                }
+            }],
+            where: {
+                status: { [Op.ne]: 'Resolved' }
+            }
+        });
+
+        const activeReport = await Report.findOne({
+            where: {
+                [Op.or]: [
+                    { reporter_id: senderId, reported_user_id: receiverId },
+                    { reporter_id: receiverId, reported_user_id: senderId }
+                ],
+                status: { [Op.ne]: 'Dismissed' }
+            }
+        });
+
+        // If no active dispute or report exists, block access
+        if (!activeDispute && !activeReport) {
+            return res.status(403).json({
+                error: 'Privacy Audit Restriction: You can only view chat transcripts attached to an active Dispute or Report.'
+            });
+        }
+
+        // Fetch the conversation
+        const messages = await Message.findAll({
+            where: {
+                [Op.or]: [
+                    { sender_id: senderId, receiver_id: receiverId },
+                    { sender_id: receiverId, receiver_id: senderId }
+                ]
+            },
+            order: [['createdAt', 'ASC']]
+        });
+
+        // Log the access to ActivityLog for privacy audit trail
+        await ActivityLog.create({
+            user_id: requesterId,
+            action: `PRIVACY_AUDIT: Admin/Mod reviewed chat transcript between User [${senderId}] and User [${receiverId}] for Dispute [${activeDispute ? activeDispute.id : 'N/A'}] / Report [${activeReport ? activeReport.id : 'N/A'}].`
+        });
+
+        res.json(messages);
+    } catch (e) {
+        console.error('Get Chat Transcript Error:', e);
         res.status(500).json({ error: e.message });
     }
 };
@@ -672,11 +753,55 @@ export const getAllUsers = async (req, res) => {
                     [
                         sequelize.literal('(SELECT COUNT(*) FROM "Follows" WHERE "Follows"."following_id" = "User"."id")'),
                         'follower_count'
+                    ],
+                    [
+                        sequelize.literal('(SELECT COUNT(*) FROM "Reports" WHERE "Reports"."reported_user_id" = "User"."id" AND "Reports"."status" = \'Pending\')'),
+                        'pending_reports_count'
                     ]
                 ]
             }
         });
-        res.json(users);
+
+        // Map users and apply dynamic behavior flagging logic (Flag A & Flag B)
+        const updatedUsers = users.map(userVal => {
+            const user = userVal.toJSON();
+            const pendingReports = parseInt(user.pending_reports_count || 0, 10);
+            
+            let isFlagged = user.is_flagged || false;
+            let flagReasons = [];
+
+            if (user.flag_reason) {
+                flagReasons.push(user.flag_reason);
+            }
+
+            // Flag A & B only apply if the Admin hasn't manually override-cleared (manual_unflagged === true)
+            if (!user.manual_unflagged) {
+                // Flag A: Low Reputation (< 3.0)
+                if (parseFloat(user.reputation_score || 5.0) < 3.0) {
+                    isFlagged = true;
+                    if (!flagReasons.includes("Low Reputation Score")) {
+                        flagReasons.push("Low Reputation Score");
+                    }
+                }
+
+                // Flag B: High Reports (>= 2 pending reports)
+                if (pendingReports >= 2) {
+                    isFlagged = true;
+                    if (!flagReasons.includes("Multiple Pending Reports")) {
+                        flagReasons.push("Multiple Pending Reports");
+                    }
+                }
+            } else {
+                // If manually unflagged, enforce is_flagged to remain false
+                isFlagged = false;
+            }
+
+            user.is_flagged = isFlagged;
+            user.flag_reason = flagReasons.length > 0 ? flagReasons.join('; ') : null;
+            return user;
+        });
+
+        res.json(updatedUsers);
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
@@ -1203,5 +1328,255 @@ export const updateSubCategory = async (req, res) => {
         res.json(sub);
     } catch (e) {
         res.status(500).json({ error: e.message });
+    }
+};
+
+export const getActivityLogs = async (req, res) => {
+    try {
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 20;
+        const offset = (page - 1) * limit;
+        const search = req.query.search || '';
+
+        const whereClause = {};
+        if (search) {
+            whereClause.action = { [Op.like]: `%${search}%` };
+        }
+
+        const { count, rows } = await ActivityLog.findAndCountAll({
+            where: whereClause,
+            include: [{
+                model: User,
+                as: 'user',
+                attributes: ['username', 'email']
+            }],
+            order: [['createdAt', 'DESC']],
+            limit,
+            offset
+        });
+
+        res.json({
+            logs: rows.map(l => ({
+                id: l.id,
+                action: l.action,
+                timestamp: l.createdAt,
+                user: l.user ? {
+                    username: l.user.username,
+                    email: l.user.email
+                } : { username: 'System', email: 'system@platform' }
+            })),
+            pagination: {
+                total: count,
+                page,
+                limit,
+                pages: Math.ceil(count / limit)
+            }
+        });
+    } catch (error) {
+        console.error('Error fetching activity logs:', error);
+        res.status(500).json({ error: 'Failed to fetch activity logs' });
+    }
+};
+
+export const broadcastNotification = async (req, res) => {
+    try {
+        const { title, message, category } = req.body;
+        if (!title || !message || !category) {
+            return res.status(400).json({ error: 'Missing title, message, or category' });
+        }
+
+        // a. Fetch all active student user IDs (status = 'active', role = 'student')
+        const activeStudents = await User.findAll({
+            where: {
+                status: 'active',
+                role: 'student'
+            },
+            attributes: ['id']
+        });
+
+        if (activeStudents.length === 0) {
+            return res.json({ message: 'No active student users to notify', total_notified: 0 });
+        }
+
+        // b. Perform a bulk insert into the Notification table
+        // Map category ('ANNOUNCEMENT', 'MAINTENANCE', 'PROMOTION') to valid notification type enums ('System', 'Promotion')
+        const categoryUpper = category.toUpperCase();
+        const notificationType = categoryUpper === 'PROMOTION' ? 'Promotion' : 'System';
+
+        const notificationsData = activeStudents.map(student => ({
+            user_id: student.id,
+            title,
+            message,
+            type: notificationType,
+            is_read: false
+        }));
+
+        await Notification.bulkCreate(notificationsData);
+
+        // Log the action to database activity trail
+        await ActivityLog.create({
+            user_id: req.user.id,
+            action: `BROADCAST_SENT: ${title}`
+        });
+
+        // c. Return JSON response with notified count
+        res.json({
+            message: 'Broadcast sent successfully',
+            total_notified: activeStudents.length
+        });
+    } catch (error) {
+        console.error('Error broadcasting notification:', error);
+        res.status(500).json({ error: 'Failed to broadcast notification' });
+    }
+};
+
+export const verifyUser = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { is_verified } = req.body;
+        const user = await User.findByPk(id);
+        if (!user) return res.status(404).json({ error: 'User not found' });
+
+        user.is_verified = (is_verified !== undefined) ? is_verified : !user.is_verified;
+        await user.save();
+
+        await ActivityLog.create({
+            user_id: req.user.id,
+            action: `ADMIN_ACTION: verifyUser performed on user ${id}`,
+            event_type: 'ADMIN_USER_MANAGEMENT',
+            description: `ADMIN_ACTION: verifyUser performed on user ${id}`,
+            admin_id: req.user.id
+        });
+
+        res.json({ message: `User verification status updated to ${user.is_verified}`, user });
+    } catch (error) {
+        console.error('Verify User Error:', error);
+        res.status(500).json({ error: 'Failed to update verification status' });
+    }
+};
+
+export const flagUser = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { is_flagged, reason } = req.body;
+        const user = await User.findByPk(id);
+        if (!user) return res.status(404).json({ error: 'User not found' });
+
+        user.is_flagged = (is_flagged !== undefined) ? is_flagged : !user.is_flagged;
+        if (user.is_flagged) {
+            user.flag_reason = reason || 'Manually Flagged by Admin';
+            user.manual_unflagged = false;
+        } else {
+            user.flag_reason = null;
+            user.manual_unflagged = true;
+        }
+        await user.save();
+
+        await ActivityLog.create({
+            user_id: req.user.id,
+            action: `ADMIN_ACTION: flagUser performed on user ${id}`,
+            event_type: 'ADMIN_USER_MANAGEMENT',
+            description: `ADMIN_ACTION: flagUser performed on user ${id}`,
+            admin_id: req.user.id
+        });
+
+        res.json({ message: `User flagged status updated to ${user.is_flagged}`, user });
+    } catch (error) {
+        console.error('Flag User Error:', error);
+        res.status(500).json({ error: 'Failed to update flagged status' });
+    }
+};
+
+export const warnUser = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const user = await User.findByPk(id);
+        if (!user) return res.status(404).json({ error: 'User not found' });
+
+        user.warning_count = (user.warning_count || 0) + 1;
+        let isSuspended = false;
+        if (user.warning_count >= 3) {
+            user.is_active = false;
+            user.status = 'suspended';
+            user.deactivation_reason = `Accumulated ${user.warning_count} warnings for policy violations.`;
+            isSuspended = true;
+        }
+        await user.save();
+
+        if (isSuspended) {
+            await Product.update(
+                { status: 'Suspended' },
+                { where: { seller_id: user.id, status: 'Available' } }
+            );
+        }
+
+        await Notification.create({
+            user_id: user.id,
+            title: 'Formal System Warning',
+            message: `You have received an administrative warning for policy violation. Total warnings: ${user.warning_count}. Please adhere to campus trading guidelines.`,
+            type: 'System',
+            is_read: false
+        });
+
+        await ActivityLog.create({
+            user_id: req.user.id,
+            action: `ADMIN_ACTION: warnUser performed on user ${id}`,
+            event_type: 'ADMIN_USER_MANAGEMENT',
+            description: `ADMIN_ACTION: warnUser performed on user ${id}`,
+            admin_id: req.user.id
+        });
+
+        res.json({ message: 'User warned successfully', user, isSuspended });
+    } catch (error) {
+        console.error('Warn User Error:', error);
+        res.status(500).json({ error: 'Failed to warn user' });
+    }
+};
+
+export const suspendUser = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { is_active, reason } = req.body;
+        const user = await User.findByPk(id);
+        if (!user) return res.status(404).json({ error: 'User not found' });
+
+        if (user.id === req.user.id) {
+            return res.status(400).json({ error: 'You cannot suspend your own account.' });
+        }
+        if (user.role === 'admin') {
+            return res.status(403).json({ error: 'You cannot modify another Administrator.' });
+        }
+
+        const suspend = (is_active !== undefined) ? !is_active : true;
+        user.is_active = !suspend;
+        if (suspend) {
+            user.status = 'suspended';
+            user.deactivation_reason = reason || 'Suspended by Administrator';
+        } else {
+            user.status = 'active';
+            user.deactivation_reason = null;
+        }
+        await user.save();
+
+        if (suspend) {
+            await Product.update(
+                { status: 'Suspended' },
+                { where: { seller_id: user.id, status: 'Available' } }
+            );
+        }
+
+        const actionName = suspend ? 'suspendUser' : 'reactivateUser';
+        await ActivityLog.create({
+            user_id: req.user.id,
+            action: `ADMIN_ACTION: ${actionName} performed on user ${id}`,
+            event_type: 'ADMIN_USER_MANAGEMENT',
+            description: `ADMIN_ACTION: ${actionName} performed on user ${id}`,
+            admin_id: req.user.id
+        });
+
+        res.json({ message: `User account ${suspend ? 'suspended' : 'reactivated'} successfully`, user });
+    } catch (error) {
+        console.error('Suspend User Error:', error);
+        res.status(500).json({ error: 'Failed to suspend user' });
     }
 };

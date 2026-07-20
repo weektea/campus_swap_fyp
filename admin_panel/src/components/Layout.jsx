@@ -15,7 +15,8 @@ import {
     Tags,
     MessageSquareWarning,
     Bell,
-    BrainCircuit
+    BrainCircuit,
+    Settings
 } from 'lucide-react';
 import api from '../services/api';
 import { useSocket } from '../context/SocketContext';
@@ -131,6 +132,10 @@ const Layout = ({ children }) => {
                                 <Tags size={20} />
                                 <span>Categories & Zones</span>
                             </NavLink>
+                            <NavLink to="/broadcast" className={({isActive}) => `nav-link ${isActive ? 'active' : ''}`}>
+                                <Bell size={20} />
+                                <span>Broadcast Announce</span>
+                            </NavLink>
                         </nav>
                     </div>
 
@@ -177,6 +182,10 @@ const Layout = ({ children }) => {
                                 <NavLink to="/history" className={({isActive}) => `nav-link ${isActive ? 'active' : ''}`}>
                                     <HistoryIcon size={20} />
                                     <span>Activity Log</span>
+                                </NavLink>
+                                <NavLink to="/system" className={({isActive}) => `nav-link ${isActive ? 'active' : ''}`}>
+                                    <Settings size={20} />
+                                    <span>System Management</span>
                                 </NavLink>
                             </nav>
                         </div>

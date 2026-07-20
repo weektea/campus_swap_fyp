@@ -24,6 +24,12 @@ class _SellPageState extends State<SellPage> {
   final TextEditingController _descController = TextEditingController();
   final TextEditingController _maxDurationController = TextEditingController();
   final TextEditingController _depositController = TextEditingController();
+  final TextEditingController _originalPriceController = TextEditingController();
+  final TextEditingController _usageDurationController = TextEditingController();
+
+  double? _suggestedPrice;
+  double? _minSuggestedPrice;
+  double? _maxSuggestedPrice;
 
   @override
   void dispose() {
@@ -32,6 +38,8 @@ class _SellPageState extends State<SellPage> {
     _descController.dispose();
     _maxDurationController.dispose();
     _depositController.dispose();
+    _originalPriceController.dispose();
+    _usageDurationController.dispose();
     super.dispose();
   }
 
@@ -275,6 +283,7 @@ class _SellPageState extends State<SellPage> {
     );
   }
 
+
   Future<void> _fetchPriceSuggestion() async {
       if (_selectedCategory == null) {
            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a category first')));
@@ -283,20 +292,42 @@ class _SellPageState extends State<SellPage> {
       
       try {
           final apiClient = ApiClient();
-          final res = await apiClient.post('/products/price-suggestion', {
+          final Map<String, dynamic> body = {
               'category': _selectedCategory,
-              'condition': _selectedCondition 
-          });
+              'condition': _selectedCondition,
+              'subcategory_id': _selectedSubCategory ?? 'Others'
+          };
+          
+          if (_originalPriceController.text.isNotEmpty) {
+              body['original_price'] = double.tryParse(_originalPriceController.text) ?? 0.0;
+          } else {
+              body['original_price'] = 100.0; // default baseline if empty
+          }
+          if (_usageDurationController.text.isNotEmpty) {
+              body['months_used'] = double.tryParse(_usageDurationController.text) ?? 0.0;
+          } else {
+              body['months_used'] = 0.0;
+          }
+
+          final res = await apiClient.post('/products/price-suggestion', body);
           
           if (mounted) {
-              final price = res['estimated_price'];
-              double finalPrice = double.tryParse(price.toString()) ?? 0.0;
+              final suggestedPriceVal = res['suggested_price'] ?? res['estimated_price'];
+              double suggested = double.tryParse(suggestedPriceVal.toString()) ?? 0.0;
+              double minPrice = double.tryParse((res['min_price'] ?? (suggested * 0.9)).toString()) ?? (suggested * 0.9);
+              double maxPrice = double.tryParse((res['max_price'] ?? (suggested * 1.1)).toString()) ?? (suggested * 1.1);
+              
               if (_listingType == 'Rent') {
-                  finalPrice = finalPrice * 0.1; // Rule of thumb: Rent is 10% of value
+                  suggested = suggested * 0.1; // Rule of thumb: Rent is 10% of value
+                  minPrice = minPrice * 0.1;
+                  maxPrice = maxPrice * 0.1;
               }
               
               setState(() {
-                  _priceController.text = finalPrice.toStringAsFixed(2);
+                  _suggestedPrice = suggested;
+                  _minSuggestedPrice = minPrice;
+                  _maxSuggestedPrice = maxPrice;
+                  _priceController.text = suggested.toStringAsFixed(2);
               });
               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Price Suggested!')));
           }
@@ -341,12 +372,15 @@ class _SellPageState extends State<SellPage> {
      }
   }
 
+
   void _resetForm() {
       _titleController.clear();
       _priceController.clear();
       _descController.clear();
       _maxDurationController.clear();
       _depositController.clear();
+      _originalPriceController.clear();
+      _usageDurationController.clear();
       setState(() {
           _imageFiles.clear();
           _videoFile = null;
@@ -354,6 +388,9 @@ class _SellPageState extends State<SellPage> {
           _selectedSubCategory = null;
           _selectedCondition = 'Good';
           _listingType = 'Sale';
+          _suggestedPrice = null;
+          _minSuggestedPrice = null;
+          _maxSuggestedPrice = null;
       });
   }
 
@@ -671,15 +708,130 @@ class _SellPageState extends State<SellPage> {
                 ),
             ],
 
-             const SizedBox(height: 8),
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton.icon(
-                  onPressed: _fetchPriceSuggestion,
-                  icon: const Icon(Icons.analytics_outlined, size: 16),
-                  label: const Text('Get Price Suggestion'),
+            const SizedBox(height: 16),
+            Card(
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: BorderSide(color: theme.colorScheme.outlineVariant),
+              ),
+              child: Theme(
+                data: theme.copyWith(dividerColor: Colors.transparent),
+                child: ExpansionTile(
+                  key: const PageStorageKey('ai_pricing_assistant'),
+                  title: Row(
+                    children: [
+                      Icon(Icons.auto_awesome, color: theme.colorScheme.primary, size: 20),
+                      const SizedBox(width: 8),
+                      Text(
+                        'AI Pricing Assistant',
+                        style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                  subtitle: Text(
+                    'Estimate optimal listing price range using AI',
+                    style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                  ),
+                  childrenPadding: const EdgeInsets.all(16),
+                  children: [
+                    TextFormField(
+                      controller: _originalPriceController,
+                      decoration: const InputDecoration(
+                        labelText: 'Original Purchase Price (RM) (Optional)',
+                        hintText: 'e.g. 150.00',
+                        prefixText: 'RM ',
+                      ),
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
+                      ],
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _usageDurationController,
+                      decoration: const InputDecoration(
+                        labelText: 'Usage Duration (Months) (Optional)',
+                        hintText: 'e.g. 12',
+                      ),
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: _fetchPriceSuggestion,
+                        icon: const Icon(Icons.psychology, size: 18),
+                        label: const Text('Calculate Smart Suggestion'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: theme.colorScheme.primaryContainer,
+                          foregroundColor: theme.colorScheme.onPrimaryContainer,
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                      ),
+                    ),
+                    if (_suggestedPrice != null) ...[
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.primary.withOpacity(0.05),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: theme.colorScheme.primary.withOpacity(0.2)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: theme.colorScheme.primary,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: const Text(
+                                    'AI Suggested',
+                                    style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'RM ${_suggestedPrice!.toStringAsFixed(2)}',
+                                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: theme.colorScheme.primary),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Suggested Range: RM ${_minSuggestedPrice!.toStringAsFixed(2)} - RM ${_maxSuggestedPrice!.toStringAsFixed(2)}',
+                              style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                            ),
+                            const SizedBox(height: 8),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: TextButton(
+                                onPressed: () {
+                                  setState(() {
+                                    _priceController.text = _suggestedPrice!.toStringAsFixed(2);
+                                  });
+                                },
+                                child: const Text('Apply Price'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
+            ),
 
               const SizedBox(height: 16),
               Text(

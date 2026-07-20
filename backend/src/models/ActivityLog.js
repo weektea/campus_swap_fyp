@@ -15,6 +15,18 @@ const ActivityLog = sequelize.define('ActivityLog', {
         type: DataTypes.STRING,
         allowNull: false,
         defaultValue: 'ACCOUNT_REACTIVATED'
+    },
+    event_type: {
+        type: DataTypes.STRING,
+        allowNull: true,
+    },
+    description: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+    },
+    admin_id: {
+        type: DataTypes.UUID,
+        allowNull: true,
     }
 }, {
     tableName: 'logs', // Map exactly to 'logs' table

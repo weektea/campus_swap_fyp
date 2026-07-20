@@ -1,4 +1,4 @@
-import { UserInteraction, Product, User, Report, Category, SubCategory } from '../models/index.js';
+import { UserInteraction, Product, User, Report, Category, SubCategory, Follow } from '../models/index.js';
 import { Op } from 'sequelize';
 import sequelize from '../config/database.js';
 import axios from 'axios';
@@ -33,23 +33,53 @@ export const trackInteraction = async (req, res) => {
     }
 };
 
-// Get Recommendations (Hybrid Content-Based + KNN Collaborative)
+// Get Recommendations (Hybrid Content-Based + KNN Collaborative with A/B Testing)
 export const getRecommendations = async (req, res) => {
     try {
-        const user_id = req.user.id;
+        const user_id = req.user ? req.user.id : null;
 
-        // 1. Fetch user's interactions
-        const userInteractions = await UserInteraction.findAll({
-            where: { user_id }
-        });
+        // Session interactions (Task 1)
+        let sessionProductIds = [];
+        if (req.query.session_interactions) {
+            sessionProductIds = req.query.session_interactions.split(',').filter(Boolean);
+        }
+        const headerInteractions = req.headers['x-session-interactions'];
+        if (headerInteractions) {
+            sessionProductIds = headerInteractions.split(',').filter(Boolean);
+        }
 
-        const reportedItems = await Report.findAll({
-            where: { reporter_id: user_id },
-            attributes: ['product_id']
-        });
-        const reportedIds = reportedItems.map(r => r.product_id).filter(Boolean);
+        // Fetch reported items to exclude
+        let reportedIds = [];
+        if (user_id) {
+            const reportedItems = await Report.findAll({
+                where: { reporter_id: user_id },
+                attributes: ['product_id']
+            });
+            reportedIds = reportedItems.map(r => r.product_id).filter(Boolean);
+        }
 
-        // Helper function for cold-start / fallback trending list
+        // A/B Testing split logic (Task 3)
+        let chooseModelA = true;
+        if (user_id) {
+            let hash = 0;
+            for (let i = 0; i < user_id.length; i++) {
+                hash = user_id.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            chooseModelA = (hash % 2 === 0);
+        } else {
+            // Random split for guests
+            chooseModelA = Math.random() < 0.5;
+        }
+
+        if (req.query.ab_variant === 'A') {
+            chooseModelA = true;
+        } else if (req.query.ab_variant === 'B') {
+            chooseModelA = false;
+        }
+
+        const ab_variant = chooseModelA ? 'Model_A_Hybrid_ML' : 'Model_B_Baseline';
+
+        // Helper function for traditional popular/trending items (Baseline / Fallback)
         const getFallbackRecommendations = async () => {
             const trendingQuery = await sequelize.query(`
                 SELECT ui.product_id, 
@@ -66,12 +96,12 @@ export const getRecommendations = async (req, res) => {
                 JOIN "Products" p ON ui.product_id = p.id
                 WHERE p.status = 'Available'
                   AND ui.interaction_type IN ('view', 'message', 'save')
-                  AND p.seller_id != :user_id
+                  ${user_id ? 'AND p.seller_id != :user_id' : ''}
                 GROUP BY ui.product_id
                 ORDER BY score DESC
                 LIMIT 10
             `, {
-                replacements: { user_id },
+                replacements: user_id ? { user_id } : {},
                 type: sequelize.QueryTypes.SELECT
             });
 
@@ -80,7 +110,7 @@ export const getRecommendations = async (req, res) => {
                 let whereCond = {
                     id: { [Op.in]: productIds },
                     status: 'Available',
-                    seller_id: { [Op.ne]: user_id }
+                    ...(user_id ? { seller_id: { [Op.ne]: user_id } } : {})
                 };
                 if (reportedIds.length > 0) {
                     whereCond.id = { [Op.in]: productIds, [Op.notIn]: reportedIds };
@@ -101,7 +131,7 @@ export const getRecommendations = async (req, res) => {
                 return await Product.findAll({
                     where: {
                         status: 'Available',
-                        seller_id: { [Op.ne]: user_id },
+                        ...(user_id ? { seller_id: { [Op.ne]: user_id } } : {}),
                         ...(reportedIds.length > 0 ? { id: { [Op.notIn]: reportedIds } } : {})
                     },
                     include: [{ model: User, as: 'seller', attributes: ['username', 'full_name', 'reputation_score', 'profile_image_url'] }],
@@ -111,17 +141,50 @@ export const getRecommendations = async (req, res) => {
             }
         };
 
-        // Cold Start Fallback: If user has no interactions, return global trending items
-        if (userInteractions.length === 0) {
-            const fallbackList = await getFallbackRecommendations();
-            return res.json(fallbackList);
+        // If Model B (Baseline), return traditional popular/trending list immediately
+        if (!chooseModelA) {
+            const data = await getFallbackRecommendations();
+            return res.json({ ab_variant, data });
         }
 
-        // Fetch all available products (excluding user's own listings and reported listings)
+        // --- Model A (Active ML) Flow ---
+        
+        // Fetch base interactions
+        let userInteractions = [];
+        if (user_id) {
+            const userInteractionsDb = await UserInteraction.findAll({
+                where: { user_id }
+            });
+            userInteractions = userInteractionsDb.map(i => ({
+                user_id: i.user_id,
+                product_id: i.product_id,
+                weight: parseFloat(i.weight) || 1.0
+            }));
+        }
+
+        // Dynamically merge session interactions (weight 1.0)
+        sessionProductIds.forEach(pid => {
+            const exists = userInteractions.some(i => i.product_id === pid);
+            if (!exists) {
+                userInteractions.push({
+                    user_id: user_id || 'guest',
+                    product_id: pid,
+                    weight: 1.0
+                });
+            }
+        });
+
+        // Cold Start Fallback: If user has absolutely no interactions (db + session), return fallback
+        if (userInteractions.length === 0) {
+            const fallbackList = await getFallbackRecommendations();
+            return res.json({ ab_variant, data: fallbackList });
+        }
+
+        // Fetch all available products (excluding own and reported)
         const availableProducts = await Product.findAll({
             where: {
                 status: 'Available',
-                seller_id: { [Op.ne]: user_id },
+                ...(user_id ? { seller_id: { [Op.ne]: user_id } } : {}),
                 ...(reportedIds.length > 0 ? { id: { [Op.notIn]: reportedIds } } : {})
             },
             include: [{
@@ -138,47 +201,75 @@ export const getRecommendations = async (req, res) => {
         });
 
         if (availableProducts.length === 0) {
-            return res.json([]);
+            return res.json({ ab_variant, data: [] });
         }
 
-        // Fetch all interactions for Collaborative Filtering (KNN) matrix building
-        const allInteractions = await UserInteraction.findAll({
+        // Fetch all interactions for KNN CF matrix building
+        const allInteractionsFromDb = await UserInteraction.findAll({
             attributes: ['user_id', 'product_id', 'weight']
         });
+        
+        let allInteractions = allInteractionsFromDb.map(i => ({
+            user_id: i.user_id,
+            product_id: i.product_id,
+            weight: parseFloat(i.weight) || 1.0
+        }));
+
+        // Inject current guest or temporary session interactions into matrix
+        if (!user_id || sessionProductIds.length > 0) {
+            userInteractions.forEach(ui => {
+                const exists = allInteractions.some(i => i.user_id === ui.user_id && i.product_id === ui.product_id);
+                if (!exists) {
+                    allInteractions.push(ui);
+                }
+            });
+        }
+
+        // Fetch user followed seller list for ML personalization boosting
+        let followedSellerIds = [];
+        if (user_id) {
+            try {
+                const follows = await Follow.findAll({
+                    where: { follower_id: user_id },
+                    attributes: ['following_id']
+                });
+                followedSellerIds = follows.map(f => f.following_id);
+            } catch (err) {
+                console.error("Failed to query user follows for ML boosting:", err);
+            }
+        }
 
         const productsPayload = availableProducts.map(p => ({
             id: p.id,
             title: p.title,
             description: p.description || '',
             category: p.categoryModel ? p.categoryModel.name : (p.category || ''),
-            subcategory: p.subcategoryModel ? p.subcategoryModel.name : ''
+            subcategory: p.subcategoryModel ? p.subcategoryModel.name : '',
+            seller_id: p.seller_id
         }));
 
         let recommendedIds = [];
         try {
             const pythonRes = await axios.post(`${ML_SERVICE_URL}/api/recommend/hybrid`, {
-                user_id: user_id,
-                interactions: allInteractions.map(i => ({
-                    user_id: i.user_id,
-                    product_id: i.product_id,
-                    weight: parseFloat(i.weight) || 1.0
-                })),
-                products: productsPayload
+                user_id: user_id || 'guest',
+                interactions: userInteractions, // send user profile interactions
+                products: productsPayload,
+                followed_seller_ids: followedSellerIds
             }, { timeout: 4000 });
 
             recommendedIds = pythonRes.data.recommended_product_ids || [];
         } catch (pyError) {
             console.error('Python ML recommendation service call failed, falling back to database list:', pyError.message);
             const fallbackList = await getFallbackRecommendations();
-            return res.json(fallbackList);
+            return res.json({ ab_variant, data: fallbackList });
         }
 
         if (recommendedIds.length === 0) {
             const fallbackList = await getFallbackRecommendations();
-            return res.json(fallbackList);
+            return res.json({ ab_variant, data: fallbackList });
         }
 
-        // Fetch recommendations from DB and maintain python's exact hybrid scoring sorting order
+        // Fetch recommendations from DB and maintain exact sorting order
         const recommendedProducts = await Product.findAll({
             where: {
                 id: { [Op.in]: recommendedIds },
@@ -195,7 +286,7 @@ export const getRecommendations = async (req, res) => {
             .map(id => recommendedProducts.find(p => p.id === id))
             .filter(Boolean);
 
-        res.json(sortedRecommendations);
+        res.json({ ab_variant, data: sortedRecommendations });
     } catch (error) {
         console.error('Recommendation Error:', error);
         res.status(500).json({ error: 'Failed to get recommendations' });

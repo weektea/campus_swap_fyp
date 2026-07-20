@@ -3,6 +3,7 @@ import { authenticateToken } from '../middleware/authMiddleware.js';
 import { isAdmin, isAdminOrModerator } from '../middleware/adminMiddleware.js';
 import * as adminController from '../controllers/adminController.js';
 import { getAdminAnalytics, exportEnvironmentalReport } from '../controllers/analyticsController.js';
+import * as systemController from '../controllers/systemController.js';
 
 const router = express.Router();
 
@@ -41,6 +42,7 @@ router.delete('/zones/:id', authenticateToken, isAdmin, adminController.deleteZo
 // Manage Reports and Disputes
 router.get('/reports', authenticateToken, isAdminOrModerator, adminController.getReports);
 router.put('/reports/:id', authenticateToken, isAdminOrModerator, adminController.resolveReport); // Handle or Escalate
+router.get('/chats/transcript/:senderId/:receiverId', authenticateToken, isAdminOrModerator, adminController.getChatTranscript);
 router.get('/disputes', authenticateToken, isAdminOrModerator, adminController.getDisputes);
 router.post('/disputes/:id/triage', authenticateToken, isAdminOrModerator, adminController.triageDispute);
 router.post('/disputes/:id/arbitrate', authenticateToken, isAdmin, adminController.arbitrateDispute);
@@ -57,10 +59,16 @@ router.get('/metrics', authenticateToken, isAdminOrModerator, adminController.ge
 router.get('/analytics', authenticateToken, isAdminOrModerator, getAdminAnalytics);
 router.get('/export-report', authenticateToken, isAdminOrModerator, exportEnvironmentalReport);
 router.get('/ml-dashboard', authenticateToken, isAdmin, adminController.getMLDashboardMetrics);
+router.get('/logs', authenticateToken, isAdminOrModerator, adminController.getActivityLogs);
+router.post('/notifications/broadcast', authenticateToken, isAdminOrModerator, adminController.broadcastNotification);
 
 // Full User Administration (Promoting, Banning)
 router.get('/users/archived', authenticateToken, isAdmin, adminController.getArchivedUsers);
 router.get('/users', authenticateToken, isAdmin, adminController.getAllUsers);
+router.patch('/users/:id/verify', authenticateToken, isAdminOrModerator, adminController.verifyUser);
+router.patch('/users/:id/flag', authenticateToken, isAdminOrModerator, adminController.flagUser);
+router.post('/users/:id/warn', authenticateToken, isAdminOrModerator, adminController.warnUser);
+router.post('/users/:id/suspend', authenticateToken, isAdminOrModerator, adminController.suspendUser);
 router.get('/users/:id', authenticateToken, isAdmin, adminController.getUserDetails);
 router.post('/users', authenticateToken, isAdmin, adminController.createUser);
 router.put('/users/:id', authenticateToken, isAdmin, adminController.manageUserRoleOrBan);
@@ -71,5 +79,11 @@ router.delete('/users/:id/permanent', authenticateToken, isAdmin, adminControlle
 router.get('/backups', authenticateToken, isAdmin, adminController.getBackups);
 router.post('/backup', authenticateToken, isAdmin, adminController.backupDatabase);
 router.post('/restore/:id', authenticateToken, isAdmin, adminController.restoreDatabase);
+
+// System Management (Admin Only)
+router.get('/system/health', authenticateToken, isAdmin, systemController.getSystemHealth);
+router.get('/system/settings', authenticateToken, isAdmin, systemController.getSystemSettings);
+router.put('/system/settings', authenticateToken, isAdmin, systemController.updateSystemSettings);
+router.put('/system/policies/:type', authenticateToken, isAdmin, systemController.updatePolicy);
 
 export default router;

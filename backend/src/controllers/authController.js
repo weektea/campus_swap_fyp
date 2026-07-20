@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { User, Transaction, Dispute, Report, Product, ActivityLog, SupportTicket, Follow } from '../models/index.js';
+import { User, Transaction, Dispute, Report, Product, ActivityLog, SupportTicket, Follow, Message } from '../models/index.js';
 import { Op } from 'sequelize';
 import { emitToAdmins, emitToStrictlyAdmins } from '../config/socket.js';
 import { sendMail } from '../utils/mailer.js';
@@ -415,13 +415,91 @@ export const getUserProfile = async (req, res) => {
             }
         });
 
-        // Dynamic badges logic
-        const badges = [];
-        if (completedSales >= 5) {
-            badges.push('Fast Seller');
+        // 1. Calculate successful transactions count (buyer or seller completed)
+        const successfulTransactionsCount = await Transaction.count({
+            where: {
+                [Op.or]: [{ buyer_id: id }, { seller_id: id }],
+                status: 'Completed'
+            }
+        });
+
+        // 2. Calculate average response speed in minutes (from Message table)
+        let responseSpeedStr = "< 15 mins";
+        try {
+            const uniqueSenders = await Message.findAll({
+                attributes: ['sender_id'],
+                where: { receiver_id: id },
+                group: ['sender_id']
+            });
+
+            let totalDiffMinutes = 0;
+            let countedConversations = 0;
+
+            for (const senderRow of uniqueSenders) {
+                const senderId = senderRow.sender_id;
+                
+                const firstIncoming = await Message.findOne({
+                    where: { sender_id: senderId, receiver_id: id },
+                    order: [['createdAt', 'ASC']]
+                });
+
+                if (firstIncoming) {
+                    const firstOutgoing = await Message.findOne({
+                        where: {
+                            sender_id: id,
+                            receiver_id: senderId,
+                            createdAt: { [Op.gt]: firstIncoming.createdAt }
+                        },
+                        order: [['createdAt', 'ASC']]
+                    });
+
+                    if (firstOutgoing) {
+                        const diffMs = firstOutgoing.createdAt - firstIncoming.createdAt;
+                        totalDiffMinutes += (diffMs / 1000 / 60);
+                        countedConversations++;
+                    }
+                }
+            }
+
+            if (countedConversations > 0) {
+                const avgMinutes = Math.round(totalDiffMinutes / countedConversations);
+                if (avgMinutes < 15) {
+                    responseSpeedStr = "< 15 mins";
+                } else if (avgMinutes < 60) {
+                    responseSpeedStr = `~${avgMinutes} mins`;
+                } else {
+                    const hours = Math.round(avgMinutes / 60);
+                    responseSpeedStr = `Replies in ~${hours} hr${hours > 1 ? 's' : ''}`;
+                }
+            }
+        } catch (speedError) {
+            console.error("Failed calculating response speed, using fallback:", speedError);
         }
-        if (completedSales >= 3 && (user.reputation_score || 0) >= 4.8) {
-            badges.push('Highly Rated');
+
+        // 3. Dynamic badges logic
+        const badges = [];
+        // a. "🌱 Eco Warrior Badge": total_carbon_saved >= 10.0 kg CO2e
+        if ((user.total_carbon_saved || 0.0) >= 10.0) {
+            badges.push({ id: 'eco_warrior', label: 'Eco Warrior', icon: 'leaf' });
+        }
+        // b. "🥇 Top Seller Badge": total completed sales as a seller >= 5 items
+        if (completedSales >= 5) {
+            badges.push({ id: 'top_seller', label: 'Top Seller', icon: 'award' });
+        }
+        // c. "🎓 Verified Student Badge": university email domain is verified
+        if (user.is_email_verified) {
+            badges.push({ id: 'verified_student', label: 'Verified Student', icon: 'school' });
+        }
+
+        // 4. Reputation Badge Levels
+        const score = user.reputation_score || 0.0;
+        let repLevel = "⛔ High Risk Trader";
+        if (score >= 4.8) {
+            repLevel = "🏆 Exemplary Trader";
+        } else if (score >= 4.0) {
+            repLevel = "⭐ Reliable Trader";
+        } else if (score >= 3.0) {
+            repLevel = "⚠️ Average Trader";
         }
 
         const followerCount = await Follow.count({ where: { following_id: id } });
@@ -432,6 +510,9 @@ export const getUserProfile = async (req, res) => {
 
         const userJSON = user.toJSON();
         userJSON.badges = badges;
+        userJSON.reputation_level = repLevel;
+        userJSON.successful_transactions_count = successfulTransactionsCount;
+        userJSON.response_speed = responseSpeedStr;
         userJSON.follower_count = followerCount;
         userJSON.following_count = followingCount;
         userJSON.is_following = isFollowing;
@@ -898,5 +979,73 @@ export const resendOtp = async (req, res) => {
     } catch (error) {
         console.error('Resend OTP Error:', error);
         res.status(500).json({ error: 'Failed to resend verification email' });
+    }
+};
+
+export const getFollowingList = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const targetUserId = id || req.user.id;
+        const follows = await Follow.findAll({
+            where: { follower_id: targetUserId },
+            include: [{
+                model: User,
+                as: 'following',
+                attributes: ['id', 'username', 'full_name', 'profile_image_url', 'is_verified', 'year_of_study']
+            }]
+        });
+
+        const result = await Promise.all(follows.map(async f => {
+            const user = f.following;
+            if (!user) return null;
+
+            const activeListingsCount = await Product.count({
+                where: { seller_id: user.id, status: 'Available' }
+            });
+
+            const userJSON = user.toJSON();
+            userJSON.active_listings_count = activeListingsCount;
+            userJSON.faculty = user.faculty || 'FCI'; 
+            return userJSON;
+        }));
+
+        res.json(result.filter(Boolean));
+    } catch (error) {
+        console.error('Get Following List Error:', error);
+        res.status(500).json({ error: 'Failed to retrieve following list' });
+    }
+};
+
+export const getFollowersList = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const targetUserId = id || req.user.id;
+        const follows = await Follow.findAll({
+            where: { following_id: targetUserId },
+            include: [{
+                model: User,
+                as: 'follower',
+                attributes: ['id', 'username', 'full_name', 'profile_image_url', 'is_verified', 'year_of_study']
+            }]
+        });
+
+        const result = await Promise.all(follows.map(async f => {
+            const user = f.follower;
+            if (!user) return null;
+
+            const activeListingsCount = await Product.count({
+                where: { seller_id: user.id, status: 'Available' }
+            });
+
+            const userJSON = user.toJSON();
+            userJSON.active_listings_count = activeListingsCount;
+            userJSON.faculty = user.faculty || 'FCI'; 
+            return userJSON;
+        }));
+
+        res.json(result.filter(Boolean));
+    } catch (error) {
+        console.error('Get Followers List Error:', error);
+        res.status(500).json({ error: 'Failed to retrieve followers list' });
     }
 };

@@ -100,6 +100,11 @@ const User = sequelize.define('User', {
         defaultValue: 'active',
         allowNull: false,
     },
+    warning_count: {
+        type: DataTypes.INTEGER,
+        defaultValue: 0,
+        allowNull: false,
+    },
     show_full_name: {
         type: DataTypes.BOOLEAN,
         defaultValue: false,
@@ -142,6 +147,20 @@ const User = sequelize.define('User', {
     deactivation_reason: {
         type: DataTypes.STRING,
         allowNull: true,
+    },
+    is_flagged: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false,
+        allowNull: false,
+    },
+    flag_reason: {
+        type: DataTypes.STRING,
+        allowNull: true,
+    },
+    manual_unflagged: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false,
+        allowNull: false,
     },
 }, {
     timestamps: true,

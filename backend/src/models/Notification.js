@@ -20,7 +20,7 @@ const Notification = sequelize.define('Notification', {
         allowNull: false,
     },
     type: {
-        type: DataTypes.ENUM('Transaction', 'System', 'Promotion'),
+        type: DataTypes.ENUM('Transaction', 'System', 'Promotion', 'PRICE_DROP', 'NEW_SELLER_ITEM'),
         defaultValue: 'System',
     },
     is_read: {

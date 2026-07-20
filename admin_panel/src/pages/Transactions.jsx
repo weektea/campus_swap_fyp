@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search } from 'lucide-react';
+import { Search, Eye, Calendar, Clock, User, ShieldAlert, Award } from 'lucide-react';
 import api from '../services/api';
 
 const Transactions = () => {
@@ -7,6 +7,7 @@ const Transactions = () => {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [filterStatus, setFilterStatus] = useState('All');
+    const [selectedTransaction, setSelectedTransaction] = useState(null);
 
     useEffect(() => {
         fetchTransactions();
@@ -39,7 +40,7 @@ const Transactions = () => {
     return (
         <div>
             <div className="flex justify-between items-center mb-8">
-                <h1 style={{ fontSize: '1.5rem', margin: 0 }}>Transactions (Orders)</h1>
+                <h1 style={{ fontSize: '1.5rem', margin: 0, fontWeight: 'bold', color: 'var(--primary)' }}>Transactions (Orders)</h1>
                 <div className="flex gap-4">
                     <div style={{ display: 'flex', alignItems: 'center', background: 'white', border: '1px solid var(--border)', borderRadius: '8px', padding: '8px 16px', width: '300px' }}>
                         <Search size={18} color="var(--text-muted)" style={{ marginRight: '8px' }} />
@@ -51,6 +52,7 @@ const Transactions = () => {
                         <option value="Scheduled">Scheduled</option>
                         <option value="Completed">Completed</option>
                         <option value="Cancelled">Cancelled</option>
+                        <option value="Disputed">Disputed</option>
                     </select>
                 </div>
             </div>
@@ -65,11 +67,12 @@ const Transactions = () => {
                             <th>SELLER</th>
                             <th>AMOUNT</th>
                             <th>STATUS</th>
+                            <th>ACTION</th>
                         </tr>
                     </thead>
                     <tbody>
                         {filtered.map(t => (
-                            <tr key={t.id}>
+                            <tr key={t.id} onClick={() => setSelectedTransaction(t)} style={{ cursor: 'pointer' }}>
                                 <td>
                                     <div style={{ fontWeight: 'bold' }}>{t.id.substring(0,8)}...</div>
                                     <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{new Date(t.createdAt).toLocaleDateString()}</div>
@@ -100,12 +103,201 @@ const Transactions = () => {
                                         {t.status}
                                     </span>
                                 </td>
+                                <td>
+                                    <button 
+                                        className="btn btn-outline" 
+                                        style={{ padding: '4px 8px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px', height: 'auto' }}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setSelectedTransaction(t);
+                                        }}
+                                    >
+                                        <Eye size={12} />
+                                        <span>View</span>
+                                    </button>
+                                </td>
                             </tr>
                         ))}
-                        {filtered.length === 0 && <tr><td colSpan="6" style={{ textAlign: 'center', padding: '2rem' }}>No transactions found.</td></tr>}
+                        {filtered.length === 0 && <tr><td colSpan="7" style={{ textAlign: 'center', padding: '2rem' }}>No transactions found.</td></tr>}
                     </tbody>
                 </table>
             </div>
+
+            {/* Transaction Details Modal */}
+            {selectedTransaction && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 1000,
+                    backdropFilter: 'blur(4px)',
+                    animation: 'fadeIn 0.2s ease-out'
+                }} onClick={() => setSelectedTransaction(null)}>
+                    <div style={{
+                        background: 'white',
+                        borderRadius: '16px',
+                        padding: '2rem',
+                        width: '650px',
+                        maxWidth: '90%',
+                        maxHeight: '85vh',
+                        overflowY: 'auto',
+                        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+                        animation: 'scaleIn 0.2s ease-out'
+                    }} onClick={(e) => e.stopPropagation()}>
+                        {/* Modal Header */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)', paddingBottom: '1rem', marginBottom: '1.5rem' }}>
+                            <div>
+                                <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 'bold', color: 'var(--primary)' }}>Transaction Details</h3>
+                                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>ID: {selectedTransaction.id}</span>
+                            </div>
+                            <button 
+                                onClick={() => setSelectedTransaction(null)}
+                                style={{ background: 'transparent', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: 'var(--text-muted)' }}
+                            >
+                                &times;
+                            </button>
+                        </div>
+
+                        {/* Modal Content */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                            {/* Summary row */}
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: '1rem', background: '#f9fafb', padding: '1rem', borderRadius: '12px', border: '1px solid var(--border)' }}>
+                                <div>
+                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Order Date</div>
+                                    <div style={{ fontWeight: '600', marginTop: '2px', fontSize: '0.85rem' }}>{new Date(selectedTransaction.createdAt).toLocaleDateString()}</div>
+                                </div>
+                                <div>
+                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Status</div>
+                                    <div style={{ marginTop: '2px' }}>
+                                        <span style={{
+                                            padding: '2px 8px', borderRadius: '8px', fontSize: '0.7rem', fontWeight: 'bold',
+                                            background: selectedTransaction.status === 'Completed' ? '#dcfce7' : 
+                                                        selectedTransaction.status === 'Cancelled' ? '#fee2e2' : '#fef3c7',
+                                            color: selectedTransaction.status === 'Completed' ? '#16a34a' : 
+                                                   selectedTransaction.status === 'Cancelled' ? '#dc2626' : '#d97706'
+                                        }}>
+                                            {selectedTransaction.status}
+                                        </span>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Amount</div>
+                                    <div style={{ fontWeight: 'bold', color: 'var(--primary)', marginTop: '2px', fontSize: '0.85rem' }}>RM {selectedTransaction.amount}</div>
+                                </div>
+                                <div>
+                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Platform Fee</div>
+                                    <div style={{ fontWeight: '600', marginTop: '2px', fontSize: '0.85rem' }}>RM {selectedTransaction.platform_fee || '0.00'}</div>
+                                </div>
+                                <div>
+                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Carbon Saved</div>
+                                    <div style={{ fontWeight: '600', color: '#16a34a', marginTop: '2px', fontSize: '0.85rem' }}>{selectedTransaction.awarded_carbon_points || '0.00'} kg CO2e</div>
+                                </div>
+                            </div>
+
+                            {/* Product Info Section */}
+                            <div>
+                                <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.9rem', borderBottom: '1px solid var(--border)', paddingBottom: '4px', color: 'var(--primary)', fontWeight: 'bold' }}>Product Details</h4>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <div>
+                                        <div style={{ fontWeight: 'bold', fontSize: '0.95rem' }}>{selectedTransaction.product?.title || 'Unknown Product'}</div>
+                                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>Type: {selectedTransaction.product?.type || 'Sale'}</div>
+                                    </div>
+                                    <div style={{ fontWeight: 'bold' }}>RM {selectedTransaction.product?.price || '0.00'}</div>
+                                </div>
+                            </div>
+
+                            {/* Parties Info Section */}
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+                                <div>
+                                    <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.9rem', borderBottom: '1px solid var(--border)', paddingBottom: '4px', color: 'var(--primary)', fontWeight: 'bold' }}>Buyer Details</h4>
+                                    <div style={{ fontSize: '0.85rem', lineHeight: '1.4' }}>
+                                        <div><strong>Name:</strong> {selectedTransaction.buyer?.full_name}</div>
+                                        <div><strong>Username:</strong> {selectedTransaction.buyer?.username}</div>
+                                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis' }}>{selectedTransaction.buyer?.email}</div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.9rem', borderBottom: '1px solid var(--border)', paddingBottom: '4px', color: 'var(--primary)', fontWeight: 'bold' }}>Seller Details</h4>
+                                    <div style={{ fontSize: '0.85rem', lineHeight: '1.4' }}>
+                                        <div><strong>Name:</strong> {selectedTransaction.seller?.full_name}</div>
+                                        <div><strong>Username:</strong> {selectedTransaction.seller?.username}</div>
+                                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis' }}>{selectedTransaction.seller?.email}</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Meetup Details Section */}
+                            <div>
+                                <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.9rem', borderBottom: '1px solid var(--border)', paddingBottom: '4px', color: 'var(--primary)', fontWeight: 'bold' }}>Meetup & Scheduling</h4>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', fontSize: '0.85rem' }}>
+                                    <div><strong>Meetup Location:</strong> {selectedTransaction.meetup_location || 'Not Specified'}</div>
+                                    <div><strong>Scheduled Time:</strong> {selectedTransaction.scheduled_at ? new Date(selectedTransaction.scheduled_at).toLocaleString() : 'Not Scheduled'}</div>
+                                </div>
+                            </div>
+
+                            {/* Rental Period (Visible only for Rental Transactions) */}
+                            {selectedTransaction.product?.type === 'Rent' && (
+                                <div>
+                                    <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.9rem', borderBottom: '1px solid var(--border)', paddingBottom: '4px', color: 'var(--primary)', fontWeight: 'bold' }}>Rental Info</h4>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', fontSize: '0.85rem' }}>
+                                        <div><strong>Rental Type:</strong> {selectedTransaction.rental_type || 'Short-term'}</div>
+                                        <div><strong>Group Size:</strong> {selectedTransaction.group_size || 1}</div>
+                                        <div>
+                                            <strong>Period:</strong> 
+                                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                                                {selectedTransaction.rental_start_date ? `${new Date(selectedTransaction.rental_start_date).toLocaleDateString()} to ${new Date(selectedTransaction.rental_end_date).toLocaleDateString()}` : 'N/A'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Payment proof and method info */}
+                            <div>
+                                <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.9rem', borderBottom: '1px solid var(--border)', paddingBottom: '4px', color: 'var(--primary)', fontWeight: 'bold' }}>Payment Details</h4>
+                                <div style={{ fontSize: '0.85rem' }}>
+                                    <div><strong>Method Selected:</strong> {selectedTransaction.selected_payment_method || 'N/A'}</div>
+                                    {selectedTransaction.payment_proof_url && (
+                                        <div style={{ marginTop: '0.75rem' }}>
+                                            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '4px' }}>Proof of Payment:</div>
+                                            <a href={selectedTransaction.payment_proof_url} target="_blank" rel="noopener noreferrer">
+                                                <img src={selectedTransaction.payment_proof_url} alt="Payment Proof" style={{ maxWidth: '100%', maxHeight: '180px', borderRadius: '8px', border: '1px solid var(--border)', cursor: 'pointer' }} />
+                                            </a>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Ratings and Reviews */}
+                            {(selectedTransaction.rating_from_buyer || selectedTransaction.rating_from_seller) && (
+                                <div>
+                                    <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.9rem', borderBottom: '1px solid var(--border)', paddingBottom: '4px', color: 'var(--primary)', fontWeight: 'bold' }}>Feedback & Reviews</h4>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', fontSize: '0.85rem' }}>
+                                        {selectedTransaction.rating_from_buyer && (
+                                            <div>
+                                                <div><strong>Buyer Rating:</strong> {'⭐'.repeat(selectedTransaction.rating_from_buyer)}</div>
+                                                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontStyle: 'italic', marginTop: '2px' }}>"{selectedTransaction.buyer_comment || 'No comment'}"</div>
+                                            </div>
+                                        )}
+                                        {selectedTransaction.rating_from_seller && (
+                                            <div>
+                                                <div><strong>Seller Rating:</strong> {'⭐'.repeat(selectedTransaction.rating_from_seller)}</div>
+                                                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontStyle: 'italic', marginTop: '2px' }}>"{selectedTransaction.seller_comment || 'No comment'}"</div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

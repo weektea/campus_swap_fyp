@@ -16,6 +16,8 @@ import Transactions from './pages/Transactions';
 import Categories from './pages/Categories';
 import Reviews from './pages/Reviews';
 import MLModels from './pages/MLModels';
+import Broadcast from './pages/Broadcast';
+import System from './pages/System';
 import PrivateRoute from './components/PrivateRoute';
 import { SocketProvider } from './context/SocketContext';
 
@@ -135,6 +137,22 @@ function App() {
           <PrivateRoute>
             <Layout>
               <Reviews />
+            </Layout>
+          </PrivateRoute>
+        } />
+
+        <Route path="/broadcast" element={
+          <PrivateRoute>
+            <Layout>
+              <Broadcast />
+            </Layout>
+          </PrivateRoute>
+        } />
+
+        <Route path="/system" element={
+          <PrivateRoute>
+            <Layout>
+              <System />
             </Layout>
           </PrivateRoute>
         } />

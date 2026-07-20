@@ -1,13 +1,14 @@
 import express from 'express';
-import { authenticateToken } from '../middleware/authMiddleware.js';
+import { authenticateToken, authenticateTokenOptional } from '../middleware/authMiddleware.js';
 import { trackInteraction, getRecommendations, getTrendingItems, getTrendingCategories } from '../controllers/recommendationController.js';
 
 const router = express.Router();
 
+router.post('/', authenticateToken, trackInteraction);
 router.post('/track', authenticateToken, trackInteraction);
-router.get('/', authenticateToken, getRecommendations);
-router.get('/trending', authenticateToken, getTrendingItems); // Legacy /trending -> /trending/items
-router.get('/trending/items', authenticateToken, getTrendingItems);
-router.get('/trending/categories', authenticateToken, getTrendingCategories);
+router.get('/', authenticateTokenOptional, getRecommendations);
+router.get('/trending', authenticateTokenOptional, getTrendingItems); // Legacy /trending -> /trending/items
+router.get('/trending/items', authenticateTokenOptional, getTrendingItems);
+router.get('/trending/categories', authenticateTokenOptional, getTrendingCategories);
 
 export default router;

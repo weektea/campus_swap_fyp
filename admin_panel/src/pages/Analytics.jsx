@@ -20,8 +20,14 @@ const Analytics = () => {
     const [metrics, setMetrics] = useState(null);
     const [loading, setLoading] = useState(true);
     const [range, setRange] = useState('last30'); // 'last30', 'quarter', 'semester', 'all'
-    const [startDate, setStartDate] = useState('');
-    const [endDate, setEndDate] = useState('');
+    const [startDate, setStartDate] = useState(() => {
+        const d = new Date();
+        d.setDate(d.getDate() - 30);
+        return d.toISOString().split('T')[0];
+    });
+    const [endDate, setEndDate] = useState(() => {
+        return new Date().toISOString().split('T')[0];
+    });
 
     const fetchMetrics = async (selectedRange) => {
         setLoading(true);
@@ -39,7 +45,9 @@ const Analytics = () => {
     };
 
     useEffect(() => {
-        fetchMetrics(range);
+        if (range !== 'custom') {
+            fetchMetrics(range);
+        }
     }, [range]);
 
     const getRangeLabel = () => {
@@ -121,6 +129,14 @@ const Analytics = () => {
         window.print();
     };
 
+    const handleUnifiedExportCSV = () => {
+        if (range === 'custom') {
+            handleExportEnvironmentalCSV();
+        } else {
+            handleExportCSV();
+        }
+    };
+
     if (loading) return <div className="p-8 text-center text-gray-500">Loading platform reports...</div>;
 
     const COLORS = ['#0d503c', '#2563eb', '#d97706', '#dc2626', '#8b5cf6'];
@@ -158,6 +174,130 @@ const Analytics = () => {
             {/* Print Stylesheet Injection */}
             <style dangerouslySetInnerHTML={{
                 __html: `
+                .print-domain-section {
+                    margin-bottom: 3.5rem;
+                }
+                .mb-8 {
+                    margin-bottom: 2rem;
+                }
+                .mb-6 {
+                    margin-bottom: 1.5rem;
+                }
+                .mb-4 {
+                    margin-bottom: 1rem;
+                }
+                .mt-6 {
+                    margin-top: 1.5rem;
+                }
+                .mt-4 {
+                    margin-top: 1rem;
+                }
+                .flex-1 {
+                    flex: 1 1 0%;
+                }
+                .flex-wrap {
+                    flex-wrap: wrap;
+                }
+                .gap-3 {
+                    gap: 0.75rem;
+                }
+                .gap-8 {
+                    gap: 2rem;
+                }
+                .dashboard-grid-3 {
+                    display: grid;
+                    grid-template-columns: repeat(3, 1fr);
+                    gap: 1.5rem;
+                }
+                .dashboard-grid-4 {
+                    display: grid;
+                    grid-template-columns: repeat(4, 1fr);
+                    gap: 1.5rem;
+                }
+                .analytics-grid-2 {
+                    display: grid;
+                    grid-template-columns: 1.8fr 1.2fr;
+                    gap: 1.5rem;
+                }
+                .chart-container-card {
+                    background: var(--card-bg);
+                    border: 1px solid var(--border);
+                    border-radius: 16px;
+                    padding: 1.5rem;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+                    transition: transform 0.2s, box-shadow 0.2s;
+                }
+                .chart-container-card:hover {
+                    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.02);
+                }
+                .chart-title {
+                    font-size: 0.95rem;
+                    font-weight: 700;
+                    color: var(--text-main);
+                    margin: 0 0 4px 0;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                }
+                .chart-subtitle {
+                    font-size: 0.75rem;
+                    color: var(--text-muted);
+                    margin: 0 0 1.25rem 0;
+                }
+                .stat-pill {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 6px;
+                    padding: 3px 8px;
+                    background: rgba(13, 80, 60, 0.08);
+                    color: var(--primary);
+                    border-radius: 6px;
+                    font-size: 0.75rem;
+                    font-weight: 600;
+                }
+                .stat-value {
+                    font-size: 1.75rem;
+                    font-weight: 800;
+                    color: var(--text-main);
+                    margin-top: 4px;
+                }
+                .anomaly-badge {
+                    display: inline-block;
+                    padding: 2px 8px;
+                    background: #fee2e2;
+                    color: #dc2626;
+                    border-radius: 6px;
+                    font-size: 0.725rem;
+                    font-weight: 600;
+                }
+                .custom-legend-item {
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    padding: 8px 12px;
+                    border-radius: 8px;
+                    background: #f9fafb;
+                    border: 1px solid var(--border);
+                }
+                @media (max-width: 1024px) {
+                    .dashboard-grid-3 {
+                        grid-template-columns: repeat(2, 1fr);
+                    }
+                    .dashboard-grid-4 {
+                        grid-template-columns: repeat(2, 1fr);
+                    }
+                    .analytics-grid-2 {
+                        grid-template-columns: 1fr;
+                    }
+                }
+                @media (max-width: 640px) {
+                    .dashboard-grid-3 {
+                        grid-template-columns: 1fr;
+                    }
+                    .dashboard-grid-4 {
+                        grid-template-columns: 1fr;
+                    }
+                }
                 @media print {
                     aside.sidebar,
                     main.main-content > header,
@@ -202,7 +342,7 @@ const Analytics = () => {
                     }
                     .print-domain-section {
                         page-break-inside: avoid;
-                        margin-bottom: 2.5rem;
+                        margin-bottom: 2.5rem !important;
                         border: 1px solid #d1d5db !important;
                         border-radius: 8px;
                         padding: 1.5rem;
@@ -253,35 +393,67 @@ const Analytics = () => {
             </div>
 
             {/* Screen Action Bar */}
-            <div className="flex justify-between items-center mb-8 no-print">
-                <h1 style={{ fontSize: '1.5rem', margin: 0, fontWeight: 'bold', color: 'var(--primary)' }}>Platform Performance & Sustainability Report</h1>
-                <div className="flex gap-4 items-center">
+            <div className="flex justify-between items-center mb-8 no-print" style={{ flexWrap: 'wrap', gap: '16px', borderBottom: '1px solid var(--border)', paddingBottom: '1.5rem' }}>
+                <div>
+                    <h1 style={{ fontSize: '1.75rem', margin: 0, fontWeight: 'bold', color: 'var(--primary)' }}>Platform Performance & Analytics</h1>
+                    <p style={{ margin: '4px 0 0 0', fontSize: '0.875rem', color: 'var(--text-muted)' }}>Monitor platform activity, user ecology, and export performance reports.</p>
+                </div>
+                <div className="flex items-center gap-4" style={{ flexWrap: 'wrap' }}>
                     {/* Time Range Filter Selector */}
-                    <div style={{ display: 'flex', alignItems: 'center', background: 'white', border: '1px solid var(--border)', borderRadius: '8px', padding: '4px 12px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', background: 'white', border: '1px solid var(--border)', borderRadius: '8px', padding: '6px 12px' }}>
                         <Calendar size={18} color="var(--text-muted)" style={{ marginRight: '8px' }} />
                         <select
                             value={range}
                             onChange={(e) => setRange(e.target.value)}
-                            style={{ border: 'none', background: 'transparent', outline: 'none', color: 'var(--text-main)', fontSize: '0.9rem', cursor: 'pointer', padding: '4px 0' }}
+                            style={{ border: 'none', background: 'transparent', outline: 'none', color: 'var(--text-main)', fontSize: '0.9rem', cursor: 'pointer', fontWeight: '500' }}
                         >
-                            <option value="last30">Last 30 Days</option>
-                            <option value="quarter">Last Quarter (90 Days)</option>
-                            <option value="semester">Academic Semester (180 Days)</option>
-                            <option value="all">All Time</option>
+                            <option value="last30">Last 30 Days (Summary)</option>
+                            <option value="quarter">Last Quarter (Summary)</option>
+                            <option value="semester">Academic Semester (Summary)</option>
+                            <option value="all">All Time (Summary)</option>
+                            <option value="custom">Custom Date Range (Detailed Environmental)</option>
                         </select>
                     </div>
 
-                    {/* Export PDF Button */}
-                    <button className="btn btn-outline flex items-center gap-2" onClick={handleExportPDF} style={{ padding: '0.5rem 1rem', fontSize: '0.9rem' }}>
-                        <Printer size={16} />
-                        <span>Export PDF</span>
-                    </button>
+                    {/* Custom Date Pickers (Shown inline only when Custom Date Range is selected) */}
+                    {range === 'custom' && (
+                        <div className="flex items-center gap-3" style={{ background: 'rgba(13, 80, 60, 0.04)', padding: '6px 12px', borderRadius: '8px', border: '1px dashed rgba(13, 80, 60, 0.2)' }}>
+                            <div className="flex items-center gap-2">
+                                <span style={{ fontSize: '0.8rem', color: 'var(--primary)', fontWeight: '600' }}>Start</span>
+                                <input 
+                                    type="date" 
+                                    className="input" 
+                                    style={{ margin: 0, padding: '4px 8px', width: 'auto', fontSize: '0.8rem', height: '32px' }} 
+                                    value={startDate} 
+                                    onChange={(e) => setStartDate(e.target.value)} 
+                                />
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <span style={{ fontSize: '0.8rem', color: 'var(--primary)', fontWeight: '600' }}>End</span>
+                                <input 
+                                    type="date" 
+                                    className="input" 
+                                    style={{ margin: 0, padding: '4px 8px', width: 'auto', fontSize: '0.8rem', height: '32px' }} 
+                                    value={endDate} 
+                                    onChange={(e) => setEndDate(e.target.value)} 
+                                />
+                            </div>
+                        </div>
+                    )}
 
-                    {/* Export CSV Button */}
-                    <button className="btn flex items-center gap-2" onClick={handleExportCSV} style={{ padding: '0.5rem 1rem', fontSize: '0.9rem' }}>
-                        <Download size={16} />
-                        <span>Export CSV</span>
-                    </button>
+                    <div className="flex gap-2">
+                        {/* Print PDF Button */}
+                        <button className="btn btn-outline flex items-center gap-2" onClick={handleExportPDF} style={{ padding: '0.6rem 1.2rem', fontSize: '0.9rem', height: '42px' }}>
+                            <Printer size={16} />
+                            <span>Print PDF</span>
+                        </button>
+
+                        {/* Export CSV Button (Unified Action) */}
+                        <button className="btn flex items-center gap-2" onClick={handleUnifiedExportCSV} style={{ padding: '0.6rem 1.2rem', fontSize: '0.9rem', height: '42px' }}>
+                            <Download size={16} />
+                            <span>Export CSV</span>
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -291,20 +463,20 @@ const Analytics = () => {
                     <Users size={20} />
                     <span>User Ecology</span>
                 </h2>
-                <div className="flex gap-6 print-grid-3">
+                <div className="dashboard-grid-3 print-grid-3">
                     <div className="card flex-1">
                         <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginBottom: '8px' }}>New Registrations</div>
-                        <div style={{ fontSize: '1.75rem', fontWeight: 'bold' }}>{metrics?.new_registrations || 0}</div>
+                        <div className="stat-value">{metrics?.new_registrations || 0}</div>
                         <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '4px' }}>Via campus email domain in range</div>
                     </div>
                     <div className="card flex-1">
                         <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginBottom: '8px' }}>Active Users</div>
-                        <div style={{ fontSize: '1.75rem', fontWeight: 'bold', color: 'var(--success)' }}>{metrics?.active_users || 0}</div>
+                        <div className="stat-value" style={{ color: 'var(--success)' }}>{metrics?.active_users || 0}</div>
                         <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '4px' }}>Current unbanned users</div>
                     </div>
                     <div className="card flex-1">
                         <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginBottom: '8px' }}>Total Registered Users</div>
-                        <div style={{ fontSize: '1.75rem', fontWeight: 'bold' }}>{metrics?.total_users || 0}</div>
+                        <div className="stat-value">{metrics?.total_users || 0}</div>
                         <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '4px' }}>All-time total platform users</div>
                     </div>
                 </div>
@@ -316,7 +488,7 @@ const Analytics = () => {
                     <Award size={20} />
                     <span>Environmental Impact</span>
                 </h2>
-                <div className="flex gap-6 mb-6 print-grid-3">
+                <div className="dashboard-grid-3 mb-6 print-grid-3">
                     <div className="card flex-1" style={{ background: '#f0fdf4', borderColor: '#bbf7d0' }}>
                         <div style={{ color: '#16a34a', fontSize: '0.875rem', marginBottom: '8px', fontWeight: 'bold' }}>Total Carbon Saved</div>
                         <div style={{ fontSize: '1.75rem', fontWeight: 'bold', color: '#15803d' }}>
@@ -335,14 +507,14 @@ const Analytics = () => {
                     </div>
                     <div className="card flex-1">
                         <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginBottom: '8px' }}>Items Reused</div>
-                        <div style={{ fontSize: '1.75rem', fontWeight: 'bold' }}>{metrics?.completed_transactions || 0}</div>
+                        <div className="stat-value">{metrics?.completed_transactions || 0}</div>
                         <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '4px' }}>Physically exchanged listings</div>
                     </div>
                 </div>
 
                 {/* Donut Chart and Data Table */}
-                <div className="flex gap-6 print-flex-row">
-                    <div className="card flex-col print-flex-child" style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
+                <div className="flex gap-6 print-flex-row" style={{ flexWrap: 'wrap' }}>
+                    <div className="card flex-col print-flex-child" style={{ flex: 1, display: 'flex', alignItems: 'center', minWidth: '300px' }}>
                         <h3 style={{ margin: '0 0 1rem 0', fontSize: '0.9rem', width: '100%', textAlign: 'left' }}>Carbon Reduction Distribution</h3>
                         <ResponsiveContainer width="100%" height={180}>
                             <PieChart>
@@ -363,7 +535,7 @@ const Analytics = () => {
                             </PieChart>
                         </ResponsiveContainer>
                     </div>
-                    <div className="card flex-col print-flex-child" style={{ flex: 1.5 }}>
+                    <div className="card flex-col print-flex-child" style={{ flex: 1.5, minWidth: '300px' }}>
                         <h3 style={{ margin: '0 0 1rem 0', fontSize: '0.9rem' }}>Sustainability Metric Breakdown</h3>
                         <table style={{ width: '100%' }}>
                             <thead>
@@ -394,25 +566,25 @@ const Analytics = () => {
                     <BarChart3 size={20} />
                     <span>Transactional Health</span>
                 </h2>
-                <div className="flex gap-6 mb-6 print-grid-4">
+                <div className="dashboard-grid-4 mb-6 print-grid-4">
                     <div className="card flex-1">
                         <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginBottom: '8px' }}>GMV Volume</div>
-                        <div style={{ fontSize: '1.6rem', fontWeight: 'bold' }}>RM {metrics?.gmv || 0}</div>
+                        <div className="stat-value">RM {metrics?.gmv || 0}</div>
                         <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '4px' }}>Total trade value in period</div>
                     </div>
                     <div className="card flex-1">
                         <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginBottom: '8px' }}>Successful Trades</div>
-                        <div style={{ fontSize: '1.6rem', fontWeight: 'bold' }}>{metrics?.completed_transactions || 0}</div>
+                        <div className="stat-value">{metrics?.completed_transactions || 0}</div>
                         <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '4px' }}>Trades completed successfully</div>
                     </div>
                     <div className="card flex-1" style={{ background: '#fef2f2', borderColor: '#fecaca' }}>
                         <div style={{ color: '#dc2626', fontSize: '0.875rem', marginBottom: '8px', fontWeight: 'bold' }}>Active Disputes</div>
-                        <div style={{ fontSize: '1.6rem', fontWeight: 'bold', color: '#b91c1c' }}>{metrics?.active_disputes || 0}</div>
+                        <div className="stat-value" style={{ color: '#b91c1c' }}>{metrics?.active_disputes || 0}</div>
                         <div style={{ color: '#b91c1c', fontSize: '0.75rem', marginTop: '4px' }}>Strictly New or Investigating</div>
                     </div>
                     <div className="card flex-1" style={{ background: '#fef2f2', borderColor: '#fecaca' }}>
                         <div style={{ color: '#dc2626', fontSize: '0.875rem', marginBottom: '8px', fontWeight: 'bold' }}>Suspended Accounts</div>
-                        <div style={{ fontSize: '1.6rem', fontWeight: 'bold', color: '#b91c1c' }}>{metrics?.suspended_users || 0}</div>
+                        <div className="stat-value" style={{ color: '#b91c1c' }}>{metrics?.suspended_users || 0}</div>
                         <div style={{ color: '#b91c1c', fontSize: '0.75rem', marginTop: '4px' }}>Banned due to policy violation</div>
                     </div>
                 </div>
@@ -437,119 +609,152 @@ const Analytics = () => {
                 </div>
             </div>
 
-            {/* SECTION 4: FYP ANALYTICS — Growth, Earnings Prediction, Category Carbon, Order Type, Anomaly Logs */}
+            {/* SECTION 4: GROWTH & PREDICTIVE ANALYTICS */}
             <div className="print-domain-section mb-8 no-print">
                 <h2 className="print-domain-title" style={{ fontSize: '1.2rem', margin: '0 0 1.5rem 0', display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--primary)', borderBottom: '2px solid var(--border)', paddingBottom: '8px' }}>
                     <BarChart3 size={20} />
                     <span>Growth & Predictive Analytics</span>
                 </h2>
 
-                {/* Row 1: User Growth + Earnings Prediction */}
-                <div className="flex gap-6 mb-6">
-                    <div className="card flex-1" style={{ height: '300px' }}>
-                        <h3 style={{ margin: '0 0 0.75rem 0', fontSize: '0.9rem' }}>📈 Monthly User Growth</h3>
-                        <ResponsiveContainer width="100%" height={230}>
-                            <LineChart data={growthData}>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                                <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#6b7280' }} />
-                                <YAxis tick={{ fontSize: 10, fill: '#6b7280' }} />
-                                <Tooltip />
-                                <Line type="monotone" dataKey="registrations" name="New Registrations" stroke="#0d503c" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />
-                            </LineChart>
-                        </ResponsiveContainer>
-                    </div>
-                    <div className="card flex-1" style={{ height: '300px' }}>
-                        <h3 style={{ margin: '0 0 0.75rem 0', fontSize: '0.9rem' }}>💸 Earnings & 3-Month Trend Prediction</h3>
-                        <ResponsiveContainer width="100%" height={230}>
-                            <ComposedChart data={combinedEarningsData}>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                                <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#6b7280' }} />
-                                <YAxis tick={{ fontSize: 10, fill: '#6b7280' }} />
-                                <Tooltip />
-                                <Legend wrapperStyle={{ fontSize: '0.75rem' }} />
-                                <Bar dataKey="actual" name="Earnings (RM)" fill="#0d503c" radius={[4, 4, 0, 0]} />
-                                <Line type="monotone" dataKey="prediction" name="Projected Trend" stroke="#d97706" strokeDasharray="5 5" strokeWidth={2} dot={{ r: 3 }} />
-                            </ComposedChart>
-                        </ResponsiveContainer>
-                    </div>
-                </div>
-
-                {/* Row 2: Category Carbon Pie + Order Type Pie + Anomaly Logs */}
-                <div className="flex gap-6">
-                    <div className="card flex-1" style={{ height: '280px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                        <h3 style={{ margin: '0 0 0.75rem 0', fontSize: '0.9rem', width: '100%' }}>🌿 Carbon Savings by Category</h3>
-                        <ResponsiveContainer width="100%" height={200}>
-                            <PieChart>
-                                <Pie data={metrics?.carbon_by_category || []} cx="50%" cy="50%" innerRadius={45} outerRadius={70} paddingAngle={2} dataKey="value" nameKey="category">
-                                    {(metrics?.carbon_by_category || []).map((_, index) => (
-                                        <Cell key={index} fill={COLORS[index % COLORS.length]} />
-                                    ))}
-                                </Pie>
-                                <Tooltip formatter={(v) => [`${Number(v).toFixed(2)} kg CO2e`, 'Saved']} />
-                            </PieChart>
-                        </ResponsiveContainer>
-                    </div>
-                    <div className="card flex-1" style={{ height: '280px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                        <h3 style={{ margin: '0 0 0.75rem 0', fontSize: '0.9rem', width: '100%' }}>🔄 Sale vs Rent Split</h3>
-                        <ResponsiveContainer width="100%" height={200}>
-                            <PieChart>
-                                <Pie data={orderTypeData} cx="50%" cy="50%" outerRadius={70} dataKey="value" nameKey="name">
-                                    <Cell fill="#0d503c" />
-                                    <Cell fill="#8b5cf6" />
-                                </Pie>
-                                <Tooltip />
-                                <Legend wrapperStyle={{ fontSize: '0.75rem' }} />
-                            </PieChart>
-                        </ResponsiveContainer>
-                    </div>
-                    <div className="card flex-1" style={{ height: '280px', overflowY: 'auto' }}>
-                        <h3 style={{ margin: '0 0 0.75rem 0', fontSize: '0.9rem', color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <ShieldAlert size={16} /> Anomaly Behavior Logs
-                        </h3>
-                        <table style={{ width: '100%', fontSize: '0.8rem' }}>
-                            <thead>
-                                <tr>
-                                    <th style={{ padding: '6px 8px' }}>User</th>
-                                    <th style={{ padding: '6px 8px' }}>Event</th>
-                                    <th style={{ padding: '6px 8px' }}>Time</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {(metrics?.anomaly_logs || []).map((log, idx) => (
-                                    <tr key={idx}>
-                                        <td style={{ padding: '6px 8px', fontWeight: '600' }}>{log.username}</td>
-                                        <td style={{ padding: '6px 8px' }}>
-                                            <span style={{ padding: '2px 6px', background: '#fee2e2', color: '#dc2626', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>
-                                                {log.action.replace('ANOMALY: ', '')}
-                                            </span>
-                                        </td>
-                                        <td style={{ padding: '6px 8px', color: 'var(--text-muted)' }}>{new Date(log.timestamp).toLocaleTimeString()}</td>
-                                    </tr>
-                                ))}
-                                {(!metrics?.anomaly_logs || metrics.anomaly_logs.length === 0) && (
-                                    <tr><td colSpan="3" style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-muted)' }}>No anomalies recorded.</td></tr>
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                {/* Environmental Report Export */}
-                <div className="card mt-6">
-                    <h3 style={{ margin: '0 0 0.75rem 0', fontSize: '0.9rem', color: 'var(--primary)' }}>📅 Environmental Impact Report Exporter (UC30)</h3>
-                    <div className="flex gap-4 items-end" style={{ flexWrap: 'wrap' }}>
-                        <div style={{ flex: 1, minWidth: '180px' }}>
-                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>Start Date</div>
-                            <input type="date" className="input" style={{ margin: 0 }} value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+                <div className="analytics-grid-2">
+                    {/* Left Column: Charts */}
+                    <div className="flex flex-col gap-6">
+                        {/* Monthly User Growth */}
+                        <div className="chart-container-card" style={{ height: '330px' }}>
+                            <h3 className="chart-title">📈 Monthly User Growth</h3>
+                            <p className="chart-subtitle">Monthly sign-ups of new user accounts</p>
+                            <ResponsiveContainer width="100%" height={230}>
+                                <LineChart data={growthData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                                    <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#6b7280' }} tickLine={false} axisLine={false} />
+                                    <YAxis tick={{ fontSize: 10, fill: '#6b7280' }} tickLine={false} axisLine={false} />
+                                    <Tooltip 
+                                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.08)', background: '#ffffff', fontFamily: 'Outfit, sans-serif' }}
+                                    />
+                                    <Line type="monotone" dataKey="registrations" name="New Registrations" stroke="#0d503c" strokeWidth={3} dot={{ r: 4, strokeWidth: 2, fill: '#ffffff' }} activeDot={{ r: 6 }} />
+                                </LineChart>
+                            </ResponsiveContainer>
                         </div>
-                        <div style={{ flex: 1, minWidth: '180px' }}>
-                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>End Date</div>
-                            <input type="date" className="input" style={{ margin: 0 }} value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+
+                        {/* Revenue & Predictive Projection */}
+                        <div className="chart-container-card" style={{ height: '330px' }}>
+                            <h3 className="chart-title">💸 Revenue & Predictive Projection</h3>
+                            <p className="chart-subtitle">Actual monthly earnings and linear regression trend projection</p>
+                            <ResponsiveContainer width="100%" height={230}>
+                                <ComposedChart data={combinedEarningsData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                                    <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#6b7280' }} tickLine={false} axisLine={false} />
+                                    <YAxis tick={{ fontSize: 10, fill: '#6b7280' }} tickLine={false} axisLine={false} />
+                                    <Tooltip 
+                                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.08)', background: '#ffffff', fontFamily: 'Outfit, sans-serif' }}
+                                    />
+                                    <Legend wrapperStyle={{ fontSize: '0.75rem', marginTop: '10px' }} />
+                                    <Bar dataKey="actual" name="Earnings (RM)" fill="#0d503c" radius={[4, 4, 0, 0]} barSize={35} />
+                                    <Line type="monotone" dataKey="prediction" name="Projected Trend" stroke="#d97706" strokeDasharray="5 5" strokeWidth={2.5} dot={{ r: 4, strokeWidth: 2, fill: '#ffffff' }} />
+                                </ComposedChart>
+                            </ResponsiveContainer>
                         </div>
-                        <button className="btn flex items-center gap-2" style={{ height: '42px', padding: '0 1.25rem' }} onClick={handleExportEnvironmentalCSV}>
-                            <Download size={15} />
-                            <span>Generate Report</span>
-                        </button>
+                    </div>
+
+                    {/* Right Column: Split & Anomaly Table */}
+                    <div className="flex flex-col gap-6">
+                        {/* Transaction Type Split */}
+                        <div className="chart-container-card" style={{ height: '330px', display: 'flex', flexDirection: 'column' }}>
+                            <h3 className="chart-title">🔄 Transaction Type Breakdown</h3>
+                            <p className="chart-subtitle">Ratio of direct sales vs rentals across the platform</p>
+                            
+                            <div style={{ display: 'flex', alignItems: 'center', height: '100%', gap: '16px' }}>
+                                <div style={{ flex: 1, height: '180px' }}>
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <PieChart>
+                                            <Pie 
+                                                data={orderTypeData} 
+                                                cx="50%" 
+                                                cy="50%" 
+                                                innerRadius={50}
+                                                outerRadius={70} 
+                                                paddingAngle={3}
+                                                dataKey="value" 
+                                                nameKey="name"
+                                            >
+                                                <Cell fill="#0d503c" />
+                                                <Cell fill="#8b5cf6" />
+                                            </Pie>
+                                            <Tooltip 
+                                                contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}
+                                            />
+                                        </PieChart>
+                                    </ResponsiveContainer>
+                                </div>
+                                <div style={{ flex: 1.1, display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                    {(() => {
+                                        const saleCount = metrics?.order_type_breakdown?.sale || 0;
+                                        const rentCount = metrics?.order_type_breakdown?.rent || 0;
+                                        const totalCount = saleCount + rentCount;
+                                        const salePercent = totalCount > 0 ? ((saleCount / totalCount) * 100).toFixed(1) : 0;
+                                        const rentPercent = totalCount > 0 ? ((rentCount / totalCount) * 100).toFixed(1) : 0;
+                                        return (
+                                            <>
+                                                <div className="custom-legend-item">
+                                                    <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#0d503c' }} />
+                                                    <div style={{ flex: 1 }}>
+                                                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Sales</div>
+                                                        <div style={{ fontSize: '1rem', fontWeight: 'bold' }}>{saleCount} <span style={{ fontSize: '0.75rem', fontWeight: 'normal', color: 'var(--text-muted)' }}>({salePercent}%)</span></div>
+                                                    </div>
+                                                </div>
+                                                <div className="custom-legend-item">
+                                                    <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#8b5cf6' }} />
+                                                    <div style={{ flex: 1 }}>
+                                                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Rentals</div>
+                                                        <div style={{ fontSize: '1rem', fontWeight: 'bold' }}>{rentCount} <span style={{ fontSize: '0.75rem', fontWeight: 'normal', color: 'var(--text-muted)' }}>({rentPercent}%)</span></div>
+                                                    </div>
+                                                </div>
+                                            </>
+                                        );
+                                    })()}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Anomaly Behavior Logs */}
+                        <div className="chart-container-card" style={{ height: '330px', display: 'flex', flexDirection: 'column' }}>
+                            <h3 className="chart-title" style={{ color: 'var(--danger)' }}>
+                                <ShieldAlert size={18} />
+                                <span>Security & Anomaly Logs</span>
+                            </h3>
+                            <p className="chart-subtitle">Recent automated alerts flagged for suspicious user actions</p>
+                            <div style={{ flex: 1, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: '8px' }}>
+                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+                                    <thead style={{ position: 'sticky', top: 0, zIndex: 1, background: '#f9fafb' }}>
+                                        <tr>
+                                            <th style={{ padding: '8px 12px', fontSize: '0.75rem', borderBottom: '1px solid var(--border)' }}>User</th>
+                                            <th style={{ padding: '8px 12px', fontSize: '0.75rem', borderBottom: '1px solid var(--border)' }}>Event</th>
+                                            <th style={{ padding: '8px 12px', fontSize: '0.75rem', borderBottom: '1px solid var(--border)', textAlign: 'right' }}>Time</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {(metrics?.anomaly_logs || []).map((log, idx) => (
+                                            <tr key={idx}>
+                                                <td style={{ padding: '8px 12px', fontWeight: '600', borderBottom: '1px solid var(--border)' }}>{log.username}</td>
+                                                <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)' }}>
+                                                    <span className="anomaly-badge">
+                                                        {log.action.replace('ANOMALY: ', '')}
+                                                    </span>
+                                                </td>
+                                                <td style={{ padding: '8px 12px', color: 'var(--text-muted)', textAlign: 'right', borderBottom: '1px solid var(--border)' }}>{new Date(log.timestamp).toLocaleTimeString()}</td>
+                                            </tr>
+                                        ))}
+                                        {(!metrics?.anomaly_logs || metrics.anomaly_logs.length === 0) && (
+                                            <tr>
+                                                <td colSpan="3" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
+                                                    No security anomalies recorded.
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

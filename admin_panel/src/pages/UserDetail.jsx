@@ -112,6 +112,35 @@ const UserDetail = () => {
                         <div style={{ color: 'var(--text-muted)', fontWeight: 'bold' }}>Reputation</div>
                         <div>{user.reputation_score} / 5.0 ({user.total_reviews} reviews)</div>
 
+                        <div style={{ color: 'var(--text-muted)', fontWeight: 'bold' }}>Verification</div>
+                        <div>
+                            {user.is_verified ? (
+                                <span style={{ padding: '4px 8px', background: '#dcfce7', borderRadius: '8px', color: '#16a34a', fontSize: '0.75rem', fontWeight: 'bold' }}>
+                                    Verified Student
+                                </span>
+                            ) : (
+                                <span style={{ padding: '4px 8px', background: '#f3f4f6', borderRadius: '8px', color: '#6b7280', fontSize: '0.75rem', fontWeight: 'bold' }}>
+                                    Unverified
+                                </span>
+                            )}
+                        </div>
+
+                        <div style={{ color: 'var(--text-muted)', fontWeight: 'bold' }}>Flagged / Suspicious</div>
+                        <div>
+                            {user.is_flagged ? (
+                                <span style={{ padding: '4px 8px', background: '#fee2e2', borderRadius: '8px', color: '#dc2626', fontSize: '0.75rem', fontWeight: 'bold' }}>
+                                    ⚠️ Flagged: {user.flag_reason || 'Suspicious Activity'}
+                                </span>
+                            ) : (
+                                <span style={{ padding: '4px 8px', background: '#f3f4f6', borderRadius: '8px', color: '#6b7280', fontSize: '0.75rem', fontWeight: 'bold' }}>
+                                    Clear / Not Flagged
+                                </span>
+                            )}
+                        </div>
+
+                        <div style={{ color: 'var(--text-muted)', fontWeight: 'bold' }}>Warning Count</div>
+                        <div>{user.warning_count || 0} / 3 (suspended at 3)</div>
+
                         <div style={{ color: 'var(--text-muted)', fontWeight: 'bold' }}>Carbon Saved</div>
                         <div>{user.total_carbon_saved} kg CO2e</div>
 
@@ -174,6 +203,95 @@ const UserDetail = () => {
                                 Moderators cannot change user roles or status. Please contact an Administrator.
                             </div>
                         )}
+
+                        <div style={{ 
+                            padding: '16px', 
+                            background: '#f8fafc', 
+                            border: '1px solid #e2e8f0', 
+                            borderRadius: '12px', 
+                            marginTop: '24px' 
+                        }}>
+                            <span style={{ display: 'block', color: 'var(--primary)', fontWeight: 'bold', fontSize: '0.85rem', marginBottom: '12px' }}>
+                                Verification, Flagging & Warnings
+                            </span>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                <button 
+                                    className="btn" 
+                                    style={{ 
+                                        background: user.is_verified ? '#f1f5f9' : '#dcfce7', 
+                                        color: user.is_verified ? '#475569' : '#16a34a',
+                                        border: '1px solid ' + (user.is_verified ? '#cbd5e1' : '#bbf7d0'),
+                                        padding: '8px 12px',
+                                        fontWeight: 'bold',
+                                        justifyContent: 'center',
+                                        display: 'flex'
+                                    }}
+                                    onClick={async () => {
+                                        try {
+                                            const res = await api.patch(`/admin/users/${user.id}/verify`);
+                                            alert(res.data.message);
+                                            fetchUserDetails();
+                                        } catch (err) {
+                                            alert(err.response?.data?.error || 'Verification failed');
+                                        }
+                                    }}
+                                >
+                                    {user.is_verified ? 'Revoke Verification Status' : 'Approve / Verify Student Credential'}
+                                </button>
+                                <button 
+                                    className="btn" 
+                                    style={{ 
+                                        background: user.is_flagged ? '#f1f5f9' : '#fee2e2', 
+                                        color: user.is_flagged ? '#475569' : '#dc2626',
+                                        border: '1px solid ' + (user.is_flagged ? '#cbd5e1' : '#fecaca'),
+                                        padding: '8px 12px',
+                                        fontWeight: 'bold',
+                                        justifyContent: 'center',
+                                        display: 'flex'
+                                    }}
+                                    onClick={async () => {
+                                        const reason = user.is_flagged ? null : window.prompt('Enter flag reason:', 'Suspicious Behavior');
+                                        if (!user.is_flagged && reason === null) return;
+                                        try {
+                                            const res = await api.patch(`/admin/users/${user.id}/flag`, {
+                                                is_flagged: !user.is_flagged,
+                                                reason: reason
+                                             });
+                                             alert(res.data.message);
+                                             fetchUserDetails();
+                                        } catch (err) {
+                                             alert(err.response?.data?.error || 'Flagging failed');
+                                        }
+                                    }}
+                                >
+                                    {user.is_flagged ? 'Unflag User / Dismiss Flag' : 'Flag User as Suspicious'}
+                                </button>
+                                <button 
+                                    className="btn" 
+                                    style={{ 
+                                        background: '#fef3c7', 
+                                        color: '#d97706',
+                                        border: '1px solid #fde68a',
+                                        padding: '8px 12px',
+                                        fontWeight: 'bold',
+                                        justifyContent: 'center',
+                                        display: 'flex'
+                                    }}
+                                    onClick={async () => {
+                                        if (!window.confirm('Send a formal warning to this user? Accumulating 3 warnings results in automatic suspension.')) return;
+                                        try {
+                                            const res = await api.post(`/admin/users/${user.id}/warn`);
+                                             alert(res.data.message + (res.data.isSuspended ? ' (User suspended!)' : ''));
+                                             fetchUserDetails();
+                                        } catch (err) {
+                                             alert(err.response?.data?.error || 'Warning failed');
+                                        }
+                                    }}
+                                >
+                                    Send Warning to Student ({user.warning_count || 0} warning(s))
+                                </button>
+                            </div>
+                        </div>
                     </div>
 
                     <div className="card">

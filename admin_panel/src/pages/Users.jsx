@@ -115,7 +115,9 @@ const Users = () => {
         const matchSearch = (u.full_name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
                             (u.email || '').toLowerCase().includes(searchTerm.toLowerCase());
         const matchStatus = filterStatus === 'All' ? true : 
-                            (filterStatus === 'Active' ? u.is_active : !u.is_active);
+                            (filterStatus === 'Active' ? u.is_active : 
+                             (filterStatus === 'Banned' ? !u.is_active :
+                              (filterStatus === 'Flagged' ? u.is_flagged : true)));
         return matchSearch && matchStatus;
     });
 
@@ -153,6 +155,7 @@ const Users = () => {
                             <option value="All">All Status</option>
                             <option value="Active">Active</option>
                             <option value="Banned">Banned</option>
+                            <option value="Flagged">Flagged / Suspicious</option>
                         </select>
                     )}
                     {viewTab === 'active' && currentUser?.role === 'admin' && (
@@ -201,6 +204,7 @@ const Users = () => {
                             <th>USER ID</th>
                             <th>NAME/EMAIL</th>
                             <th>ROLE</th>
+                            <th>VERIFICATION</th>
                             <th>ECO-SCORE</th>
                             <th>FOLLOWERS</th>
                             <th>STATUS</th>
@@ -212,14 +216,31 @@ const Users = () => {
                             <tr key={user.id}>
                                 <td style={{ color: 'var(--text-muted)' }}>{user.id.substring(0,8)}</td>
                                 <td>
-                                    <div 
-                                        style={{ color: 'var(--primary)', fontWeight: 'bold', cursor: 'pointer', textDecoration: 'underline' }}
-                                        onClick={() => navigate(`/users/${user.id}`)}
-                                        title="View User Details"
-                                    >
-                                        {user.full_name || 'No Name'}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <div 
+                                            style={{ color: 'var(--primary)', fontWeight: 'bold', cursor: 'pointer', textDecoration: 'underline' }}
+                                            onClick={() => navigate(`/users/${user.id}`)}
+                                            title="View User Details"
+                                        >
+                                            {user.full_name || 'No Name'}
+                                        </div>
                                     </div>
                                     <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{user.email}</div>
+                                    {user.is_flagged && (
+                                        <div style={{ marginTop: '4px' }}>
+                                            <span style={{ 
+                                                padding: '2px 6px', 
+                                                background: '#fee2e2', 
+                                                borderRadius: '4px', 
+                                                color: '#dc2626', 
+                                                fontSize: '0.65rem', 
+                                                fontWeight: 'bold',
+                                                display: 'inline-block'
+                                            }} title={user.flag_reason}>
+                                                ⚠️ Flagged: {user.flag_reason || 'Suspicious Activity'}
+                                            </span>
+                                        </div>
+                                    )}
                                 </td>
                                 <td>
                                     <span style={{ 
@@ -233,6 +254,17 @@ const Users = () => {
                                     }}>
                                         {user.role}
                                     </span>
+                                </td>
+                                <td>
+                                    {user.is_verified ? (
+                                        <span style={{ padding: '4px 12px', background: '#dcfce7', borderRadius: '12px', color: '#16a34a', fontSize: '0.75rem', fontWeight: 'bold' }}>
+                                            Verified
+                                        </span>
+                                    ) : (
+                                        <span style={{ padding: '4px 12px', background: '#f3f4f6', borderRadius: '12px', color: '#6b7280', fontSize: '0.75rem', fontWeight: 'bold' }}>
+                                            Unverified
+                                        </span>
+                                    )}
                                 </td>
                                 <td style={{ color: 'var(--primary)', fontWeight: 'bold' }}>{typeof user.total_carbon_saved === 'number' ? user.total_carbon_saved.toFixed(1) : (user.total_carbon_saved || 0)}</td>
                                 <td style={{ fontWeight: 'bold' }}>{user.follower_count || 0}</td>
@@ -267,7 +299,7 @@ const Users = () => {
                         ))}
                         {filteredUsers.length === 0 && (
                             <tr>
-                                <td colSpan="6" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>No users found.</td>
+                                <td colSpan="8" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>No users found.</td>
                             </tr>
                         )}
                     </tbody>
@@ -319,6 +351,98 @@ const Users = () => {
                                 Moderators cannot change user roles or status. Please contact an Administrator.
                             </div>
                         )}
+
+                        <div style={{ 
+                            padding: '16px', 
+                            background: '#f8fafc', 
+                            border: '1px solid #e2e8f0', 
+                            borderRadius: '12px', 
+                            marginBottom: '24px' 
+                        }}>
+                            <span style={{ display: 'block', color: 'var(--primary)', fontWeight: 'bold', fontSize: '0.85rem', marginBottom: '12px' }}>
+                                Verification & Flagging Actions
+                            </span>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                <button 
+                                    className="btn" 
+                                    style={{ 
+                                        background: selectedUser.is_verified ? '#f1f5f9' : '#dcfce7', 
+                                        color: selectedUser.is_verified ? '#475569' : '#16a34a',
+                                        border: '1px solid ' + (selectedUser.is_verified ? '#cbd5e1' : '#bbf7d0'),
+                                        padding: '8px 12px',
+                                        fontWeight: 'bold',
+                                        justifyContent: 'center',
+                                        display: 'flex'
+                                    }}
+                                    onClick={async () => {
+                                        try {
+                                            const res = await api.patch(`/admin/users/${selectedUser.id}/verify`);
+                                            alert(res.data.message);
+                                            setIsEditModalOpen(false);
+                                            fetchUsers();
+                                        } catch (err) {
+                                            alert(err.response?.data?.error || 'Verification failed');
+                                        }
+                                    }}
+                                >
+                                    {selectedUser.is_verified ? 'Revoke Verification Status' : 'Approve / Verify Student Credential'}
+                                </button>
+                                <button 
+                                    className="btn" 
+                                    style={{ 
+                                        background: selectedUser.is_flagged ? '#f1f5f9' : '#fee2e2', 
+                                        color: selectedUser.is_flagged ? '#475569' : '#dc2626',
+                                        border: '1px solid ' + (selectedUser.is_flagged ? '#cbd5e1' : '#fecaca'),
+                                        padding: '8px 12px',
+                                        fontWeight: 'bold',
+                                        justifyContent: 'center',
+                                        display: 'flex'
+                                    }}
+                                    onClick={async () => {
+                                        const reason = selectedUser.is_flagged ? null : window.prompt('Enter flag reason:', 'Suspicious Behavior');
+                                        if (!selectedUser.is_flagged && reason === null) return;
+                                        try {
+                                            const res = await api.patch(`/admin/users/${selectedUser.id}/flag`, {
+                                                is_flagged: !selectedUser.is_flagged,
+                                                reason: reason
+                                             });
+                                             alert(res.data.message);
+                                             setIsEditModalOpen(false);
+                                             fetchUsers();
+                                        } catch (err) {
+                                             alert(err.response?.data?.error || 'Flagging failed');
+                                        }
+                                    }}
+                                >
+                                    {selectedUser.is_flagged ? 'Unflag User / Dismiss Flag' : 'Flag User as Suspicious'}
+                                </button>
+                                <button 
+                                    className="btn" 
+                                    style={{ 
+                                        background: '#fef3c7', 
+                                        color: '#d97706',
+                                        border: '1px solid #fde68a',
+                                        padding: '8px 12px',
+                                        fontWeight: 'bold',
+                                        justifyContent: 'center',
+                                        display: 'flex'
+                                    }}
+                                    onClick={async () => {
+                                        if (!window.confirm('Send a formal warning to this user? Accumulating 3 warnings results in automatic suspension.')) return;
+                                        try {
+                                            const res = await api.post(`/admin/users/${selectedUser.id}/warn`);
+                                             alert(res.data.message + (res.data.isSuspended ? ' (User suspended!)' : ''));
+                                             setIsEditModalOpen(false);
+                                             fetchUsers();
+                                        } catch (err) {
+                                             alert(err.response?.data?.error || 'Warning failed');
+                                        }
+                                    }}
+                                >
+                                    Send Warning to Student ({selectedUser.warning_count || 0} warning(s))
+                                </button>
+                            </div>
+                        </div>
 
                         {/* Danger Zone */}
                         {currentUser?.role === 'admin' && (selectedUser.role !== 'admin' || currentUser.email === 'admin@campus.edu.my') && currentUser.id !== selectedUser.id && (

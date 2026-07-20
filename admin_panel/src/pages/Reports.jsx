@@ -14,6 +14,28 @@ const Reports = () => {
     const [modNotes, setModNotes] = useState('');
     const [action, setAction] = useState('Dismissed'); // Dismissed, Uphold, Escalated
     const [currentUser, setCurrentUser] = useState(null);
+    const [privateTranscript, setPrivateTranscript] = useState(null);
+    const [loadingTranscript, setLoadingTranscript] = useState(false);
+    const [showTranscriptModal, setShowTranscriptModal] = useState(false);
+
+    const fetchPrivateTranscript = async () => {
+        const reporterId = selectedReport?.raw?.reporter_id;
+        const reportedUserId = selectedReport?.raw?.reported_user_id;
+        if (!reporterId || !reportedUserId) {
+            alert('Cannot view transcript: Report is not a direct user report or is missing reporter/reported user information.');
+            return;
+        }
+        setLoadingTranscript(true);
+        try {
+            const res = await api.get(`/admin/chats/transcript/${reporterId}/${reportedUserId}`);
+            setPrivateTranscript(res.data);
+            setShowTranscriptModal(true);
+        } catch (err) {
+            alert(err.response?.data?.error || 'Access Denied: Chat safety snooping is restricted.');
+        } finally {
+            setLoadingTranscript(false);
+        }
+    };
 
     useEffect(() => {
         const userStr = localStorage.getItem('user');
@@ -278,6 +300,16 @@ const Reports = () => {
                                         Reported by: {selectedReport.raw.reporter.email}
                                     </div>
                                 )}
+                                {selectedReport.raw.reporter_id && selectedReport.raw.reported_user_id && (
+                                    <button 
+                                        className="btn btn-outline" 
+                                        style={{ marginTop: '1rem', width: '200px', fontSize: '0.85rem', padding: '6px', height: 'auto', display: 'flex', alignItems: 'center', gap: '6px' }}
+                                        onClick={fetchPrivateTranscript}
+                                        disabled={loadingTranscript}
+                                    >
+                                        {loadingTranscript ? 'Loading...' : '🔒 Audit Private Chats'}
+                                    </button>
+                                )}
                             </div>
                         </div>
 
@@ -384,6 +416,68 @@ const Reports = () => {
                         }} 
                         onClick={e => e.stopPropagation()}
                     />
+                </div>
+            )}
+
+            {/* Private Chat Audit Modal */}
+            {showTranscriptModal && (
+                <div 
+                    style={{
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        width: '100vw',
+                        height: '100vh',
+                        backgroundColor: 'rgba(15, 23, 42, 0.7)',
+                        backdropFilter: 'blur(4px)',
+                        zIndex: 9998,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                    }}
+                >
+                    <div className="card" style={{ width: '600px', maxHeight: '80vh', display: 'flex', flexDirection: 'column', padding: '1.5rem', background: 'white' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)', paddingBottom: '0.75rem', marginBottom: '1rem' }}>
+                            <h3 style={{ margin: 0 }}>🔒 Private Chat Audit Transcript</h3>
+                            <button 
+                                className="btn btn-outline" 
+                                style={{ padding: '4px 8px', height: 'auto', fontSize: '0.85rem' }} 
+                                onClick={() => setShowTranscriptModal(false)}
+                            >
+                                Close
+                            </button>
+                        </div>
+                        <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.75rem', background: '#f8fafc', padding: '1rem', borderRadius: '8px' }}>
+                            {privateTranscript?.length === 0 ? (
+                                <div style={{ color: 'var(--text-muted)', textAlign: 'center', margin: '2rem 0' }}>No messages exchanged between these users.</div>
+                            ) : (
+                                privateTranscript?.map(msg => {
+                                    const isReporter = msg.sender_id === selectedReport.raw.reporter_id;
+                                    return (
+                                        <div 
+                                            key={msg.id} 
+                                            style={{ 
+                                                alignSelf: isReporter ? 'flex-start' : 'flex-end',
+                                                maxWidth: '80%',
+                                                background: isReporter ? '#f1f5f9' : '#dcfce7',
+                                                color: '#1e293b',
+                                                padding: '8px 12px',
+                                                borderRadius: '8px'
+                                            }}
+                                        >
+                                            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '2px', fontWeight: 'bold' }}>
+                                                {isReporter ? `Reporter (${selectedReport.raw.reporter?.username || 'Reporter'})` : `Reported User (${selectedReport.raw.reported_user?.username || 'Reported'})`}
+                                            </div>
+                                            <div style={{ fontSize: '0.9rem' }}>{msg.content}</div>
+                                            <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textAlign: 'right', marginTop: '2px' }}>
+                                                {new Date(msg.createdAt).toLocaleTimeString()}
+                                            </div>
+                                        </div>
+                                    );
+                                })
+                            )}
+                        </div>
+                    </div>
                 </div>
             )}
         </div>

@@ -37,6 +37,27 @@ export const authenticateToken = async (req, res, next) => {
     }
 };
 
+export const authenticateTokenOptional = async (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+
+    if (!token) {
+        return next();
+    }
+
+    try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret_key_dev');
+        const { User } = await import('../models/index.js');
+        const user = await User.findByPk(decoded.id);
+        if (user && user.is_active !== false) {
+            req.user = decoded;
+        }
+        next();
+    } catch (error) {
+        next();
+    }
+};
+
 /**
  * Utility function to send JSON formatted error responses.
  *

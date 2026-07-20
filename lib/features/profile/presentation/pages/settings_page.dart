@@ -9,6 +9,7 @@ import 'package:campus_swap/core/services/socket_service.dart';
 import 'package:campus_swap/core/services/notification_service.dart';
 import 'package:campus_swap/core/api/api_client.dart';
 import 'package:campus_swap/features/profile/presentation/pages/change_password_page.dart';
+import 'package:campus_swap/features/profile/presentation/pages/terms_guidelines_page.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -173,6 +174,14 @@ class _SettingsPageState extends State<SettingsPage> {
             leading: const Icon(Icons.info_outline),
             title: Text("Version", style: GoogleFonts.outfit()),
             trailing: Text("1.0.0 (Beta)", style: GoogleFonts.outfit(color: Colors.grey)),
+          ),
+          ListTile(
+            leading: const Icon(Icons.description_outlined),
+            title: Text("Terms & Guidelines", style: GoogleFonts.outfit()),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+               Navigator.push(context, MaterialPageRoute(builder: (_) => const TermsGuidelinesPage()));
+            },
           ),
 
           const Divider(height: 32),

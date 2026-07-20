@@ -15,7 +15,15 @@ class UserSession {
   String? avatarUrl;
   String? role;
 
+  final List<String> sessionInteractions = [];
+
   bool get isLoggedIn => userId != null && token != null;
+
+  void addSessionInteraction(String productId) {
+    if (!sessionInteractions.contains(productId)) {
+      sessionInteractions.add(productId);
+    }
+  }
 
   void clear() {
     userId = null;
@@ -25,5 +33,6 @@ class UserSession {
     token = null;
     avatarUrl = null;
     role = null;
+    sessionInteractions.clear();
   }
 }

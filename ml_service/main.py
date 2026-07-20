@@ -316,6 +316,129 @@ async def predict_price(req: PriceSuggestionRequest):
         "note": f"Estimated using baseline pricing index for {category} at {condition} condition."
     }
 
+# --- Intelligent Price Suggestion API ---
+import psycopg2
+
+class PriceSuggestMLRequest(BaseModel):
+    original_price: float
+    months_used: float
+    condition: str
+    subcategory_id: Optional[str] = None
+
+class PriceSuggestMLResponse(BaseModel):
+    suggested_price: float
+    min_price: float
+    max_price: float
+    note: str
+
+def get_db_connection():
+    db_name = os.getenv("DB_NAME", "campus_swap")
+    db_user = os.getenv("DB_USER", "postgres")
+    db_pass = os.getenv("DB_PASS", os.getenv("DB_PASSWORD", "postgres"))
+    db_host = os.getenv("DB_HOST", "localhost")
+    db_port = os.getenv("DB_PORT", "5432")
+    
+    # Try reading from parent backend/.env file if not found in env
+    if not os.getenv("DB_HOST"):
+        backend_env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "backend", ".env")
+        if os.path.exists(backend_env_path):
+            try:
+                with open(backend_env_path, "r") as f:
+                    for line in f:
+                        if "=" in line and not line.startswith("#"):
+                            parts = line.strip().split("=", 1)
+                            if len(parts) == 2:
+                                k, v = parts
+                                k = k.strip()
+                                v = v.strip().strip('"').strip("'")
+                                if k == "DB_NAME": db_name = v
+                                elif k == "DB_USER": db_user = v
+                                elif k in ("DB_PASS", "DB_PASSWORD"): db_pass = v
+                                elif k == "DB_HOST": db_host = v
+                                elif k == "DB_PORT": db_port = v
+            except Exception as e:
+                print(f"Error parsing backend .env: {e}")
+                
+    return psycopg2.connect(
+        dbname=db_name,
+        user=db_user,
+        password=db_pass,
+        host=db_host,
+        port=db_port
+    )
+
+@app.post("/api/ml/suggest-price", response_model=PriceSuggestMLResponse)
+async def suggest_price(req: PriceSuggestMLRequest):
+    original_price = req.original_price
+    months_used = req.months_used
+    condition = req.condition
+    subcategory_id = req.subcategory_id
+
+    # 1. Base Depreciation Formula
+    condition_factors = {
+        "brand new": 1.0,
+        "new": 1.0,
+        "like new": 0.85,
+        "good": 0.70,
+        "fair": 0.50,
+        "poor": 0.30
+    }
+    cond_key = condition.lower().strip()
+    factor = condition_factors.get(cond_key, 0.70)
+    
+    age_decay = min(0.02 * max(0.0, months_used), 0.60)
+    decay_factor = 1.0 - age_decay
+    depreciation_price = original_price * factor * decay_factor
+
+    # 2. Market Data Correction
+    market_prices = []
+    if subcategory_id and subcategory_id != 'Others':
+        conn = None
+        try:
+            conn = get_db_connection()
+            db_condition = condition
+            if cond_key == "brand new":
+                db_condition = "New"
+            
+            with conn.cursor() as cur:
+                cur.execute(
+                    'SELECT price FROM "Products" WHERE "sub_category_id" = %s AND "status" = \'Available\' AND "condition" = %s',
+                    (subcategory_id, db_condition)
+                )
+                rows = cur.fetchall()
+                market_prices = [float(row[0]) for row in rows]
+        except Exception as e:
+            print(f"Market Correction DB Query error: {e}")
+        finally:
+            if conn:
+                conn.close()
+
+    # Compute Median
+    market_median = None
+    if market_prices:
+        n = len(market_prices)
+        s = sorted(market_prices)
+        market_median = s[n//2] if n % 2 == 1 else (s[n//2 - 1] + s[n//2]) / 2.0
+
+    # 3. Weighted Average (70% Depreciation Formula + 30% Market Median)
+    if market_median is not None:
+        suggested = 0.70 * depreciation_price + 0.30 * market_median
+        note = f"Suggested price computed via hybrid logic: 70% Depreciation (formula: RM {depreciation_price:.2f}) and 30% Market Correction (median: RM {market_median:.2f} based on {len(market_prices)} active listings)."
+    else:
+        suggested = depreciation_price
+        note = f"Suggested price computed via depreciation formula (RM {depreciation_price:.2f}). No active market data found for subcategory {subcategory_id} with condition {condition}."
+
+    suggested = max(1.0, round(suggested, 2))
+    min_price = max(1.0, round(suggested * 0.90, 2))
+    max_price = max(1.0, round(suggested * 1.10, 2))
+
+    return {
+        "suggested_price": suggested,
+        "min_price": min_price,
+        "max_price": max_price,
+        "note": note
+    }
+
 class DescriptionRequest(BaseModel):
     """
     Overriding schema for description generation request parameters, including optional fields.
@@ -591,11 +714,13 @@ class ProductItem(BaseModel):
     description: str
     category: str
     subcategory: Optional[str] = None
+    seller_id: Optional[str] = None
 
 class HybridRecommendRequest(BaseModel):
     user_id: str
     interactions: List[InteractionItem]
     products: List[ProductItem]
+    followed_seller_ids: Optional[List[str]] = None
 
 class HybridRecommendResponse(BaseModel):
     recommended_product_ids: List[str]
@@ -713,6 +838,14 @@ async def get_hybrid_recommendations(req: HybridRecommendRequest):
     # Combine content-based (0.7) and collaborative filtering (0.3)
     final_scores = 0.7 * content_scores + 0.3 * cf_scores
     
+    # Follow Synergy Boost: increase final relevance by +20% (multiply by 1.2) if seller_id is followed
+    followed_sellers = set(req.followed_seller_ids or [])
+    if followed_sellers:
+        for idx, p in enumerate(products_data):
+            seller_id = p.get('seller_id')
+            if seller_id and seller_id in followed_sellers:
+                final_scores[idx] *= 1.20
+
     scored_products = list(zip(product_ids, final_scores))
     scored_products.sort(key=lambda x: x[1], reverse=True)
     

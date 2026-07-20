@@ -213,6 +213,7 @@ class HomePageState extends State<HomePage> {
   List<Product> _recommendedProducts = [];
   bool _isLoadingRecommendations = false;
   List<Product> _trendingProducts = [];
+  String? _activeAbVariant;
 
   final List<String> _tabs = ['For You', 'All Listings', 'Popular', 'Newest'];
   String _selectedTab = 'For You';
@@ -228,7 +229,6 @@ class HomePageState extends State<HomePage> {
   }
 
   Future<void> _fetchTrending() async {
-    if (!UserSession().isLoggedIn) return;
     try {
        final apiClient = ApiClient();
        final response = await apiClient.get('/recommendations/trending');
@@ -243,9 +243,6 @@ class HomePageState extends State<HomePage> {
   }
 
   Future<void> _fetchRecommendations() async {
-    // Only fetch for logged-in users? Or generic
-    if (!UserSession().isLoggedIn) return;
-
     if (mounted) {
       setState(() {
         _isLoadingRecommendations = true;
@@ -255,7 +252,15 @@ class HomePageState extends State<HomePage> {
     try {
        final apiClient = ApiClient();
        final response = await apiClient.get('/recommendations');
-       if (response is List && mounted) {
+       if (response is Map && mounted) {
+          final abVariant = response['ab_variant']?.toString() ?? 'Model_A_Hybrid_ML';
+          debugPrint("Active Recommendation A/B Variant: $abVariant");
+          setState(() {
+             _activeAbVariant = abVariant;
+             final List data = response['data'] as List;
+             _recommendedProducts = data.map((e) => Product.fromJson(e)).toList();
+          });
+       } else if (response is List && mounted) {
           setState(() {
              _recommendedProducts = response.map((e) => Product.fromJson(e)).toList();
           });
@@ -304,6 +309,8 @@ class HomePageState extends State<HomePage> {
       try {
           final apiClient = ApiClient();
           await apiClient.post('/saved/toggle', {'product_id': productId});
+          // Refresh recommendations in real-time
+          _fetchRecommendations();
       } catch (e) {
           // Revert on failure
           setState(() {
@@ -868,43 +875,88 @@ class HomePageState extends State<HomePage> {
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).brightness == Brightness.dark 
-                          ? Colors.amber.withValues(alpha: 0.08) 
-                          : Colors.amber.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: Theme.of(context).brightness == Brightness.dark 
-                            ? Colors.amber.shade700.withValues(alpha: 0.5) 
-                            : Colors.amber.shade300, 
-                        width: 1,
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.info_outline_rounded, 
+                  child: Column(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        decoration: BoxDecoration(
                           color: Theme.of(context).brightness == Brightness.dark 
-                              ? Colors.amber.shade200 
-                              : Colors.amber.shade700, 
-                          size: 18,
+                              ? Colors.amber.withValues(alpha: 0.08) 
+                              : Colors.amber.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Theme.of(context).brightness == Brightness.dark 
+                                ? Colors.amber.shade700.withValues(alpha: 0.5) 
+                                : Colors.amber.shade300, 
+                            width: 1,
+                          ),
                         ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            'For You shows personalised picks — search, sort & filter apply to All Listings tab.',
-                            style: GoogleFonts.outfit(
-                              fontSize: 12, 
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.info_outline_rounded, 
                               color: Theme.of(context).brightness == Brightness.dark 
                                   ? Colors.amber.shade200 
-                                  : Colors.amber.shade800,
+                                  : Colors.amber.shade700, 
+                              size: 18,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                'For You shows personalised picks — search, sort & filter apply to All Listings tab.',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 12, 
+                                  color: Theme.of(context).brightness == Brightness.dark 
+                                      ? Colors.amber.shade200 
+                                      : Colors.amber.shade800,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (_activeAbVariant != null) ...[
+                        const SizedBox(height: 8),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: _activeAbVariant!.contains('Hybrid_ML') 
+                                  ? Colors.blue.withOpacity(0.1) 
+                                  : Colors.green.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: _activeAbVariant!.contains('Hybrid_ML') 
+                                    ? Colors.blue.withOpacity(0.3) 
+                                    : Colors.green.withOpacity(0.3),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  _activeAbVariant!.contains('Hybrid_ML') ? Icons.psychology : Icons.trending_up, 
+                                  size: 14, 
+                                  color: _activeAbVariant!.contains('Hybrid_ML') ? Colors.blue : Colors.green,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'Recommendation Variant: ${_activeAbVariant!.replaceAll('_', ' ')}',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 11, 
+                                    fontWeight: FontWeight.bold,
+                                    color: _activeAbVariant!.contains('Hybrid_ML') 
+                                        ? (Theme.of(context).brightness == Brightness.dark ? Colors.blue[200] : Colors.blue[800])
+                                        : (Theme.of(context).brightness == Brightness.dark ? Colors.green[200] : Colors.green[800]),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ),
                       ],
-                    ),
+                    ],
                   ),
                 ),
               ),
@@ -981,6 +1033,7 @@ class HomePageState extends State<HomePage> {
                                 )).then((result) {
                                   _fetchSavedItems();
                                   _fetchTrending();
+                                  _fetchRecommendations();
                                   if (result == 'reported') {
                                     _fetchFirstPageNewest();
                                   }
@@ -1200,9 +1253,9 @@ class HomePageState extends State<HomePage> {
                             )).then((result) {
                               _fetchSavedItems();
                               _fetchTrending();
+                              _fetchRecommendations();
                               if (result == 'reported') {
                                 _fetchProducts();
-                                _fetchRecommendations();
                               }
                             });
                           },

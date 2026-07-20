@@ -75,6 +75,19 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
     }
   }
 
+  IconData _getBadgeIcon(String? iconName) {
+    switch (iconName) {
+      case 'leaf':
+        return Icons.eco;
+      case 'award':
+        return Icons.workspace_premium;
+      case 'school':
+        return Icons.school;
+      default:
+        return Icons.star;
+    }
+  }
+
   Widget _buildSectionHeader(String title, IconData icon) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 16.0),
@@ -122,6 +135,7 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
       appBar: AppBar(
         title: Text('Student Profile', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
@@ -188,10 +202,98 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
                                 style: TextStyle(color: Colors.green.shade700, fontWeight: FontWeight.bold, fontSize: 12),
                               ),
                             ),
+                            const SizedBox(height: 8),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(Icons.star_rounded, color: Colors.amber, size: 20),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '${double.tryParse((_userData!['reputation_score'] ?? 5.0).toString())?.toStringAsFixed(1) ?? '5.0'} (${_userData!['total_reviews'] ?? 0} reviews)',
+                                  style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 13),
+                                ),
+                                 if (_userData!['reputation_level'] != null) ...[
+                                  const SizedBox(width: 12),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: isDark ? Colors.amber.shade900.withOpacity(0.2) : Colors.amber.shade50,
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(color: isDark ? Colors.amber.shade800.withOpacity(0.4) : Colors.amber.shade200),
+                                    ),
+                                    child: Text(
+                                      _userData!['reputation_level'],
+                                      style: GoogleFonts.outfit(
+                                        color: isDark ? Colors.amber.shade200 : Colors.amber.shade900,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 11,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
                           ],
                         ),
                       ),
                       const SizedBox(height: 24),
+                      
+                      // Transaction Statistics Cards
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: isDark ? Colors.teal.shade900.withOpacity(0.2) : Colors.teal.shade50,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: isDark ? Colors.teal.shade800.withOpacity(0.4) : Colors.teal.shade100),
+                              ),
+                              child: Column(
+                                children: [
+                                  const Text('📦', style: TextStyle(fontSize: 20)),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    '${_userData!['successful_transactions_count'] ?? 0} Deals Done',
+                                    style: GoogleFonts.outfit(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                      color: isDark ? Colors.teal.shade200 : Colors.teal.shade900,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: isDark ? Colors.teal.shade900.withOpacity(0.2) : Colors.teal.shade50,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: isDark ? Colors.teal.shade800.withOpacity(0.4) : Colors.teal.shade100),
+                              ),
+                              child: Column(
+                                children: [
+                                  const Text('⚡', style: TextStyle(fontSize: 20)),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    _userData!['response_speed'] ?? 'Replies fast',
+                                    style: GoogleFonts.outfit(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                      color: isDark ? Colors.teal.shade200 : Colors.teal.shade900,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                       
                       const Divider(),
                       _buildSectionHeader('Basic Information', Icons.badge_outlined),
@@ -241,6 +343,54 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
                       _buildDataRow('Active Listings', '$_activeListingsCount items'),
                       _buildDataRow('Total Carbon Saved', '${_userData!['total_carbon_saved'] ?? '0.0'} kg CO2e'),
                       
+                      // Achievements & Badges Section
+                      const Divider(),
+                      _buildSectionHeader('Achievements & Badges', Icons.emoji_events_outlined),
+                      const SizedBox(height: 8),
+                      _userData!['badges'] == null || (_userData!['badges'] as List).isEmpty
+                          ? Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 8.0),
+                              child: Text(
+                                "Complete transactions to unlock badges!",
+                                style: GoogleFonts.outfit(
+                                  color: Colors.grey.shade500,
+                                  fontStyle: FontStyle.italic,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            )
+                          : Wrap(
+                              spacing: 12,
+                              runSpacing: 12,
+                              children: (_userData!['badges'] as List).map((badge) {
+                                final label = badge['label'] ?? '';
+                                final iconName = badge['icon'] ?? '';
+                                return Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: isDark ? Colors.orange.shade900.withOpacity(0.2) : Colors.orange.shade50,
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(color: isDark ? Colors.orange.shade800.withOpacity(0.4) : Colors.orange.shade200),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(_getBadgeIcon(iconName), color: isDark ? Colors.orange.shade200 : Colors.orange.shade800, size: 18),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        label,
+                                        style: GoogleFonts.outfit(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 13,
+                                          color: isDark ? Colors.orange.shade200 : Colors.orange.shade900,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+
                       const Divider(),
                       _buildSectionHeader('Reviews', Icons.rate_review_outlined),
                       Padding(

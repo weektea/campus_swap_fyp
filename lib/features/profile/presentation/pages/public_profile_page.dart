@@ -68,6 +68,19 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
     }
   }
 
+  IconData _getBadgeIcon(String? iconName) {
+    switch (iconName) {
+      case 'leaf':
+        return Icons.eco;
+      case 'award':
+        return Icons.workspace_premium;
+      case 'school':
+        return Icons.school;
+      default:
+        return Icons.star;
+    }
+  }
+
   String _formatDate(String? isoString) {
       if (isoString == null) return 'N/A';
       try {
@@ -120,8 +133,123 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
     }
   }
 
+  Future<void> _showFollowersOrFollowingModal(bool showFollowers) async {
+    final title = showFollowers ? 'Followers' : 'Following';
+    final endpoint = showFollowers 
+        ? '/auth/user/${widget.userId}/followers' 
+        : '/auth/user/${widget.userId}/following';
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        List<dynamic> usersList = [];
+        bool modalLoading = true;
+
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            if (modalLoading) {
+              modalLoading = false;
+              ApiClient().get(endpoint).then((res) {
+                if (res is List && mounted) {
+                  setModalState(() {
+                    usersList = res;
+                  });
+                }
+              }).catchError((err) {
+                // handle error silently
+              });
+            }
+
+            return Container(
+              padding: const EdgeInsets.all(16),
+              height: MediaQuery.of(context).size.height * 0.5,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[300],
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  Text(
+                    title,
+                    style: GoogleFonts.outfit(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Expanded(
+                    child: usersList.isEmpty
+                        ? const Center(
+                            child: Text(
+                              'No users found',
+                              style: TextStyle(color: Colors.grey),
+                            ),
+                          )
+                        : ListView.builder(
+                            itemCount: usersList.length,
+                            itemBuilder: (context, index) {
+                              final u = usersList[index];
+                              final String profileImg = u['profile_image_url'] ?? '';
+                              final String name = u['full_name'] ?? u['username'] ?? 'User';
+                              final String uname = u['username'] ?? '';
+                              final bool verified = u['is_verified'] ?? false;
+
+                              return ListTile(
+                                leading: CircleAvatar(
+                                  backgroundImage: profileImg.isNotEmpty ? NetworkImage(profileImg) : null,
+                                  child: profileImg.isEmpty ? Text(name[0].toUpperCase()) : null,
+                                ),
+                                title: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        name,
+                                        style: GoogleFonts.outfit(fontWeight: FontWeight.bold),
+                                      ),
+                                    ),
+                                    if (verified)
+                                      const Icon(Icons.verified_rounded, color: Colors.blue, size: 14),
+                                  ],
+                                ),
+                                subtitle: Text('@$uname'),
+                                onTap: () {
+                                  Navigator.pop(context);
+                                  if (u['id'] != widget.userId) {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => PublicProfilePage(userId: u['id'], userName: uname),
+                                      ),
+                                    ).then((_) => _fetchData());
+                                  }
+                                },
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
         appBar: AppBar(
             title: Text(widget.userName, style: GoogleFonts.outfit()),
@@ -160,50 +288,83 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
                                     ] else ...[
                                       Text('@${widget.userName}', style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.bold)),
                                     ],
-                                    if (_userProfile != null && _userProfile!['reputation_score'] != null) ...[
-                                      const SizedBox(height: 8),
-                                      Row(
-                                        mainAxisAlignment: MainAxisAlignment.center,
-                                        children: [
-                                          const Icon(Icons.star_rounded, size: 20, color: Colors.amber),
-                                          const SizedBox(width: 4),
-                                          Text(
-                                            '${double.parse(_userProfile!['reputation_score'].toString()).toStringAsFixed(1)} (${_userProfile!['total_reviews'] ?? 0})',
-                                            style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold),
-                                          ),
-                                        ],
-                                      ),
-                                    ],
+                                     if (_userProfile != null && _userProfile!['reputation_score'] != null) ...[
+                                       const SizedBox(height: 8),
+                                       Row(
+                                         mainAxisAlignment: MainAxisAlignment.center,
+                                         children: [
+                                           const Icon(Icons.star_rounded, size: 20, color: Colors.amber),
+                                           const SizedBox(width: 4),
+                                           Text(
+                                             '${double.parse(_userProfile!['reputation_score'].toString()).toStringAsFixed(1)} (${_userProfile!['total_reviews'] ?? 0})',
+                                             style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold),
+                                           ),
+                                           if (_userProfile!['reputation_level'] != null) ...[
+                                             const SizedBox(width: 8),
+                                             Container(
+                                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                                               decoration: BoxDecoration(
+                                                 color: isDark ? Colors.amber.shade900.withOpacity(0.2) : Colors.amber.shade50,
+                                                 borderRadius: BorderRadius.circular(12),
+                                                 border: Border.all(color: isDark ? Colors.amber.shade800.withOpacity(0.4) : Colors.amber.shade200),
+                                               ),
+                                               child: Text(
+                                                 _userProfile!['reputation_level'],
+                                                 style: GoogleFonts.outfit(
+                                                   color: isDark ? Colors.amber.shade200 : Colors.amber.shade900,
+                                                   fontWeight: FontWeight.bold,
+                                                   fontSize: 11,
+                                                 ),
+                                               ),
+                                             ),
+                                           ],
+                                         ],
+                                       ),
+                                     ],
                                     const SizedBox(height: 8),
                                     Text("Member since ${_formatDate(_userProfile?['createdAt'])}", style: GoogleFonts.outfit(color: Colors.grey)),
                                     const SizedBox(height: 12),
                                     Row(
                                         mainAxisAlignment: MainAxisAlignment.center,
                                         children: [
-                                            Column(
-                                                children: [
-                                                    Text(
-                                                        '${_userProfile?['follower_count'] ?? 0}',
-                                                        style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold),
+                                            InkWell(
+                                                onTap: () => _showFollowersOrFollowingModal(true),
+                                                borderRadius: BorderRadius.circular(8),
+                                                child: Padding(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                                    child: Column(
+                                                        children: [
+                                                            Text(
+                                                                '${_userProfile?['follower_count'] ?? 0}',
+                                                                style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold),
+                                                            ),
+                                                            Text(
+                                                                'Followers',
+                                                                style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey),
+                                                            ),
+                                                        ],
                                                     ),
-                                                    Text(
-                                                        'Followers',
-                                                        style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey),
-                                                    ),
-                                                ],
+                                                ),
                                             ),
-                                            const SizedBox(width: 32),
-                                            Column(
-                                                children: [
-                                                    Text(
-                                                        '${_userProfile?['following_count'] ?? 0}',
-                                                        style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold),
+                                            const SizedBox(width: 16),
+                                            InkWell(
+                                                onTap: () => _showFollowersOrFollowingModal(false),
+                                                borderRadius: BorderRadius.circular(8),
+                                                child: Padding(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                                    child: Column(
+                                                        children: [
+                                                            Text(
+                                                                '${_userProfile?['following_count'] ?? 0}',
+                                                                style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold),
+                                                            ),
+                                                            Text(
+                                                                'Following',
+                                                                style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey),
+                                                            ),
+                                                        ],
                                                     ),
-                                                    Text(
-                                                        'Following',
-                                                        style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey),
-                                                    ),
-                                                ],
+                                                ),
                                             ),
                                         ],
                                     ),
@@ -237,7 +398,64 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
                                 ],
                             ),
                         ),
-                        const SizedBox(height: 32),
+                        const SizedBox(height: 16),
+                         if (_userProfile != null) 
+                           Row(
+                             children: [
+                               Expanded(
+                                 child: Container(
+                                   padding: const EdgeInsets.all(12),
+                                   decoration: BoxDecoration(
+                                     color: isDark ? Colors.teal.shade900.withOpacity(0.2) : Colors.teal.shade50,
+                                     borderRadius: BorderRadius.circular(12),
+                                     border: Border.all(color: isDark ? Colors.teal.shade800.withOpacity(0.4) : Colors.teal.shade100),
+                                   ),
+                                   child: Column(
+                                     children: [
+                                       const Text('📦', style: TextStyle(fontSize: 20)),
+                                       const SizedBox(height: 4),
+                                       Text(
+                                         '${_userProfile!['successful_transactions_count'] ?? 0} Deals Done',
+                                         style: GoogleFonts.outfit(
+                                           fontWeight: FontWeight.bold, 
+                                           fontSize: 13, 
+                                           color: isDark ? Colors.teal.shade200 : Colors.teal.shade900,
+                                         ),
+                                         textAlign: TextAlign.center,
+                                       ),
+                                     ],
+                                   ),
+                                 ),
+                               ),
+                               const SizedBox(width: 16),
+                               Expanded(
+                                 child: Container(
+                                   padding: const EdgeInsets.all(12),
+                                   decoration: BoxDecoration(
+                                     color: isDark ? Colors.teal.shade900.withOpacity(0.2) : Colors.teal.shade50,
+                                     borderRadius: BorderRadius.circular(12),
+                                     border: Border.all(color: isDark ? Colors.teal.shade800.withOpacity(0.4) : Colors.teal.shade100),
+                                   ),
+                                   child: Column(
+                                     children: [
+                                       const Text('⚡', style: TextStyle(fontSize: 20)),
+                                       const SizedBox(height: 4),
+                                       Text(
+                                         _userProfile!['response_speed'] ?? 'Replies fast',
+                                         style: GoogleFonts.outfit(
+                                           fontWeight: FontWeight.bold, 
+                                           fontSize: 13, 
+                                           color: isDark ? Colors.teal.shade200 : Colors.teal.shade900,
+                                         ),
+                                         textAlign: TextAlign.center,
+                                       ),
+                                     ],
+                                   ),
+                                 ),
+                               ),
+                             ],
+                            ),
+                         const SizedBox(height: 24),
                         
                         if (_userProfile != null) ...[
                           if (_userProfile!['bio'] != null && _userProfile!['bio'].toString().trim().isNotEmpty) ...[
@@ -290,7 +508,67 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
                               ),
                             ),
                         ],
-                        
+                                              if (_userProfile != null) ...[
+                           const Divider(),
+                           Padding(
+                             padding: const EdgeInsets.symmetric(vertical: 8.0),
+                             child: Row(
+                               children: [
+                                 const Icon(Icons.emoji_events_outlined, color: Colors.teal),
+                                 const SizedBox(width: 8),
+                                 Text(
+                                   "Achievements & Badges",
+                                   style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.teal.shade800),
+                                 ),
+                               ],
+                             ),
+                           ),
+                           const SizedBox(height: 8),
+                           _userProfile!['badges'] == null || (_userProfile!['badges'] as List).isEmpty
+                               ? Padding(
+                                   padding: const EdgeInsets.symmetric(vertical: 8.0),
+                                   child: Text(
+                                     "Complete transactions to unlock badges!",
+                                     style: GoogleFonts.outfit(
+                                       color: Colors.grey.shade500,
+                                       fontStyle: FontStyle.italic,
+                                       fontSize: 14,
+                                     ),
+                                   ),
+                                 )
+                               : Wrap(
+                                   spacing: 12,
+                                   runSpacing: 12,
+                                   children: (_userProfile!['badges'] as List).map((badge) {
+                                     final label = badge['label'] ?? '';
+                                     final iconName = badge['icon'] ?? '';
+                                     return Container(
+                                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                       decoration: BoxDecoration(
+                                         color: isDark ? Colors.orange.shade900.withOpacity(0.2) : Colors.orange.shade50,
+                                         borderRadius: BorderRadius.circular(16),
+                                         border: Border.all(color: isDark ? Colors.orange.shade800.withOpacity(0.4) : Colors.orange.shade200),
+                                       ),
+                                       child: Row(
+                                         mainAxisSize: MainAxisSize.min,
+                                         children: [
+                                           Icon(_getBadgeIcon(iconName), color: isDark ? Colors.orange.shade200 : Colors.orange.shade800, size: 18),
+                                           const SizedBox(width: 8),
+                                           Text(
+                                             label,
+                                             style: GoogleFonts.outfit(
+                                               fontWeight: FontWeight.bold,
+                                               fontSize: 13,
+                                               color: isDark ? Colors.orange.shade200 : Colors.orange.shade900,
+                                             ),
+                                           ),
+                                         ],
+                                        ),
+                                      );
+                                   }).toList(),
+                                 ),
+                         ],
+
                         const Divider(),
                         Padding(
                           padding: const EdgeInsets.symmetric(vertical: 8.0),

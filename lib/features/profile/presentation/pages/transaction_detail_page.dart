@@ -415,10 +415,32 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
                                ]
                            )
                        ),
-                       Text('RM ${_transaction['amount']}', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: Theme.of(context).colorScheme.primary)),
-                   ]
-               )
-            ),
+                        Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                                Text('RM ${_transaction['amount']}', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: Theme.of(context).colorScheme.primary)),
+                                if (double.tryParse(_transaction['amount'].toString()) != null &&
+                                    product['price'] != null &&
+                                    double.tryParse(_transaction['amount'].toString()) != double.tryParse(product['price'].toString())) ...[
+                                    const SizedBox(height: 4),
+                                    Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                            color: Colors.orange.withOpacity(0.1),
+                                            borderRadius: BorderRadius.circular(4),
+                                            border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                                        ),
+                                        child: Text(
+                                            'Offer Price',
+                                            style: GoogleFonts.outfit(color: Colors.orange, fontSize: 10, fontWeight: FontWeight.bold),
+                                        ),
+                                    ),
+                                ],
+                            ],
+                        ),
+                    ]
+                )
+             ),
             const SizedBox(height: 24),
 
             // Party Info & Chat

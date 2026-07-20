@@ -515,6 +515,28 @@ if (process.env.NODE_ENV !== 'test') {
                         IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='Reports' AND column_name='product_id' AND is_nullable='NO') THEN
                             ALTER TABLE "Reports" ALTER COLUMN "product_id" DROP NOT NULL;
                         END IF;
+
+                        -- 17. Ensure Users table has is_flagged, flag_reason, and manual_unflagged columns
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='Users' AND column_name='is_flagged') THEN
+                            ALTER TABLE "Users" ADD COLUMN "is_flagged" BOOLEAN DEFAULT FALSE;
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='Users' AND column_name='flag_reason') THEN
+                            ALTER TABLE "Users" ADD COLUMN "flag_reason" VARCHAR(255);
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='Users' AND column_name='manual_unflagged') THEN
+                            ALTER TABLE "Users" ADD COLUMN "manual_unflagged" BOOLEAN DEFAULT FALSE;
+                        END IF;
+
+                        -- 18. Ensure logs table has event_type, description, and admin_id columns
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='logs' AND column_name='event_type') THEN
+                            ALTER TABLE "logs" ADD COLUMN "event_type" VARCHAR(255);
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='logs' AND column_name='description') THEN
+                            ALTER TABLE "logs" ADD COLUMN "description" TEXT;
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='logs' AND column_name='admin_id') THEN
+                            ALTER TABLE "logs" ADD COLUMN "admin_id" UUID;
+                        END IF;
                     END $$;
                 `);
 
@@ -530,6 +552,22 @@ if (process.env.NODE_ENV !== 'test') {
                 try {
                     await sequelize.query('ALTER TYPE "enum_Disputes_reason" ADD VALUE \'Rental Damage\';');
                     console.log('Disputes reason enum updated successfully with Rental Damage');
+                } catch (enumErr) {
+                    // Ignore error if value already exists or enum is not created yet
+                }
+
+                // Dynamically add 'PRICE_DROP' value to the notifications type enum in Postgres catalog
+                try {
+                    await sequelize.query('ALTER TYPE "enum_Notifications_type" ADD VALUE \'PRICE_DROP\';');
+                    console.log('Notifications type enum updated successfully with PRICE_DROP');
+                } catch (enumErr) {
+                    // Ignore error if value already exists or enum is not created yet
+                }
+
+                // Dynamically add 'NEW_SELLER_ITEM' value to the notifications type enum in Postgres catalog
+                try {
+                    await sequelize.query('ALTER TYPE "enum_Notifications_type" ADD VALUE \'NEW_SELLER_ITEM\';');
+                    console.log('Notifications type enum updated successfully with NEW_SELLER_ITEM');
                 } catch (enumErr) {
                     // Ignore error if value already exists or enum is not created yet
                 }
@@ -594,6 +632,7 @@ app.use('/api/reviews', reviewRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/recommendations', recommendationRoutes);
+app.use('/api/interactions', recommendationRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/disputes', disputeRoutes);
 app.use('/api/sustainability', sustainabilityRoutes);
@@ -601,6 +640,9 @@ app.use('/api/tickets', ticketRoutes);
 app.use('/api/support_tickets', ticketRoutes);
 app.use('/api/zones', zoneRoutes);
 app.use('/api/profile/analytics', analyticsRoutes);
+
+import { getPolicyByType } from './controllers/systemController.js';
+app.get('/api/policies/:type', getPolicyByType);
 
 import adminRoutes from './routes/adminRoutes.js';
 import moderatorRoutes from './routes/moderatorRoutes.js';

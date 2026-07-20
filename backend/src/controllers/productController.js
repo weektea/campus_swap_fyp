@@ -1,4 +1,5 @@
-import { Product, User, Report, Category, SubCategory, ActivityLog } from '../models/index.js';
+import { Product, User, Report, Category, SubCategory, ActivityLog, SavedItem, Follow } from '../models/index.js';
+import { createNotification } from './notificationController.js';
 import { Op } from 'sequelize';
 import fs from 'fs';
 import FormData from 'form-data';
@@ -94,6 +95,30 @@ export const createProduct = async (req, res) => {
             });
         } catch (e) {
             console.error("Failed to log product listing:", e.message);
+        }
+
+        // Trigger Dynamic New Listing Notifications to Followers
+        try {
+            const seller = await User.findByPk(seller_id);
+            const sellerName = seller ? (seller.username || seller.full_name) : 'A seller';
+            
+            const followers = await Follow.findAll({
+                where: { following_id: seller_id }
+            });
+
+            for (const f of followers) {
+                if (f.follower_id !== seller_id) {
+                    await createNotification(
+                        f.follower_id,
+                        "New Listing Alert!",
+                        `${sellerName} just listed a new item: ${newProduct.title}`,
+                        'NEW_SELLER_ITEM',
+                        newProduct.id
+                    );
+                }
+            }
+        } catch (notifierErr) {
+            console.error("Failed to dispatch new listing notifications to followers:", notifierErr);
         }
 
         res.status(201).json(newProduct);
@@ -270,7 +295,38 @@ export const updateProduct = async (req, res) => {
             }
         }
 
+        const oldPrice = parseFloat(product.price || 0);
+        const newPrice = updates.price !== undefined ? parseFloat(updates.price) : null;
+        const oldRentalPrice = parseFloat(product.rental_price_per_day || 0);
+        const newRentalPrice = updates.rental_price_per_day !== undefined ? parseFloat(updates.rental_price_per_day) : null;
+
         await product.update(updates);
+
+        const isPriceDropped = (newPrice !== null && newPrice < oldPrice) || 
+                               (newRentalPrice !== null && newRentalPrice < oldRentalPrice);
+
+        if (isPriceDropped) {
+            try {
+                const savedItems = await SavedItem.findAll({
+                    where: { product_id: product.id }
+                });
+                const displayPrice = newPrice !== null ? newPrice : newRentalPrice;
+                for (const item of savedItems) {
+                    if (item.user_id !== product.seller_id) {
+                        await createNotification(
+                            item.user_id,
+                            "Price Drop Alert!",
+                            `Price Drop Alert! ${product.title} is now RM ${displayPrice}!`,
+                            'PRICE_DROP',
+                            product.id
+                        );
+                    }
+                }
+            } catch (err) {
+                console.error('Failed to trigger price drop notifications:', err);
+            }
+        }
+
         res.json(product);
     } catch (error) {
         console.error('Update Product Error:', error);
@@ -398,35 +454,89 @@ export const classifyImage = async (req, res) => {
     }
 };
 
+export const getProductById = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const product = await Product.findByPk(id, {
+            include: [
+                {
+                    model: User,
+                    as: 'seller',
+                    attributes: ['username', 'full_name', 'email', 'reputation_score', 'total_reviews', 'profile_image_url'],
+                    required: false
+                },
+                {
+                    model: Category,
+                    as: 'categoryModel',
+                    attributes: ['id', 'name'],
+                    required: false
+                },
+                {
+                    model: SubCategory,
+                    as: 'subcategoryModel',
+                    attributes: ['id', 'name'],
+                    required: false
+                }
+            ]
+        });
+        if (!product) {
+            return res.status(404).json({ error: 'Product not found' });
+        }
+        res.json(product);
+    } catch (error) {
+        console.error('Get Product By Id Error:', error);
+        res.status(500).json({ error: 'Failed to fetch product details' });
+    }
+};
+
 export const getPriceSuggestion = async (req, res) => {
     try {
-        const { category, condition } = req.body;
+        const { original_price, months_used, condition, subcategory_id, sub_category_id, category } = req.body;
+        const subcatId = sub_category_id || subcategory_id;
         
         try {
             console.log('Forwarding price suggestion request to ML service...');
-            const response = await axios.post(`${ML_SERVICE_URL}/predict-price`, { category, condition });
-            return res.json(response.data);
+            const response = await axios.post(`${ML_SERVICE_URL}/api/ml/suggest-price`, {
+                original_price: parseFloat(original_price || 0),
+                months_used: parseFloat(months_used || 0),
+                condition: condition || 'Good',
+                subcategory_id: subcatId
+            });
+            const data = response.data;
+            // Backwards compatibility: add estimated_price
+            data.estimated_price = data.suggested_price;
+            return res.json(data);
         } catch (mlErr) {
             console.warn('ML Price Suggestion Service down, using local fallback:', mlErr.message);
         }
 
-        // Fallback Mock algorithmic pricing based on condition standard deviations
-        let base = 50.0;
-        if (category === 'Electronics') base = 300.0;
-        if (category === 'Books') base = 35.0;
-        if (category === 'Furniture') base = 80.0;
-        if (category === 'Fashion') base = 40.0;
+        // Local JS Fallback Algorithm
+        const price = parseFloat(original_price || 100);
+        const months = parseFloat(months_used || 0);
+        
+        let conditionFactor = 0.70;
+        const condKey = (condition || 'Good').toLowerCase().trim();
+        if (condKey === 'new' || condKey === 'brand new') conditionFactor = 1.0;
+        else if (condKey === 'like new') conditionFactor = 0.85;
+        else if (condKey === 'good') conditionFactor = 0.70;
+        else if (condKey === 'fair') conditionFactor = 0.50;
+        else if (condKey === 'poor') conditionFactor = 0.30;
 
-        let multiplier = 1.0;
-        if (condition === 'New') multiplier = 1.2;
-        if (condition === 'Good' || condition === 'Like New') multiplier = 0.9;
-        if (condition === 'Fair') multiplier = 0.6;
-        if (condition === 'Poor') multiplier = 0.3;
+        const ageDecay = Math.min(0.02 * months, 0.60);
+        const depreciated = price * conditionFactor * (1.0 - ageDecay);
+        const suggested = Math.max(1, depreciated);
+        const min_price = suggested * 0.90;
+        const max_price = suggested * 1.10;
 
-        const suggested_price = (base * multiplier) + (Math.random() * 10 - 5); // Add slight random variance
-
-        res.json({ estimated_price: Math.max(1, suggested_price).toFixed(2) });
+        res.json({
+            suggested_price: parseFloat(suggested.toFixed(2)),
+            min_price: parseFloat(min_price.toFixed(2)),
+            max_price: parseFloat(max_price.toFixed(2)),
+            estimated_price: parseFloat(suggested.toFixed(2)),
+            note: "Calculated using local depreciation fallback (ML service unavailable)."
+        });
     } catch (error) {
+        console.error('Price suggestion failed:', error);
         res.status(500).json({ error: 'ML Price Suggestion Failed' });
     }
 };

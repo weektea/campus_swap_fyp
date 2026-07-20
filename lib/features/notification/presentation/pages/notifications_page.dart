@@ -7,6 +7,8 @@ import 'package:campus_swap/features/profile/presentation/pages/ticket_chat_page
 import 'package:campus_swap/features/profile/presentation/pages/help_center_page.dart';
 import 'package:campus_swap/core/services/notification_service.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:campus_swap/features/product/presentation/pages/product_details_page.dart';
+import 'package:campus_swap/features/home/domain/entities/product.dart';
 
 class NotificationsPage extends StatefulWidget {
   const NotificationsPage({super.key});
@@ -283,18 +285,45 @@ class _NotificationsPageState extends State<NotificationsPage> {
                                     leading: CircleAvatar(
                                         backgroundColor: isRead ? Colors.grey[200] : Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
                                         child: Icon(
-                                            note['type'] == 'Transaction' ? Icons.shopping_bag : Icons.notifications,
+                                            note['type'] == 'Transaction' ? Icons.shopping_bag : 
+                                            note['type'] == 'Promotion' ? Icons.card_giftcard : Icons.notifications,
                                             color: isRead ? Colors.grey : Theme.of(context).colorScheme.primary,
                                         ),
                                     ),
                                     title: Text(note['title'], style: GoogleFonts.outfit(fontWeight: isRead ? FontWeight.normal : FontWeight.bold)),
                                     subtitle: Text(note['message'], style: GoogleFonts.outfit()),
                                     trailing: isRead ? null : const Icon(Icons.circle, color: Colors.blue, size: 10),
-                                    onTap: () {
+                                    onTap: () async {
                                         if (!isRead) _markAsRead(note['id']);
-                                        // Navigate to details based on type
                                         final title = note['title']?.toString() ?? '';
-                                        if (title.contains('Dispute') || title.contains('Support Ticket')) {
+                                        final apiClient = ApiClient();
+                                        if (note['type'] == 'PRICE_DROP') {
+                                             if (note['related_id'] != null) {
+                                                  // Show loading spinner
+                                                  showDialog(
+                                                      context: context,
+                                                      barrierDismissible: false,
+                                                      builder: (context) => const Center(child: CircularProgressIndicator()),
+                                                  );
+                                                  try {
+                                                      final res = await apiClient.get('/products/${note['related_id']}');
+                                                      if (context.mounted) {
+                                                          Navigator.pop(context); // Pop loading dialog
+                                                          final product = Product.fromJson(res);
+                                                          Navigator.push(context, MaterialPageRoute(
+                                                              builder: (_) => ProductDetailsPage(product: product)
+                                                          ));
+                                                      }
+                                                  } catch (e) {
+                                                      if (context.mounted) {
+                                                          Navigator.pop(context); // Pop loading dialog
+                                                          ScaffoldMessenger.of(context).showSnackBar(
+                                                              SnackBar(content: Text('Failed to load item details: $e'))
+                                                          );
+                                                      }
+                                                  }
+                                             }
+                                        } else if (title.contains('Dispute') || title.contains('Support Ticket')) {
                                             if (note['related_id'] != null) {
                                                 Navigator.push(context, MaterialPageRoute(
                                                     builder: (_) => TicketChatPage(
@@ -309,13 +338,52 @@ class _NotificationsPageState extends State<NotificationsPage> {
                                             Navigator.push(context, MaterialPageRoute(
                                                 builder: (_) => const HelpCenterPage()
                                             ));
-                                        } else if (note['type'] == 'Transaction' || note['type'] == 'System') {
-                                            if (note['related_id'] != null && !title.contains('Cancelled')) {
-                                                Navigator.push(context, MaterialPageRoute(
-                                                    builder: (_) => TransactionDetailPage(transactionId: note['related_id'])
-                                                ));
-                                            }
-                                        }
+                                        } else if (note['type'] == 'Transaction' || note['type'] == 'System' || note['type'] == 'Promotion') {
+                                             if (note['related_id'] != null && !title.contains('Cancelled')) {
+                                                 Navigator.push(context, MaterialPageRoute(
+                                                     builder: (_) => TransactionDetailPage(transactionId: note['related_id'])
+                                                 ));
+                                             } else {
+                                                 // Tapping on a broadcast notification opens a simple dialog showing the full announcement content.
+                                                 showDialog(
+                                                     context: context,
+                                                     builder: (context) => AlertDialog(
+                                                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                                         title: Row(
+                                                             children: [
+                                                                 Icon(
+                                                                     note['type'] == 'Promotion' ? Icons.card_giftcard : Icons.campaign,
+                                                                     color: Theme.of(context).colorScheme.primary,
+                                                                 ),
+                                                                 const SizedBox(width: 10),
+                                                                 Expanded(
+                                                                     child: Text(
+                                                                         note['title'] ?? 'Announcement',
+                                                                         style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 18),
+                                                                     ),
+                                                                 ),
+                                                             ],
+                                                         ),
+                                                         content: Text(
+                                                             note['message'] ?? '',
+                                                             style: GoogleFonts.outfit(fontSize: 15),
+                                                         ),
+                                                         actions: [
+                                                             TextButton(
+                                                                 onPressed: () => Navigator.pop(context),
+                                                                 child: Text(
+                                                                     'Dismiss',
+                                                                     style: GoogleFonts.outfit(
+                                                                         fontWeight: FontWeight.bold,
+                                                                         color: Theme.of(context).colorScheme.primary,
+                                                                     ),
+                                                                 ),
+                                                             ),
+                                                         ],
+                                                     ),
+                                                 );
+                                             }
+                                         }
                                     },
                                 ),
                             ),
