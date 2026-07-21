@@ -516,7 +516,7 @@ if (process.env.NODE_ENV !== 'test') {
                             ALTER TABLE "Reports" ALTER COLUMN "product_id" DROP NOT NULL;
                         END IF;
 
-                        -- 17. Ensure Users table has is_flagged, flag_reason, and manual_unflagged columns
+                        -- 17. Ensure Users table has is_flagged, flag_reason, manual_unflagged, and warning_count columns
                         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='Users' AND column_name='is_flagged') THEN
                             ALTER TABLE "Users" ADD COLUMN "is_flagged" BOOLEAN DEFAULT FALSE;
                         END IF;
@@ -525,6 +525,9 @@ if (process.env.NODE_ENV !== 'test') {
                         END IF;
                         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='Users' AND column_name='manual_unflagged') THEN
                             ALTER TABLE "Users" ADD COLUMN "manual_unflagged" BOOLEAN DEFAULT FALSE;
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='Users' AND column_name='warning_count') THEN
+                            ALTER TABLE "Users" ADD COLUMN "warning_count" INTEGER DEFAULT 0 NOT NULL;
                         END IF;
 
                         -- 18. Ensure logs table has event_type, description, and admin_id columns

@@ -33,6 +33,8 @@ export const register = async (req, res) => {
             return res.status(400).json({ error: 'All fields are required' });
         }
 
+        const normalizedEmail = email.toLowerCase().trim();
+
         // Full Name Validation
         const cleanedFullName = full_name.trim();
         if (cleanedFullName.length < 2 || cleanedFullName.length > 50) {
@@ -51,7 +53,7 @@ export const register = async (req, res) => {
         const normalizedUsername = usernameVal.normalized;
 
         // Email Validation - Check if strictly ends with .edu.my
-        if (!email.trim().toLowerCase().endsWith('.edu.my')) {
+        if (!normalizedEmail.endsWith('.edu.my')) {
             return res.status(400).json({ error: 'Only valid campus emails (.edu.my) are allowed.' });
         }
 
@@ -82,7 +84,7 @@ export const register = async (req, res) => {
         }
 
         // 2. Check existing
-        const existingEmail = await User.findOne({ where: { email } });
+        const existingEmail = await User.findOne({ where: { email: normalizedEmail } });
         if (existingEmail) {
             return res.status(400).json({ error: 'Email already registered' });
         }
@@ -92,7 +94,7 @@ export const register = async (req, res) => {
             return res.status(400).json({ error: 'Username already registered' });
         }
 
-        const existingUniId = await User.findOne({ where: { university_id } });
+        const existingUniId = await User.findOne({ where: { university_id: university_id.toUpperCase().trim() } });
         if (existingUniId) {
             return res.status(400).json({ error: 'University ID already registered' });
         }
@@ -111,19 +113,21 @@ export const register = async (req, res) => {
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
         const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes from now
 
+        const bypassEmailVerification = process.env.BYPASS_EMAIL_VERIFICATION === 'true';
+
         // 4. Create User
         const user = await User.create({
-            email,
+            email: normalizedEmail,
             username: normalizedUsername,
             full_name: cleanedFullName,
             password_hash: hashedPassword,
-            university_id: university_id.toUpperCase(), // Store uniform uppercase
+            university_id: university_id.toUpperCase().trim(), // Store uniform uppercase
             phone_number,
             role: 'student',
             is_verified: true,
-            is_email_verified: false,
-            otp,
-            otp_expiry: otpExpiry,
+            is_email_verified: bypassEmailVerification ? true : false,
+            otp: bypassEmailVerification ? null : otp,
+            otp_expiry: bypassEmailVerification ? null : otpExpiry,
         });
 
         // 5. Generate Token
@@ -134,35 +138,41 @@ export const register = async (req, res) => {
         );
 
         // 6. Send Verification Email via Mailtrap
-        try {
-            // CRUCIAL DEV HACK
-            console.log(`[DEV OTP HACK] OTP for ${email} is: ${otp}`);
-            await sendMail({
-                to: email,
-                subject: 'Email Verification OTP - Campus Swap',
-                text: `Welcome to Campus Swap! Your 6-digit verification OTP code is: ${otp}. It will expire in 10 minutes.`,
-                html: `
-                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
-                        <h2 style="color: #00695C; text-align: center;">Verify Your Campus Email</h2>
-                        <p>Thank you for registering with Campus Swap. To complete your registration, please use the following One-Time Password (OTP):</p>
-                        <div style="text-align: center; margin: 30px 0;">
-                            <span style="font-size: 32px; font-weight: bold; letter-spacing: 5px; color: #00695C; padding: 10px 20px; background-color: #e0f2f1; border-radius: 4px;">${otp}</span>
+        if (!bypassEmailVerification) {
+            try {
+                // CRUCIAL DEV HACK
+                console.log(`[DEV OTP HACK] OTP for ${email} is: ${otp}`);
+                await sendMail({
+                    to: email,
+                    subject: 'Email Verification OTP - Campus Swap',
+                    text: `Welcome to Campus Swap! Your 6-digit verification OTP code is: ${otp}. It will expire in 10 minutes.`,
+                    html: `
+                        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+                            <h2 style="color: #00695C; text-align: center;">Verify Your Campus Email</h2>
+                            <p>Thank you for registering with Campus Swap. To complete your registration, please use the following One-Time Password (OTP):</p>
+                            <div style="text-align: center; margin: 30px 0;">
+                                <span style="font-size: 32px; font-weight: bold; letter-spacing: 5px; color: #00695C; padding: 10px 20px; background-color: #e0f2f1; border-radius: 4px;">${otp}</span>
+                            </div>
+                            <p style="color: #666; font-size: 14px;">This OTP is valid for 10 minutes. If you did not register for a Campus Swap account, please ignore this email.</p>
+                            <hr style="border: none; border-top: 1px solid #eee; margin-top: 30px;">
+                            <p style="text-align: center; font-size: 12px; color: #999;">&copy; 2026 Campus Swap. All rights reserved.</p>
                         </div>
-                        <p style="color: #666; font-size: 14px;">This OTP is valid for 10 minutes. If you did not register for a Campus Swap account, please ignore this email.</p>
-                        <hr style="border: none; border-top: 1px solid #eee; margin-top: 30px;">
-                        <p style="text-align: center; font-size: 12px; color: #999;">&copy; 2026 Campus Swap. All rights reserved.</p>
-                    </div>
-                `
-            });
-        } catch (emailErr) {
-            console.error('Nodemailer Error:', emailErr.message);
+                    `
+                });
+            } catch (emailErr) {
+                console.error('Nodemailer Error:', emailErr.message);
+            }
+        } else {
+            console.log(`[DEV BYPASS] Email verification bypassed for ${email}. Account default verified.`);
         }
 
         // Notify admin real-time dashboard of registration event
         emitToAdmins('admin_metrics_update', { trigger: 'user_registration' });
 
         res.status(201).json({
-            message: 'Registration successful. Verification email sent.',
+            message: bypassEmailVerification 
+                ? 'Registration successful. Email verification bypassed.'
+                : 'Registration successful. Verification email sent.',
             token,
             user: {
                 id: user.id,
@@ -171,7 +181,7 @@ export const register = async (req, res) => {
                 full_name: user.full_name,
                 profile_picture: user.profile_image_url,
                 role: user.role,
-                is_email_verified: false
+                is_email_verified: user.is_email_verified
             }
         });
 
@@ -241,6 +251,14 @@ export const login = async (req, res) => {
         }
 
         // Check if email is verified (only for student users)
+        const bypassEmailVerification = process.env.BYPASS_EMAIL_VERIFICATION === 'true';
+        if (bypassEmailVerification && user.role === 'student' && user.is_email_verified === false) {
+            user.is_email_verified = true;
+            user.otp = null;
+            user.otp_expiry = null;
+            await user.save();
+        }
+
         if (user.role === 'student' && user.is_email_verified === false) {
             return res.status(403).json({
                 errorCode: 'EMAIL_NOT_VERIFIED',

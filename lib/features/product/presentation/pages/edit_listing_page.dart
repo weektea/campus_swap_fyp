@@ -278,7 +278,7 @@ class _EditListingPageState extends State<EditListingPage> {
               child: Theme(
                 data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
                 child: ExpansionTile(
-                  key: const PageStorageKey('ai_pricing_assistant_edit'),
+                  key: const ValueKey('ai_pricing_assistant_edit'),
                   title: Row(
                     children: [
                       Icon(Icons.auto_awesome, color: Theme.of(context).colorScheme.primary, size: 20),
@@ -340,9 +340,9 @@ class _EditListingPageState extends State<EditListingPage> {
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.primary.withOpacity(0.05),
+                          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.05),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Theme.of(context).colorScheme.primary.withOpacity(0.2)),
+                          border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2)),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,

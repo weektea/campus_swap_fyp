@@ -957,7 +957,7 @@ export const anonymizeUser = async (userId, transaction) => {
 
     // Anonymization Logic
     user.full_name = 'Deleted User';
-    user.email = `deleted_${user.id}@campus-swap.test`;
+    user.email = `deleted_${user.id.replace(/-/g, '')}@deleted.edu.my`;
     user.username = `deleted_${user.id.substring(0, 8)}`; // keep unique
     user.password_hash = 'ANONYMIZED';
     user.phone_number = null;

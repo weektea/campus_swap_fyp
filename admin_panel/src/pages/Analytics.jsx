@@ -216,8 +216,12 @@ const Analytics = () => {
                 }
                 .analytics-grid-2 {
                     display: grid;
-                    grid-template-columns: 1.8fr 1.2fr;
+                    grid-template-columns: 1fr 1fr;
                     gap: 1.5rem;
+                    width: 100%;
+                }
+                .analytics-grid-2 > div {
+                    min-width: 0;
                 }
                 .chart-container-card {
                     background: var(--card-bg);
@@ -226,6 +230,9 @@ const Analytics = () => {
                     padding: 1.5rem;
                     box-shadow: 0 1px 3px rgba(0,0,0,0.02);
                     transition: transform 0.2s, box-shadow 0.2s;
+                    min-width: 0;
+                    overflow: hidden;
+                    position: relative;
                 }
                 .chart-container-card:hover {
                     box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.02);
@@ -299,6 +306,14 @@ const Analytics = () => {
                     }
                 }
                 @media print {
+                    * {
+                        -webkit-print-color-adjust: exact !important;
+                        print-color-adjust: exact !important;
+                    }
+                    @page {
+                        margin: 12mm 15mm;
+                        size: portrait;
+                    }
                     aside.sidebar,
                     main.main-content > header,
                     .no-print,
@@ -320,32 +335,48 @@ const Analytics = () => {
                     }
                     body {
                         background-color: white !important;
-                        color: black !important;
-                        font-size: 12pt !important;
+                        color: #1f2937 !important;
+                        font-size: 10pt !important;
+                        line-height: 1.4;
                     }
                     .print-report-header {
                         display: block !important;
-                        text-align: center;
+                        text-align: left;
                         margin-bottom: 2rem;
                         border-bottom: 3px double #0d503c;
-                        padding-bottom: 1rem;
+                        padding-bottom: 1.25rem;
                     }
                     .print-report-header h1 {
                         color: #0d503c !important;
-                        margin: 0 0 0.5rem 0;
-                        font-size: 24pt;
+                        margin: 0 0 0.4rem 0;
+                        font-size: 20pt;
+                        font-weight: 800;
+                        letter-spacing: -0.5px;
                     }
                     .print-report-header p {
                         margin: 0;
-                        font-size: 10pt;
+                        font-size: 9.5pt;
                         color: #4b5563;
+                    }
+                    .print-report-footer {
+                        display: block !important;
+                        position: fixed;
+                        bottom: 0;
+                        left: 0;
+                        right: 0;
+                        text-align: center;
+                        font-size: 8pt;
+                        color: #9ca3af;
+                        border-top: 1px solid #e5e7eb;
+                        padding-top: 6px;
                     }
                     .print-domain-section {
                         page-break-inside: avoid;
-                        margin-bottom: 2.5rem !important;
+                        break-inside: avoid;
+                        margin-bottom: 2rem !important;
                         border: 1px solid #d1d5db !important;
-                        border-radius: 8px;
-                        padding: 1.5rem;
+                        border-radius: 10px;
+                        padding: 1.25rem;
                         background: white !important;
                     }
                     .print-domain-title {
@@ -353,35 +384,43 @@ const Analytics = () => {
                         color: #0d503c !important;
                         padding-bottom: 0.5rem;
                         margin-bottom: 1rem;
-                        font-size: 14pt;
-                        font-weight: bold;
+                        font-size: 13pt;
+                        font-weight: 700;
                     }
-                    .card {
+                    .card, .chart-container-card {
                         box-shadow: none !important;
                         border: 1px solid #e5e7eb !important;
-                        background: white !important;
                         page-break-inside: avoid;
+                        break-inside: avoid;
                     }
                     .print-grid-3 {
                         display: grid !important;
                         grid-template-columns: repeat(3, 1fr) !important;
-                        gap: 1rem !important;
+                        gap: 0.85rem !important;
                     }
                     .print-grid-4 {
                         display: grid !important;
                         grid-template-columns: repeat(4, 1fr) !important;
+                        gap: 0.85rem !important;
+                    }
+                    .print-grid-2, .analytics-grid-2 {
+                        display: grid !important;
+                        grid-template-columns: 1fr 1fr !important;
                         gap: 1rem !important;
                     }
                     .print-flex-row {
                         display: flex !important;
                         flex-direction: row !important;
-                        gap: 1.5rem !important;
+                        gap: 1rem !important;
                     }
                     .print-flex-child {
                         flex: 1 !important;
                     }
+                    svg {
+                        max-width: 100% !important;
+                    }
                 }
-                .print-report-header {
+                .print-report-header, .print-report-footer {
                     display: none;
                 }
             `}} />
@@ -590,7 +629,7 @@ const Analytics = () => {
                 </div>
 
                 {/* Sales Chart */}
-                <div className="card flex-col no-print" style={{ height: '280px' }}>
+                <div className="card flex-col" style={{ height: '280px' }}>
                     <h3 style={{ margin: '0 0 1rem 0', fontSize: '0.9rem' }}>GMV Sales Trend (RM)</h3>
                     <div style={{ flex: 1, width: '100%' }}>
                         <ResponsiveContainer width="100%" height={220}>
@@ -610,7 +649,7 @@ const Analytics = () => {
             </div>
 
             {/* SECTION 4: GROWTH & PREDICTIVE ANALYTICS */}
-            <div className="print-domain-section mb-8 no-print">
+            <div className="print-domain-section mb-8">
                 <h2 className="print-domain-title" style={{ fontSize: '1.2rem', margin: '0 0 1.5rem 0', display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--primary)', borderBottom: '2px solid var(--border)', paddingBottom: '8px' }}>
                     <BarChart3 size={20} />
                     <span>Growth & Predictive Analytics</span>
@@ -620,39 +659,43 @@ const Analytics = () => {
                     {/* Left Column: Charts */}
                     <div className="flex flex-col gap-6">
                         {/* Monthly User Growth */}
-                        <div className="chart-container-card" style={{ height: '330px' }}>
+                        <div className="chart-container-card" style={{ height: '330px', display: 'flex', flexDirection: 'column' }}>
                             <h3 className="chart-title">📈 Monthly User Growth</h3>
                             <p className="chart-subtitle">Monthly sign-ups of new user accounts</p>
-                            <ResponsiveContainer width="100%" height={230}>
-                                <LineChart data={growthData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                                    <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#6b7280' }} tickLine={false} axisLine={false} />
-                                    <YAxis tick={{ fontSize: 10, fill: '#6b7280' }} tickLine={false} axisLine={false} />
-                                    <Tooltip 
-                                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.08)', background: '#ffffff', fontFamily: 'Outfit, sans-serif' }}
-                                    />
-                                    <Line type="monotone" dataKey="registrations" name="New Registrations" stroke="#0d503c" strokeWidth={3} dot={{ r: 4, strokeWidth: 2, fill: '#ffffff' }} activeDot={{ r: 6 }} />
-                                </LineChart>
-                            </ResponsiveContainer>
+                            <div style={{ flex: 1, width: '100%', height: '220px', minWidth: 0, position: 'relative' }}>
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <LineChart data={growthData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                                        <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#6b7280' }} tickLine={false} axisLine={false} />
+                                        <YAxis tick={{ fontSize: 10, fill: '#6b7280' }} tickLine={false} axisLine={false} />
+                                        <Tooltip 
+                                            contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.08)', background: '#ffffff', fontFamily: 'Outfit, sans-serif' }}
+                                        />
+                                        <Line type="monotone" dataKey="registrations" name="New Registrations" stroke="#0d503c" strokeWidth={3} dot={{ r: 4, strokeWidth: 2, fill: '#ffffff' }} activeDot={{ r: 6 }} />
+                                    </LineChart>
+                                </ResponsiveContainer>
+                            </div>
                         </div>
 
                         {/* Revenue & Predictive Projection */}
-                        <div className="chart-container-card" style={{ height: '330px' }}>
+                        <div className="chart-container-card" style={{ height: '330px', display: 'flex', flexDirection: 'column' }}>
                             <h3 className="chart-title">💸 Revenue & Predictive Projection</h3>
                             <p className="chart-subtitle">Actual monthly earnings and linear regression trend projection</p>
-                            <ResponsiveContainer width="100%" height={230}>
-                                <ComposedChart data={combinedEarningsData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                                    <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#6b7280' }} tickLine={false} axisLine={false} />
-                                    <YAxis tick={{ fontSize: 10, fill: '#6b7280' }} tickLine={false} axisLine={false} />
-                                    <Tooltip 
-                                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.08)', background: '#ffffff', fontFamily: 'Outfit, sans-serif' }}
-                                    />
-                                    <Legend wrapperStyle={{ fontSize: '0.75rem', marginTop: '10px' }} />
-                                    <Bar dataKey="actual" name="Earnings (RM)" fill="#0d503c" radius={[4, 4, 0, 0]} barSize={35} />
-                                    <Line type="monotone" dataKey="prediction" name="Projected Trend" stroke="#d97706" strokeDasharray="5 5" strokeWidth={2.5} dot={{ r: 4, strokeWidth: 2, fill: '#ffffff' }} />
-                                </ComposedChart>
-                            </ResponsiveContainer>
+                            <div style={{ flex: 1, width: '100%', height: '220px', minWidth: 0, position: 'relative' }}>
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <ComposedChart data={combinedEarningsData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                                        <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#6b7280' }} tickLine={false} axisLine={false} />
+                                        <YAxis tick={{ fontSize: 10, fill: '#6b7280' }} tickLine={false} axisLine={false} />
+                                        <Tooltip 
+                                            contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.08)', background: '#ffffff', fontFamily: 'Outfit, sans-serif' }}
+                                        />
+                                        <Legend wrapperStyle={{ fontSize: '0.75rem', marginTop: '10px' }} />
+                                        <Bar dataKey="actual" name="Earnings (RM)" fill="#0d503c" radius={[4, 4, 0, 0]} barSize={35} />
+                                        <Line type="monotone" dataKey="prediction" name="Projected Trend" stroke="#d97706" strokeDasharray="5 5" strokeWidth={2.5} dot={{ r: 4, strokeWidth: 2, fill: '#ffffff' }} />
+                                    </ComposedChart>
+                                </ResponsiveContainer>
+                            </div>
                         </div>
                     </div>
 
@@ -664,7 +707,7 @@ const Analytics = () => {
                             <p className="chart-subtitle">Ratio of direct sales vs rentals across the platform</p>
                             
                             <div style={{ display: 'flex', alignItems: 'center', height: '100%', gap: '16px' }}>
-                                <div style={{ flex: 1, height: '180px' }}>
+                                <div style={{ flex: 1, height: '180px', minWidth: 0, position: 'relative' }}>
                                     <ResponsiveContainer width="100%" height="100%">
                                         <PieChart>
                                             <Pie 
@@ -757,6 +800,11 @@ const Analytics = () => {
                         </div>
                     </div>
                 </div>
+            </div>
+
+            {/* Print Footer */}
+            <div className="print-report-footer">
+                Campus Swap Platform Official Analytics & Sustainability Report — Internal Confidential
             </div>
         </div>
     );

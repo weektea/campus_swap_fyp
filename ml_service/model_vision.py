@@ -65,12 +65,25 @@ fetch_categories_from_api()
 MODEL_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "custom_model.pth")
 CLASSES_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "custom_model_classes.json")
 
-# Image transformations
-data_transforms = transforms.Compose([
-    transforms.Resize((224, 224)),
+# Image transformations for live inference and evaluation
+eval_transforms = transforms.Compose([
+    transforms.Resize((256, 256)),
+    transforms.CenterCrop(224),
     transforms.ToTensor(),
     transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
 ])
+
+# Robust Data Augmentation transforms for shadow training (handles angles, lighting, scaling & background variations)
+train_transforms = transforms.Compose([
+    transforms.RandomResizedCrop(224, scale=(0.65, 1.0)),
+    transforms.RandomHorizontalFlip(p=0.5),
+    transforms.RandomRotation(degrees=15),
+    transforms.ColorJitter(brightness=0.25, contrast=0.25, saturation=0.2, hue=0.05),
+    transforms.ToTensor(),
+    transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+])
+
+data_transforms = eval_transforms
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -301,18 +314,20 @@ def fine_tune_model(dataset_dir: str, target_classes: list = None) -> bool:
             return image, label
 
     try:
-        dataset = CustomImageDataset(dataset_dir, transform=data_transforms)
+        dataset = CustomImageDataset(dataset_dir, transform=train_transforms)
+        eval_dataset = CustomImageDataset(dataset_dir, transform=eval_transforms)
         if len(dataset) == 0:
             print("[ML-SHADOW-TRAINING] Error: No images found for training.")
             return False
             
-        print(f"[ML-SHADOW-TRAINING] Found {len(dataset)} images for training.")
+        print(f"[ML-SHADOW-TRAINING] Found {len(dataset)} images for training with Data Augmentation.")
         dataloader = DataLoader(dataset, batch_size=16, shuffle=True)
+        eval_dataloader = DataLoader(eval_dataset, batch_size=16, shuffle=False)
         
         # Instantiate a separate "Shadow Model" instance to isolate training from live inference
         shadow_model = models.mobilenet_v2(weights=models.MobileNet_V2_Weights.IMAGENET1K_V1)
         
-        # Freeze early layers
+        # Unfreeze features block -4 to end for fine-tuning
         for param in shadow_model.features[:-4].parameters():
             param.requires_grad = False
             
@@ -334,10 +349,10 @@ def fine_tune_model(dataset_dir: str, target_classes: list = None) -> bool:
                 
         shadow_model.to(device)
         criterion = nn.CrossEntropyLoss()
-        optimizer = optim.Adam(filter(lambda p: p.requires_grad, shadow_model.parameters()), lr=0.001)
+        optimizer = optim.Adam(filter(lambda p: p.requires_grad, shadow_model.parameters()), lr=0.0008)
         
         shadow_model.train()
-        epochs = 3
+        epochs = 5
         for epoch in range(epochs):
             running_loss = 0.0
             for inputs, labels in dataloader:
@@ -357,12 +372,12 @@ def fine_tune_model(dataset_dir: str, target_classes: list = None) -> bool:
             
         shadow_model.eval()
         
-        # Evaluate metrics
+        # Evaluate metrics using eval_dataloader (clean evaluation)
         all_preds = []
         all_labels = []
         start_time = time.time()
         with torch.no_grad():
-            for inputs, labels in dataloader:
+            for inputs, labels in eval_dataloader:
                 inputs = inputs.to(device)
                 outputs = shadow_model(inputs)
                 _, preds = torch.max(outputs, 1)

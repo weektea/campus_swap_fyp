@@ -160,8 +160,8 @@ class _RegisterPageState extends State<RegisterPage> {
         await apiClient.post('/auth/register', {
           'username': _usernameController.text.toLowerCase().trim(),
           'full_name': _fullNameController.text.trim(),
-          'university_id': _universityIdController.text.toUpperCase(),
-          'email': _emailController.text,
+          'university_id': _universityIdController.text.toUpperCase().trim(),
+          'email': _emailController.text.toLowerCase().trim(),
           'password': _passwordController.text,
           'phone_number': '+60${_phoneController.text}',
         });

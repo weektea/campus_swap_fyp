@@ -391,6 +391,7 @@ class _SellPageState extends State<SellPage> {
           _suggestedPrice = null;
           _minSuggestedPrice = null;
           _maxSuggestedPrice = null;
+          _selectedPaymentMethods = ['Cash', 'TNG', 'Bank Transfer'];
       });
   }
 
@@ -718,7 +719,7 @@ class _SellPageState extends State<SellPage> {
               child: Theme(
                 data: theme.copyWith(dividerColor: Colors.transparent),
                 child: ExpansionTile(
-                  key: const PageStorageKey('ai_pricing_assistant'),
+                  key: const ValueKey('ai_pricing_assistant'),
                   title: Row(
                     children: [
                       Icon(Icons.auto_awesome, color: theme.colorScheme.primary, size: 20),
@@ -780,9 +781,9 @@ class _SellPageState extends State<SellPage> {
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: theme.colorScheme.primary.withOpacity(0.05),
+                          color: theme.colorScheme.primary.withValues(alpha: 0.05),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: theme.colorScheme.primary.withOpacity(0.2)),
+                          border: Border.all(color: theme.colorScheme.primary.withValues(alpha: 0.2)),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1034,18 +1035,8 @@ class _SellPageState extends State<SellPage> {
 
       if (mounted) {
         _showSuccessSnackBar(context, 'Item posted successfully!');
-        // Reset form or nav back
-        _titleController.clear();
-        _priceController.clear();
-        _descController.clear();
-        setState(() {
-             _imageFiles.clear();
-              _videoFile = null;
-              _selectedCategory = null;
-              _selectedCondition = 'Good';
-              _selectedPaymentMethods = ['Cash', 'TNG', 'Bank Transfer'];
-         });
-       }
+        _resetForm();
+      }
     } catch (e) {
       if (mounted) {
         _showErrorSnackBar(context, 'Post failed: ${_getFriendlyErrorMessage(e)}');
