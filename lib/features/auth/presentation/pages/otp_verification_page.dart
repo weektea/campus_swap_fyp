@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:campus_swap/core/api/api_client.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:campus_swap/core/session/user_session.dart';
+import 'package:campus_swap/core/services/socket_service.dart';
+import 'package:campus_swap/features/auth/presentation/pages/onboarding_page.dart';
+import 'package:campus_swap/features/home/presentation/pages/home_page.dart';
 
 class OtpVerificationPage extends StatefulWidget {
   final String email;
@@ -31,7 +35,7 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: Theme.of(context).colorScheme.error,
+        backgroundColor: Colors.red,
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -53,14 +57,45 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
 
       try {
         final apiClient = ApiClient();
-        await apiClient.post('/auth/verify-otp', {
+        final response = await apiClient.post('/auth/verify-otp', {
           'email': widget.email,
           'otp': _otpController.text.trim(),
         });
 
         if (mounted) {
-          _showSuccessSnackBar('Verification Successful! Please login.');
-          // Navigate to login screen (pop back or replace stack)
+          _showSuccessSnackBar('Verification Successful!');
+
+          if (response != null && response['token'] != null && response['user'] != null) {
+            final session = UserSession();
+            session.token = response['token'];
+            session.userId = response['user']['id'];
+            session.email = response['user']['email'];
+            session.username = response['user']['username'];
+            session.fullName = response['user']['full_name'];
+            session.avatarUrl = response['user']['profile_picture'];
+            session.role = response['user']['role'];
+            final bool isOnboarded = response['user']['is_onboarded'] == true;
+            session.isOnboarded = isOnboarded;
+            session.primaryIntent = response['user']['primary_intent'] ?? 'browse';
+            session.preferenceTags = List<String>.from(response['user']['preference_tags'] ?? []);
+
+            SocketService().init();
+
+            if (!isOnboarded) {
+              Navigator.of(context).pushAndRemoveUntil(
+                MaterialPageRoute(builder: (_) => const OnboardingPage()),
+                (route) => false,
+              );
+              return;
+            } else {
+              Navigator.of(context).pushAndRemoveUntil(
+                MaterialPageRoute(builder: (_) => const HomePage()),
+                (route) => false,
+              );
+              return;
+            }
+          }
+
           Navigator.of(context).popUntil((route) => route.isFirst);
         }
       } catch (e) {

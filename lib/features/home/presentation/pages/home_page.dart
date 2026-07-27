@@ -13,6 +13,7 @@ import 'package:campus_swap/features/notification/presentation/pages/notificatio
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:campus_swap/core/services/notification_service.dart';
+import 'package:campus_swap/core/services/view_preference_service.dart';
 import 'package:campus_swap/core/session/user_session.dart';
 import 'package:shimmer/shimmer.dart';
 
@@ -809,62 +810,72 @@ class HomePageState extends State<HomePage> {
 
             const SliverToBoxAdapter(child: SizedBox(height: 24)),
 
-            // Display Tabs
+            // Display Tabs + View Mode Switcher
             SliverToBoxAdapter(
-              child: SizedBox(
-                height: 38,
-                child: ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  scrollDirection: Axis.horizontal,
-                  itemCount: _tabs.length,
-                  itemBuilder: (context, index) {
-                    final tab = _tabs[index];
-                    final isSelected = _selectedTab == tab;
-                    return GestureDetector(
-                      onTap: () {
-                        setState(() => _selectedTab = tab);
-                        if (_scrollController.hasClients) {
-                          _scrollController.animateTo(
-                            0,
-                            duration: const Duration(milliseconds: 300),
-                            curve: Curves.easeOut,
-                          );
-                        }
-                        if (tab == 'Newest') {
-                            _fetchFirstPageNewest();
-                        } else if (tab == 'All Listings') {
-                            _sortBy = 'newest'; 
-                            _fetchProducts(); 
-                        } else if (tab == 'Popular') {
-                            _fetchProducts();
-                        } else if (tab == 'For You') {
-                            _fetchRecommendations(); // Refresh recommendation
-                        }
-                      },
-                      child: Container(
-                        margin: const EdgeInsets.only(right: 12),
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: isSelected 
-                              ? Theme.of(context).colorScheme.primary 
-                              : (Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1E1E1E) : Colors.grey[100]),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Center(
-                          child: Text(
-                            tab,
-                            style: GoogleFonts.outfit(
-                              color: isSelected 
-                                  ? Colors.white.withValues(alpha: 0.87) 
-                                  : Theme.of(context).colorScheme.onSurfaceVariant,
-                              fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-                              fontSize: 14,
-                            ),
-                          ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: SizedBox(
+                        height: 38,
+                        child: ListView.builder(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: _tabs.length,
+                          itemBuilder: (context, index) {
+                            final tab = _tabs[index];
+                            final isSelected = _selectedTab == tab;
+                            return GestureDetector(
+                              onTap: () {
+                                setState(() => _selectedTab = tab);
+                                if (_scrollController.hasClients) {
+                                  _scrollController.animateTo(
+                                    0,
+                                    duration: const Duration(milliseconds: 300),
+                                    curve: Curves.easeOut,
+                                  );
+                                }
+                                if (tab == 'Newest') {
+                                    _fetchFirstPageNewest();
+                                } else if (tab == 'All Listings') {
+                                    _sortBy = 'newest'; 
+                                    _fetchProducts(); 
+                                } else if (tab == 'Popular') {
+                                    _fetchProducts();
+                                } else if (tab == 'For You') {
+                                    _fetchRecommendations(); // Refresh recommendation
+                                }
+                              },
+                              child: Container(
+                                margin: const EdgeInsets.only(right: 8),
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: isSelected 
+                                      ? Theme.of(context).colorScheme.primary 
+                                      : (Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1E1E1E) : Colors.grey[100]),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    tab,
+                                    style: GoogleFonts.outfit(
+                                      color: isSelected 
+                                          ? Colors.white.withValues(alpha: 0.87) 
+                                          : Theme.of(context).colorScheme.onSurfaceVariant,
+                                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ).animate().fadeIn(duration: 300.ms, delay: (50*index).ms);
+                          },
                         ),
                       ),
-                    ).animate().fadeIn(duration: 300.ms, delay: (50*index).ms);
-                  },
+                    ),
+                    const SizedBox(width: 8),
+                    _buildViewModeToggle(),
+                  ],
                 ),
               ),
             ),
@@ -1228,42 +1239,86 @@ class HomePageState extends State<HomePage> {
                 )
               ]
               else
-                SliverPadding(
-                  padding: const EdgeInsets.all(20),
-                  sliver: SliverGrid(
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      childAspectRatio: 0.70, // Slightly taller for better cards
-                      crossAxisSpacing: 16,
-                      mainAxisSpacing: 16,
-                    ),
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                        final product = _gridProducts[index];
-                        return ProductCard(
-                          product: product,
-                          isFavorite: _savedProductIds.contains(product.id),
-                          onFavoriteToggle: () => _toggleFavorite(product.id),
-                          onTap: () {
-                            Navigator.push(context, MaterialPageRoute(
-                              builder: (_) => ProductDetailsPage(
+                ValueListenableBuilder<bool>(
+                  valueListenable: ViewPreferenceService(),
+                  builder: (context, isGrid, _) {
+                    if (isGrid) {
+                      return SliverPadding(
+                        key: const PageStorageKey('home_products_grid'),
+                        padding: const EdgeInsets.all(20),
+                        sliver: SliverGrid(
+                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            childAspectRatio: 0.70,
+                            crossAxisSpacing: 16,
+                            mainAxisSpacing: 16,
+                          ),
+                          delegate: SliverChildBuilderDelegate(
+                            (context, index) {
+                              final product = _gridProducts[index];
+                              return ProductCard(
                                 product: product,
-                                initialIsSaved: _savedProductIds.contains(product.id),
-                              )
-                            )).then((result) {
-                              _fetchSavedItems();
-                              _fetchTrending();
-                              _fetchRecommendations();
-                              if (result == 'reported') {
-                                _fetchProducts();
-                              }
-                            });
-                          },
-                        ).animate().fadeIn(duration: 500.ms, delay: (50 * index).ms).scale(begin: const Offset(0.9, 0.9));
-                      },
-                      childCount: _gridProducts.length,
-                    ),
-                  ),
+                                isFavorite: _savedProductIds.contains(product.id),
+                                onFavoriteToggle: () => _toggleFavorite(product.id),
+                                onTap: () {
+                                  Navigator.push(context, MaterialPageRoute(
+                                    builder: (_) => ProductDetailsPage(
+                                      product: product,
+                                      initialIsSaved: _savedProductIds.contains(product.id),
+                                    )
+                                  )).then((result) {
+                                    _fetchSavedItems();
+                                    _fetchTrending();
+                                    _fetchRecommendations();
+                                    if (result == 'reported') {
+                                      _fetchProducts();
+                                    }
+                                  });
+                                },
+                              ).animate().fadeIn(duration: 300.ms, delay: (30 * index).ms).scale(begin: const Offset(0.95, 0.95));
+                            },
+                            childCount: _gridProducts.length,
+                          ),
+                        ),
+                      );
+                    } else {
+                      return SliverPadding(
+                        key: const PageStorageKey('home_products_list'),
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                        sliver: SliverList(
+                          delegate: SliverChildBuilderDelegate(
+                            (context, index) {
+                              final product = _gridProducts[index];
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 12.0),
+                                child: ProductListRow(
+                                  product: product,
+                                  isFavorite: _savedProductIds.contains(product.id),
+                                  onFavoriteToggle: () => _toggleFavorite(product.id),
+                                  onTap: () {
+                                    Navigator.push(context, MaterialPageRoute(
+                                      builder: (_) => ProductDetailsPage(
+                                        product: product,
+                                        initialIsSaved: _savedProductIds.contains(product.id),
+                                      )
+                                    )).then((result) {
+                                      _fetchSavedItems();
+                                      _fetchTrending();
+                                      _fetchRecommendations();
+                                      if (result == 'reported') {
+                                        _fetchProducts();
+                                      }
+                                    });
+                                  },
+                                ).animate().fadeIn(duration: 300.ms, delay: (30 * index).ms).slideY(begin: 0.05, end: 0),
+                              );
+                            },
+                            childCount: _gridProducts.length,
+                          ),
+                        ),
+                      );
+                    }
+                  },
                 ),
             ],
           ],
@@ -1477,6 +1532,65 @@ class HomePageState extends State<HomePage> {
               );
           }
       );
+  }
+
+  Widget _buildViewModeToggle() {
+    return ValueListenableBuilder<bool>(
+      valueListenable: ViewPreferenceService(),
+      builder: (context, isGrid, _) {
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        return Container(
+          height: 38,
+          padding: const EdgeInsets.all(3),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1E1E1E) : Colors.grey[100],
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isDark ? Theme.of(context).colorScheme.outlineVariant : Colors.grey[300]!,
+              width: 1,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              GestureDetector(
+                onTap: () => ViewPreferenceService().setViewMode(true),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: isGrid ? Theme.of(context).colorScheme.primary : Colors.transparent,
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: Icon(
+                    Icons.grid_view_rounded,
+                    size: 16,
+                    color: isGrid ? Colors.white : (isDark ? Colors.white70 : Colors.grey[600]),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 2),
+              GestureDetector(
+                onTap: () => ViewPreferenceService().setViewMode(false),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: !isGrid ? Theme.of(context).colorScheme.primary : Colors.transparent,
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: Icon(
+                    Icons.view_list_rounded,
+                    size: 16,
+                    color: !isGrid ? Colors.white : (isDark ? Colors.white70 : Colors.grey[600]),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 }
 

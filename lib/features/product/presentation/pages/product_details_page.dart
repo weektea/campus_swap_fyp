@@ -11,6 +11,7 @@ import 'package:campus_swap/features/profile/presentation/pages/public_profile_p
 import 'package:campus_swap/features/product/presentation/pages/edit_listing_page.dart';
 import 'package:campus_swap/features/product/presentation/pages/report_listing_page.dart';
 import 'package:campus_swap/features/product/presentation/pages/full_screen_image_viewer.dart';
+import 'package:campus_swap/core/widgets/reputation_badge.dart';
 
 class ProductDetailsPage extends StatefulWidget {
   final Product product;
@@ -281,42 +282,55 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 8,
+                    runSpacing: 6,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: widget.product.type == 'Rent' ? theme.colorScheme.secondary.withValues(alpha: 0.1) : theme.colorScheme.primary.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          widget.product.type == 'Rent' ? 'RENTAL' : widget.product.category.toUpperCase(),
-                          style: theme.textTheme.labelMedium?.copyWith(
-                            color: widget.product.type == 'Rent' ? theme.colorScheme.secondary : theme.colorScheme.primary,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 1.0,
-                          ),
-                        ),
-                      ),
-                      if (widget.product.subCategoryName.isNotEmpty) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: theme.colorScheme.surfaceContainer,
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            widget.product.subCategoryName,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant,
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Flexible(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.primaryContainer.withValues(alpha: 0.5),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(
+                                widget.product.category,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.primary,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
                             ),
                           ),
-                        ),
-                      ],
-                      const Spacer(),
+                          if (widget.product.subCategoryName.isNotEmpty) ...[
+                            const SizedBox(width: 8),
+                            Flexible(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: theme.colorScheme.surfaceContainer,
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Text(
+                                  widget.product.subCategoryName,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
                       Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
                            Icon(Icons.schedule, size: 14, color: theme.colorScheme.onSurfaceVariant),
                            const SizedBox(width: 4),
@@ -502,21 +516,33 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                                   "Seller",
                                   style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)
                               ),
-                              Row(
+                              Wrap(
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                spacing: 6,
+                                runSpacing: 4,
                                 children: [
-                                  Flexible(
-                                    child: Text(
-                                      widget.product.sellerName,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Icon(Icons.star_rounded, size: 16, color: theme.colorScheme.secondary),
                                   Text(
-                                    '${widget.product.sellerReputation.toStringAsFixed(1)} (${widget.product.sellerTotalReviews})',
-                                    style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface, fontWeight: FontWeight.bold),
+                                    widget.product.sellerName,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold),
+                                  ),
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.star_rounded, size: 16, color: theme.colorScheme.secondary),
+                                      const SizedBox(width: 2),
+                                      Text(
+                                        widget.product.sellerTotalReviews == 0
+                                            ? 'No Rating (${widget.product.sellerTotalReviews})'
+                                            : '${widget.product.sellerReputation.toStringAsFixed(1)} (${widget.product.sellerTotalReviews})',
+                                        style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface, fontWeight: FontWeight.bold),
+                                      ),
+                                    ],
+                                  ),
+                                  ReputationBadge(
+                                    completedTransactionsCount: widget.product.sellerTotalReviews,
+                                    score: widget.product.sellerReputation,
                                   ),
                                 ],
                               ),
@@ -756,34 +782,24 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                   child: const Text('Chat'),
                 ),
               ),
-              if (widget.product.type == 'Sale') ...[
-                const SizedBox(width: 12),
-                Expanded(
-                  flex: 2,
-                  child: OutlinedButton(
-                    onPressed: () => _showMakeOfferConfirmation(context),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      side: const BorderSide(color: Colors.orange, width: 1.5),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    child: const Text('Make Offer', style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)),
-                  ),
-                ),
-              ],
               const SizedBox(width: 12),
               Expanded(
                 flex: 2,
                 child: ElevatedButton(
-                  onPressed: () => _showBuyConfirmation(context),
+                  onPressed: () => widget.product.type == 'Rent'
+                      ? _showBuyConfirmation(context)
+                      : _showMakeOfferConfirmation(context),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: theme.colorScheme.primary,
-                    foregroundColor: theme.colorScheme.onPrimary,
+                    backgroundColor: widget.product.type == 'Rent' ? theme.colorScheme.primary : Colors.orange,
+                    foregroundColor: Colors.white,
                     elevation: 0,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  child: Text(widget.product.type == 'Rent' ? 'Rent Now' : 'Buy Now'),
+                  child: Text(
+                    widget.product.type == 'Rent' ? 'Rent Now' : 'Make Offer',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
                 ),
               ),
             ],
@@ -956,10 +972,11 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
     if (_campusLocations.isNotEmpty && !_campusLocations.contains(selectedLocation)) {
         selectedLocation = _campusLocations.first;
     }
-    String? selectedPaymentMethod;
-    if (widget.product.acceptedPaymentMethods.isNotEmpty) {
-        selectedPaymentMethod = widget.product.acceptedPaymentMethods.first;
-    }
+    final List<String> availablePaymentMethods = widget.product.acceptedPaymentMethods.isNotEmpty
+        ? widget.product.acceptedPaymentMethods
+        : ['Cash'];
+
+    String? selectedPaymentMethod = availablePaymentMethods.isNotEmpty ? availablePaymentMethods.first : null;
 
     showModalBottomSheet(
       context: context,
@@ -1027,7 +1044,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                     ),
                     const SizedBox(height: 16),
 
-                    Text("Select Payment Method", style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold)),
+                    Text("Select Payment Method (Accepted by Seller)", style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold)),
                     const SizedBox(height: 8),
                     Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -1039,7 +1056,8 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                             child: DropdownButton<String>(
                                 value: selectedPaymentMethod,
                                 isExpanded: true,
-                                items: widget.product.acceptedPaymentMethods.map((method) => DropdownMenuItem(
+                                hint: const Text('Select payment method'),
+                                items: availablePaymentMethods.map((method) => DropdownMenuItem(
                                     value: method,
                                     child: Row(
                                         children: [
@@ -1070,6 +1088,13 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                           if (enteredPrice == null || enteredPrice <= 0) {
                               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
                                   content: Text('Please enter a valid price greater than 0'),
+                                  backgroundColor: Colors.red,
+                              ));
+                              return;
+                          }
+                          if (selectedPaymentMethod == null || !availablePaymentMethods.contains(selectedPaymentMethod)) {
+                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                                  content: Text('Please select one of the seller\'s accepted payment methods.'),
                                   backgroundColor: Colors.red,
                               ));
                               return;
@@ -1118,13 +1143,14 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
       isScrollControlled: true, // Allow full height for keyboard
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (context) {
-        final theme = Theme.of(context);
-        String? selectedPaymentMethod;
+        final List<String> availablePaymentMethods = widget.product.acceptedPaymentMethods.isNotEmpty
+            ? widget.product.acceptedPaymentMethods
+            : ['Cash'];
+        String? selectedPaymentMethod = availablePaymentMethods.isNotEmpty ? availablePaymentMethods.first : null;
+
         return StatefulBuilder(
           builder: (context, setModalState) {
-            if (widget.product.acceptedPaymentMethods.isNotEmpty) {
-                selectedPaymentMethod ??= widget.product.acceptedPaymentMethods.first;
-            }
+            final theme = Theme.of(context);
             if (!_hasFetchedLocations) {
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                     if (!_hasFetchedLocations) {
@@ -1185,7 +1211,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                 ),
 
                 const SizedBox(height: 16),
-                Text("Select Payment Method", style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold)),
+                Text("Select Payment Method (Accepted by Seller)", style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
                 Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -1197,7 +1223,8 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                         child: DropdownButton<String>(
                             value: selectedPaymentMethod,
                             isExpanded: true,
-                            items: widget.product.acceptedPaymentMethods.map((method) => DropdownMenuItem(
+                            hint: const Text('Select payment method'),
+                            items: availablePaymentMethods.map((method) => DropdownMenuItem(
                                 value: method,
                                 child: Row(
                                     children: [

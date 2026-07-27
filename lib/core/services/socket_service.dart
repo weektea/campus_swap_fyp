@@ -1,6 +1,7 @@
 import 'package:socket_io_client/socket_io_client.dart' as socket_io;
 import 'package:campus_swap/core/api/api_client.dart';
 import 'package:campus_swap/core/session/user_session.dart';
+import 'package:campus_swap/core/services/notification_service.dart';
 import 'package:flutter/foundation.dart';
 
 class SocketService {
@@ -44,6 +45,34 @@ class SocketService {
 
     socket?.onConnect((_) {
       debugPrint('SocketService: Connected successfully');
+      
+      // Real-time Chat message instant system pop-up notification
+      socket?.on('receive_new_message', (data) {
+        if (data != null) {
+          final senderId = data['sender_id']?.toString() ?? data['sender']?['id']?.toString() ?? '';
+          final senderName = data['sender']?['full_name'] ?? data['sender']?['username'] ?? 'Chat Partner';
+          final content = data['content']?.toString() ?? 'New message received';
+          final avatar = data['sender']?['profile_image_url']?.toString() ?? '';
+          NotificationService().showPopUpNotification(
+            title: 'Message from $senderName',
+            message: content,
+            payload: 'CHAT|$senderId|$senderName|$avatar',
+          );
+        }
+      });
+
+      // Real-time System notification instant pop-up (0ms latency for order updates)
+      socket?.on('new_notification', (data) {
+        if (data != null) {
+          final noteId = data['id']?.toString();
+          NotificationService().showPopUpNotification(
+            title: data['title'] ?? 'Campus Swap',
+            message: data['message'] ?? '',
+            payload: noteId,
+            notificationId: noteId,
+          );
+        }
+      });
     });
 
     socket?.onDisconnect((_) {

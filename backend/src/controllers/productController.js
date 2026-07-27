@@ -1,4 +1,4 @@
-import { Product, User, Report, Category, SubCategory, ActivityLog, SavedItem, Follow } from '../models/index.js';
+import { Product, User, Report, Category, SubCategory, ActivityLog, SavedItem, Follow, Transaction } from '../models/index.js';
 import { createNotification } from './notificationController.js';
 import { Op } from 'sequelize';
 import fs from 'fs';
@@ -9,7 +9,7 @@ const ML_SERVICE_URL = process.env.ML_SERVICE_URL || 'http://localhost:5000';
 
 export const createProduct = async (req, res) => {
     try {
-        const { title, description, price, category, sub_category_id, condition, seller_id, image_urls, video_url, type, rental_price_per_day, max_rental_duration, rental_deposit } = req.body;
+        const { title, description, price, category, sub_category_id, condition, seller_id, image_urls, video_url, type, rental_price_per_day, max_rental_duration, rental_deposit, accepted_payment_methods } = req.body;
 
         // Basic validation
         if (!title || !seller_id || (price === undefined && !rental_price_per_day)) {
@@ -60,7 +60,8 @@ export const createProduct = async (req, res) => {
             type: type || 'Sale',
             rental_price_per_day,
             max_rental_duration,
-            rental_deposit
+            rental_deposit,
+            accepted_payment_methods: (accepted_payment_methods && Array.isArray(accepted_payment_methods) && accepted_payment_methods.length > 0) ? accepted_payment_methods : ['Cash']
         });
 
         // Background task for ML Continuous Learning
@@ -482,7 +483,27 @@ export const getProductById = async (req, res) => {
         if (!product) {
             return res.status(404).json({ error: 'Product not found' });
         }
-        res.json(product);
+        const prodObj = product.toJSON();
+        if (prodObj.seller && prodObj.seller.id) {
+            const sellerCompletedCount = await Transaction.count({
+                where: {
+                    [Op.or]: [{ buyer_id: prodObj.seller.id }, { seller_id: prodObj.seller.id }],
+                    status: 'Completed'
+                }
+            });
+            prodObj.seller.completed_transactions_count = sellerCompletedCount;
+            const score = parseFloat(prodObj.seller.reputation_score || 5.0);
+            if (sellerCompletedCount === 0) {
+                prodObj.seller.reputation_level = "🌱 New Member";
+            } else if (score >= 4.5) {
+                prodObj.seller.reputation_level = "🏆 Exemplary Trader";
+            } else if (score >= 3.0) {
+                prodObj.seller.reputation_level = "⭐ Average Trader";
+            } else {
+                prodObj.seller.reputation_level = "⛔ Poor Rating";
+            }
+        }
+        res.json(prodObj);
     } catch (error) {
         console.error('Get Product By Id Error:', error);
         res.status(500).json({ error: 'Failed to fetch product details' });

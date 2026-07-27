@@ -16,17 +16,18 @@ class ApiClient {
   static const String _envHost = String.fromEnvironment('API_HOST', defaultValue: '');
 
   static String get baseUrl {
-    if (kIsWeb) {
-      return 'http://localhost:3000/api'; // Browsers access localhost directly
-    } 
-    
-    // Use injected IP for physical devices if provided via --dart-define
+    // 1. If explicit API_HOST is passed via --dart-define, use it for all platforms (Mobile & Web)
     if (_envHost.isNotEmpty) {
       return 'http://$_envHost:3000/api';
     }
 
+    // 2. Default platform fallbacks
+    if (kIsWeb) {
+      return 'http://localhost:3000/api'; // Browsers access localhost directly
+    } 
+
     if (Platform.isAndroid) {
-      return 'http://10.0.2.2:3000/api'; // Android Emulator alias to host localhost
+      return 'http://127.0.0.1:3000/api'; // Android (Physical or Emulator via adb reverse)
     } else {
       return 'http://localhost:3000/api'; // iOS Simulator or others
     }

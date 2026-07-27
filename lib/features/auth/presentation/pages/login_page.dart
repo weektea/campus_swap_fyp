@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:campus_swap/core/api/api_client.dart';
 import 'package:campus_swap/features/home/presentation/pages/home_page.dart';
 import 'package:campus_swap/features/auth/presentation/pages/register_page.dart';
+import 'package:campus_swap/features/auth/presentation/pages/onboarding_page.dart';
 import 'package:campus_swap/core/session/user_session.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:campus_swap/core/services/socket_service.dart';
@@ -139,8 +140,6 @@ class _LoginPageState extends State<LoginPage> {
           'password': _passwordController.text,
         });
 
-        // For MVP, we won't persist token yet, just assume success 
-
         final session = UserSession();
         session.token = response['token'];
         session.userId = response['user']['id'];
@@ -149,15 +148,29 @@ class _LoginPageState extends State<LoginPage> {
         session.fullName = response['user']['full_name'];
         session.avatarUrl = response['user']['profile_picture'];
         session.role = response['user']['role'];
+        final bool isOnboarded = response['user']['is_onboarded'] == true;
+        session.isOnboarded = isOnboarded;
+        session.primaryIntent = response['user']['primary_intent'] ?? 'browse';
+        session.preferenceTags = List<String>.from(response['user']['preference_tags'] ?? []);
+
+        // Persist token and user data for auto-login
+        await session.saveToStorage();
 
         // Initialize real-time WebSocket connection
         SocketService().init();
 
         if (mounted) {
-           Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const HomePage()),
-          );
+          if (!isOnboarded) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const OnboardingPage()),
+            );
+          } else {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const HomePage()),
+            );
+          }
         }
       } catch (e) {
         final isNetworkError = e.toString().contains('SocketException') || 

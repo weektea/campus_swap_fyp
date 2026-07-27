@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:campus_swap/features/chat/presentation/pages/chat_detail_page.dart';
 import 'package:campus_swap/features/profile/presentation/pages/open_dispute_page.dart';
 import 'package:campus_swap/features/profile/presentation/pages/rate_experience_page.dart';
+import 'package:campus_swap/features/profile/presentation/pages/e_receipt_modal.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:campus_swap/core/services/socket_service.dart';
 
@@ -298,7 +299,12 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Order #...${widget.transactionId.substring(widget.transactionId.length - 6)}', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+        title: Text(
+          status == 'Pending' 
+              ? 'Offer #...${widget.transactionId.substring(widget.transactionId.length - 6)}' 
+              : 'Order #...${widget.transactionId.substring(widget.transactionId.length - 6)}', 
+          style: GoogleFonts.outfit(fontWeight: FontWeight.bold)
+        ),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
@@ -324,8 +330,8 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
             ),
             const SizedBox(height: 24),
 
-            // Order Summary
-            Text('Order Summary', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold)),
+            // Order/Offer Summary
+            Text(status == 'Pending' ? 'Offer Summary' : 'Order Summary', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
             Container(
                 width: double.infinity,
@@ -360,29 +366,89 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
                                 Text('RM ${(_transaction['item_price'] ?? _transaction['amount']).toString()}', style: GoogleFonts.outfit()),
                             ],
                         ),
-                        if (!isBuying) ...[
+                        if (isBuying) ...[
                             const SizedBox(height: 8),
                             Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                    Text('Platform Fee (2%):', style: GoogleFonts.outfit(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-                                    Text('- RM ${(_transaction['platform_fee'] ?? 0.0).toString()}', style: GoogleFonts.outfit(color: Colors.red)),
+                                    Text('Total Paid by Buyer:', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+                                    Text(
+                                        'RM ${(_transaction['item_price'] ?? _transaction['amount']).toString()}',
+                                        style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary, fontSize: 16)
+                                    ),
+                                ],
+                            ),
+                        ] else ...[
+                            const SizedBox(height: 8),
+                            Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                    Row(
+                                        children: [
+                                            Text('Platform Service Fee (2%):', style: GoogleFonts.outfit(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                                            const SizedBox(width: 4),
+                                            GestureDetector(
+                                                onTap: () {
+                                                    showDialog(
+                                                        context: context,
+                                                        builder: (context) => AlertDialog(
+                                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                                            title: Row(
+                                                                children: [
+                                                                    Icon(Icons.info_outline, color: Theme.of(context).colorScheme.primary),
+                                                                    const SizedBox(width: 8),
+                                                                    Text('Platform Service Fee', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 18)),
+                                                                ],
+                                                            ),
+                                                            content: Text('A 2% fee to support platform servers and campus green initiatives.', style: GoogleFonts.outfit(fontSize: 14)),
+                                                            actions: [
+                                                                TextButton(
+                                                                    onPressed: () => Navigator.pop(context),
+                                                                    child: Text('Got it', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary)),
+                                                                ),
+                                                            ],
+                                                        ),
+                                                    );
+                                                },
+                                                child: Icon(Icons.info_outline, size: 16, color: Theme.of(context).colorScheme.primary),
+                                            ),
+                                        ],
+                                    ),
+                                    Text(
+                                        '- RM ${(_transaction['platform_fee'] ?? (double.parse((_transaction['item_price'] ?? _transaction['amount']).toString()) * 0.02).toStringAsFixed(2)).toString()}',
+                                        style: GoogleFonts.outfit(color: Colors.red, fontWeight: FontWeight.w600)
+                                    ),
+                                ],
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                    Text('Your Net Earnings:', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+                                    Text(
+                                        'RM ${(_transaction['seller_net_earnings'] ?? (double.parse((_transaction['item_price'] ?? _transaction['amount']).toString()) * 0.98).toStringAsFixed(2)).toString()}',
+                                        style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary, fontSize: 16)
+                                    ),
                                 ],
                             ),
                         ],
-                        const SizedBox(height: 8),
-                        Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                                Text(isBuying ? 'Total Paid by Buyer:' : 'Seller Net Earnings:', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
-                                Text(
-                                    isBuying 
-                                        ? 'RM ${(_transaction['total_amount_paid_by_buyer'] ?? _transaction['amount']).toString()}'
-                                        : 'RM ${(double.parse((_transaction['item_price'] ?? _transaction['amount']).toString()) - double.parse((_transaction['platform_fee'] ?? 0.0).toString())).toStringAsFixed(2)}',
-                                    style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary, fontSize: 16)
-                                ),
-                            ],
-                        ),
+                        if (status == 'Completed') ...[
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              onPressed: () => EReceiptModal.show(context, _transaction),
+                              icon: const Icon(Icons.receipt_long),
+                              label: Text('View Campus Swap E-Receipt', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF005A43),
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              ),
+                            ),
+                          ),
+                        ],
                     ],
                 )
             ),
@@ -580,7 +646,48 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
   }
 
   Widget _buildActionPanel(String status, bool isBuying) {
-      if (status == 'Cancelled' || status == 'Disputed') {
+      if (status == 'Cancelled') {
+          final currentUserId = UserSession().userId?.toString();
+          final cancelledById = _transaction['cancelled_by_id']?.toString();
+          final buyerId = _transaction['buyer_id']?.toString();
+
+          String cancelText = 'This request has been cancelled.';
+          if (cancelledById != null && currentUserId != null) {
+              if (cancelledById == currentUserId) {
+                  cancelText = 'You have cancelled/declined this request.';
+              } else if (cancelledById == buyerId) {
+                  cancelText = 'The buyer has cancelled this request. No further action can be taken.';
+              } else {
+                  cancelText = 'The seller has declined this request. No further action can be taken.';
+              }
+          } else {
+              cancelText = 'This transaction has been cancelled. No further action can be taken.';
+          }
+
+          return Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+                color: Colors.red.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.red.withValues(alpha: 0.2)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.cancel_outlined, color: Colors.red),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    cancelText,
+                    style: GoogleFonts.outfit(color: Colors.red[800], fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
+          );
+      }
+
+      if (status == 'Disputed') {
           return const SizedBox.shrink();
       }
 

@@ -7,6 +7,7 @@ import 'package:campus_swap/features/profile/presentation/pages/ticket_chat_page
 import 'package:campus_swap/features/profile/presentation/pages/help_center_page.dart';
 import 'package:campus_swap/core/services/notification_service.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:campus_swap/features/chat/presentation/pages/chat_detail_page.dart';
 import 'package:campus_swap/features/product/presentation/pages/product_details_page.dart';
 import 'package:campus_swap/features/home/domain/entities/product.dart';
 
@@ -334,7 +335,18 @@ class _NotificationsPageState extends State<NotificationsPage> {
                                                     )
                                                 ));
                                             }
-                                        } else if (title.contains('Report')) {
+                                         } else if (note['type'] == 'CHAT' || title.contains('Message')) {
+                                             if (note['related_id'] != null) {
+                                                 final rawSenderName = title.replaceAll(RegExp(r'^(New )?Message from '), '');
+                                                 final senderName = rawSenderName.isNotEmpty ? rawSenderName : 'Chat Partner';
+                                                 Navigator.push(context, MaterialPageRoute(
+                                                     builder: (_) => ChatDetailPage(
+                                                         otherUserId: note['related_id'].toString(),
+                                                         sellerName: senderName,
+                                                     )
+                                                 ));
+                                             }
+                                         } else if (title.contains('Report')) {
                                             Navigator.push(context, MaterialPageRoute(
                                                 builder: (_) => const HelpCenterPage()
                                             ));

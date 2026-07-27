@@ -530,6 +530,20 @@ if (process.env.NODE_ENV !== 'test') {
                             ALTER TABLE "Users" ADD COLUMN "warning_count" INTEGER DEFAULT 0 NOT NULL;
                         END IF;
 
+                        -- 18. Ensure onboarding columns exist in Users table
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='Users' AND column_name='primary_intent') THEN
+                            ALTER TABLE "Users" ADD COLUMN "primary_intent" VARCHAR(50) DEFAULT 'browse';
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='Users' AND column_name='preference_tags') THEN
+                            ALTER TABLE "Users" ADD COLUMN "preference_tags" JSON DEFAULT '[]'::json;
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='Users' AND column_name='is_onboarded') THEN
+                            ALTER TABLE "Users" ADD COLUMN "is_onboarded" BOOLEAN DEFAULT FALSE;
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='Users' AND column_name='fcm_token') THEN
+                            ALTER TABLE "Users" ADD COLUMN "fcm_token" TEXT;
+                        END IF;
+
                         -- 18. Ensure logs table has event_type, description, and admin_id columns
                         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='logs' AND column_name='event_type') THEN
                             ALTER TABLE "logs" ADD COLUMN "event_type" VARCHAR(255);
@@ -573,6 +587,14 @@ if (process.env.NODE_ENV !== 'test') {
                     console.log('Notifications type enum updated successfully with NEW_SELLER_ITEM');
                 } catch (enumErr) {
                     // Ignore error if value already exists or enum is not created yet
+                }
+
+                // Dynamically add cancelled_by_id column to Transactions table if missing
+                try {
+                    await sequelize.query('ALTER TABLE "Transactions" ADD COLUMN IF NOT EXISTS cancelled_by_id UUID;');
+                    console.log('Transactions table updated with cancelled_by_id column');
+                } catch (colErr) {
+                    // Ignore if column already exists
                 }
 
                 console.log('SavedItems and Users table pre-sync migrations executed successfully');

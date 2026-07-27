@@ -138,12 +138,17 @@ export const createTransaction = async (req, res) => {
             return res.status(409).json({ error: 'Conflict Detected: Item already reserved' });
         }
 
+        // Calculate 2% Platform Fee
+        const itemPrice = parseFloat(amount);
+        const platformFee = parseFloat((itemPrice * 0.02).toFixed(2));
+
         // Create Transaction
         const transaction = await Transaction.create({
             buyer_id,
             seller_id,
             product_id,
-            amount,
+            amount: itemPrice.toFixed(2),
+            platform_fee: platformFee.toFixed(2),
             meetup_location,
             scheduled_at,
             rental_start_date,
@@ -164,7 +169,15 @@ export const createTransaction = async (req, res) => {
             transaction.id
         );
 
-        res.status(201).json(transaction);
+        const resObj = transaction.toJSON();
+        const sellerNetEarnings = parseFloat((itemPrice - platformFee).toFixed(2));
+        resObj.item_price = itemPrice;
+        resObj.platform_fee = platformFee;
+        resObj.total_amount_paid_by_buyer = itemPrice;
+        resObj.seller_net_earnings = sellerNetEarnings;
+        resObj.total_payment = itemPrice;
+
+        res.status(201).json(resObj);
     } catch (error) {
         console.error('Create Transaction Error:', error);
         res.status(500).json({ error: 'Failed to create transaction' });
@@ -189,25 +202,30 @@ export const getUserTransactions = async (req, res) => {
             where: whereClause,
             include: [
                 { model: Product, as: 'product' },
-                {
-                    model: User,
-                    as: type === 'selling' ? 'buyer' : 'seller',
-                    attributes: ['id', 'username', 'full_name', 'email']
-                },
-                {
-                    model: Review,
-                    as: 'reviews', // Need to check association alias
-                    required: false
-                }
+                { model: User, as: 'buyer', attributes: ['id', 'username', 'full_name', 'email', 'profile_image_url'] },
+                { model: User, as: 'seller', attributes: ['id', 'username', 'full_name', 'email', 'profile_image_url'] },
+                { model: Review, as: 'reviews', required: false }
             ],
             order: [['createdAt', 'DESC']]
         });
         const maskedTransactions = transactions.map(tx => {
             const txObj = tx.toJSON();
             
+            const itemPrice = parseFloat(txObj.amount || 0);
+            const platformFee = txObj.platform_fee !== undefined && txObj.platform_fee !== null && parseFloat(txObj.platform_fee) > 0
+                ? parseFloat(txObj.platform_fee)
+                : parseFloat((itemPrice * 0.02).toFixed(2));
+            const sellerNetEarnings = parseFloat((itemPrice - platformFee).toFixed(2));
+
+            txObj.item_price = itemPrice;
+            txObj.platform_fee = platformFee;
+            txObj.total_amount_paid_by_buyer = itemPrice;
+            txObj.seller_net_earnings = sellerNetEarnings;
+            txObj.total_payment = itemPrice;
+
             // Filter reviews in memory to match reviewer_id = user_id (avoid Sequelize query filtering gotcha)
             if (txObj.reviews) {
-                txObj.reviews = txObj.reviews.filter(r => r.reviewer_id === user_id);
+                txObj.reviews = txObj.reviews.filter(r => String(r.reviewer_id) === String(user_id));
             }
 
             if (txObj.review_status !== 'PUBLISHED') {
@@ -250,10 +268,17 @@ export const getTransactionById = async (req, res) => {
         }
 
         const txObj = transaction.toJSON();
-        txObj.item_price = parseFloat(txObj.amount);
-        txObj.platform_fee = parseFloat(txObj.platform_fee || 0);
-        txObj.total_amount_paid_by_buyer = txObj.item_price;
-        txObj.total_payment = txObj.item_price;
+        const itemPrice = parseFloat(txObj.amount || 0);
+        const platformFee = txObj.platform_fee !== undefined && txObj.platform_fee !== null && parseFloat(txObj.platform_fee) > 0
+            ? parseFloat(txObj.platform_fee)
+            : parseFloat((itemPrice * 0.02).toFixed(2));
+        const sellerNetEarnings = parseFloat((itemPrice - platformFee).toFixed(2));
+
+        txObj.item_price = itemPrice;
+        txObj.platform_fee = platformFee;
+        txObj.total_amount_paid_by_buyer = itemPrice;
+        txObj.seller_net_earnings = sellerNetEarnings;
+        txObj.total_payment = itemPrice;
 
         if (txObj.review_status !== 'PUBLISHED') {
             if (reqUserId === String(txObj.buyer_id)) {
@@ -414,13 +439,29 @@ export const updateTransactionStatus = async (req, res) => {
             'Disputed': []
         };
 
+        if (oldStatus === 'Cancelled') {
+            return res.status(400).json({ error: 'This transaction has already been cancelled.' });
+        }
+
+        if (oldStatus === 'Completed') {
+            return res.status(400).json({ error: 'This transaction has already been completed.' });
+        }
+
         if (!validTransitions[oldStatus] || !validTransitions[oldStatus].includes(targetStatus)) {
             return res.status(400).json({ error: `Invalid transition from ${oldStatus} to ${targetStatus}` });
         }
 
+        const requesterId = req.user?.id;
+        const otherPartyId = String(requesterId) === String(transaction.buyer_id) ? transaction.seller_id : transaction.buyer_id;
+
+        const updatePayload = { status: targetStatus };
+        if (targetStatus === 'Cancelled' && requesterId) {
+            updatePayload.cancelled_by_id = requesterId;
+        }
+
         // Atomic status update to prevent race conditions (double clicks)
         const [affectedRows] = await Transaction.update(
-            { status: targetStatus },
+            updatePayload,
             { where: { id: id, status: oldStatus } }
         );
 
@@ -430,9 +471,6 @@ export const updateTransactionStatus = async (req, res) => {
 
         // Reload to sync the instance in memory for subsequent operations
         await transaction.reload();
-
-        const requesterId = req.user?.id;
-        const otherPartyId = requesterId === transaction.buyer_id ? transaction.seller_id : transaction.buyer_id;
 
         // If completed, mark product as Sold or Available (for Rent)
         if (targetStatus === 'Completed') {
@@ -568,29 +606,52 @@ export const updateTransactionStatus = async (req, res) => {
             );
         }
 
-        // If active on rent, notify buyer
-        if (targetStatus === 'On Rent') {
+        // Notify both parties of status change
+        const productTitle = product ? product.title : 'Item';
+        if (targetStatus === 'Scheduled') {
             await createNotification(
-                transaction.buyer_id,
-                'Rental Active',
-                `Handover confirmed. Your rental for "${product ? product.title : 'Item'}" is now active!`,
+                otherPartyId,
+                'Order Scheduled',
+                `Order for "${productTitle}" has been scheduled at ${transaction.meetup_location || 'Campus Meetup Point'}.`,
+                'Transaction',
+                transaction.id
+            );
+        } else if (targetStatus === 'Cancelled') {
+            if (product) {
+                await Product.update(
+                    { status: 'Available' },
+                    { where: { id: transaction.product_id } }
+                );
+            }
+            const isBuyerCancelling = String(requesterId) === String(transaction.buyer_id);
+            const cancelTitle = isBuyerCancelling ? 'Order Cancelled by Buyer' : 'Request Declined by Seller';
+            const cancelMsg = isBuyerCancelling 
+                ? `Buyer has cancelled their order for "${productTitle}".` 
+                : `Seller has declined your request for "${productTitle}".`;
+
+            await createNotification(
+                otherPartyId,
+                cancelTitle,
+                cancelMsg,
+                'Transaction',
+                transaction.id
+            );
+        } else if (targetStatus === 'To Confirm') {
+            await createNotification(
+                otherPartyId,
+                'Order Handover Ready',
+                `Meetup confirmed for "${productTitle}". Please confirm completion upon handover.`,
                 'Transaction',
                 transaction.id
             );
         }
 
-        // If cancelled, mark product as Available
-        if (targetStatus === 'Cancelled') {
-            await Product.update(
-                { status: 'Available' },
-                { where: { id: transaction.product_id } }
-            );
-
-            // Notify the other party who did not cancel it
+        // If active on rent, notify buyer
+        if (targetStatus === 'On Rent') {
             await createNotification(
-                otherPartyId,
-                'Transaction Cancelled',
-                `The transaction has been cancelled.`,
+                transaction.buyer_id,
+                'Rental Active',
+                `Handover confirmed. Your rental for "${productTitle}" is now active!`,
                 'Transaction',
                 transaction.id
             );
@@ -664,8 +725,16 @@ export const updateTransactionStatus = async (req, res) => {
         }
 
         // Emit status update to specific buyer and seller sockets
-        emitToUser(transaction.buyer_id, 'transaction_status_updated', { transaction_id: transaction.id, status: transaction.status });
-        emitToUser(transaction.seller_id, 'transaction_status_updated', { transaction_id: transaction.id, status: transaction.status });
+        emitToUser(transaction.buyer_id, 'transaction_status_updated', { 
+            transaction_id: transaction.id, 
+            status: transaction.status,
+            cancelled_by_id: transaction.cancelled_by_id
+        });
+        emitToUser(transaction.seller_id, 'transaction_status_updated', { 
+            transaction_id: transaction.id, 
+            status: transaction.status,
+            cancelled_by_id: transaction.cancelled_by_id
+        });
 
         let successMessage = `Transaction updated to ${targetStatus}`;
         if (targetStatus === 'Completed' && product && product.type === 'Rent') {
@@ -757,5 +826,48 @@ export const addRating = async (req, res) => {
     } catch (e) {
         console.error('Rating Error', e);
         res.status(500).json({ error: 'Failed to rate' });
+    }
+};
+
+export const getTransactionReceipt = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const transaction = await Transaction.findByPk(id, {
+            include: [
+                { model: Product, as: 'product' },
+                { model: User, as: 'buyer', attributes: ['id', 'username', 'full_name', 'email'] },
+                { model: User, as: 'seller', attributes: ['id', 'username', 'full_name', 'email'] }
+            ]
+        });
+
+        if (!transaction) {
+            return res.status(404).json({ error: 'Transaction not found' });
+        }
+
+        // Hard Backend Validation Safeguard: Receipts are ONLY available for Completed transactions
+        if (transaction.status !== 'Completed') {
+            return res.status(400).json({ error: 'Receipts are only available for completed transactions.' });
+        }
+
+        const reqUserId = String(req.user.id);
+        if (reqUserId !== String(transaction.buyer_id) && reqUserId !== String(transaction.seller_id)) {
+            return res.status(403).json({ error: 'Not authorized to view receipt for this transaction' });
+        }
+
+        res.json({
+            receipt_id: `RCP-${transaction.id.substring(0, 8).toUpperCase()}`,
+            transaction_id: transaction.id,
+            status: transaction.status,
+            issued_at: transaction.updatedAt,
+            amount: transaction.amount,
+            platform_fee: transaction.platform_fee,
+            payment_method: transaction.selected_payment_method,
+            buyer: transaction.buyer,
+            seller: transaction.seller,
+            product: transaction.product
+        });
+    } catch (error) {
+        console.error('Get Receipt Error:', error);
+        res.status(500).json({ error: 'Failed to generate receipt' });
     }
 };

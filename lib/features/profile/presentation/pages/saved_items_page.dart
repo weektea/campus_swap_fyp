@@ -3,6 +3,8 @@ import 'package:campus_swap/core/api/api_client.dart';
 import 'package:campus_swap/core/session/user_session.dart';
 import 'package:campus_swap/features/home/domain/entities/product.dart';
 import 'package:campus_swap/features/home/presentation/widgets/product_card.dart';
+import 'package:campus_swap/features/home/presentation/widgets/product_list_row.dart';
+import 'package:campus_swap/core/services/view_preference_service.dart';
 import 'package:campus_swap/features/product/presentation/pages/product_details_page.dart';
 import 'package:campus_swap/features/profile/presentation/pages/public_profile_page.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -123,6 +125,16 @@ class _SavedItemsPageState extends State<SavedItemsPage> with SingleTickerProvid
           ],
         ),
         actions: [
+          ValueListenableBuilder<bool>(
+            valueListenable: ViewPreferenceService(),
+            builder: (context, isGrid, _) {
+              return IconButton(
+                icon: Icon(isGrid ? Icons.view_list_rounded : Icons.grid_view_rounded),
+                tooltip: isGrid ? 'Switch to List View' : 'Switch to Grid View',
+                onPressed: () => ViewPreferenceService().toggleViewMode(),
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.refresh_rounded),
             onPressed: () {
@@ -157,26 +169,57 @@ class _SavedItemsPageState extends State<SavedItemsPage> with SingleTickerProvid
                             buttonText: 'Explore Market',
                             onActionPressed: () => Navigator.pop(context),
                           )
-                        : GridView.builder(
-                            padding: const EdgeInsets.all(16),
-                            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 2,
-                              childAspectRatio: 0.70,
-                              crossAxisSpacing: 16,
-                              mainAxisSpacing: 16,
-                            ),
-                            itemCount: _products.length,
-                            itemBuilder: (context, index) {
-                              final product = _products[index];
-                              return ProductCard(
-                                product: product,
-                                isFavorite: true,
-                                onFavoriteToggle: () => _toggleFavorite(product.id),
-                                onTap: () {
-                                  Navigator.push(context, MaterialPageRoute(
-                                    builder: (_) => ProductDetailsPage(product: product)
-                                  )).then((_) => _fetchSavedItems());
-                                },
+                        : ValueListenableBuilder<bool>(
+                            valueListenable: ViewPreferenceService(),
+                            builder: (context, isGrid, _) {
+                              return AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 300),
+                                child: isGrid
+                                    ? GridView.builder(
+                                        key: const PageStorageKey('saved_items_grid'),
+                                        padding: const EdgeInsets.all(16),
+                                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                          crossAxisCount: 2,
+                                          childAspectRatio: 0.70,
+                                          crossAxisSpacing: 16,
+                                          mainAxisSpacing: 16,
+                                        ),
+                                        itemCount: _products.length,
+                                        itemBuilder: (context, index) {
+                                          final product = _products[index];
+                                          return ProductCard(
+                                            product: product,
+                                            isFavorite: true,
+                                            onFavoriteToggle: () => _toggleFavorite(product.id),
+                                            onTap: () {
+                                              Navigator.push(context, MaterialPageRoute(
+                                                builder: (_) => ProductDetailsPage(product: product)
+                                              )).then((_) => _fetchSavedItems());
+                                            },
+                                          );
+                                        },
+                                      )
+                                    : ListView.builder(
+                                        key: const PageStorageKey('saved_items_list'),
+                                        padding: const EdgeInsets.all(16),
+                                        itemCount: _products.length,
+                                        itemBuilder: (context, index) {
+                                          final product = _products[index];
+                                          return Padding(
+                                            padding: const EdgeInsets.only(bottom: 12.0),
+                                            child: ProductListRow(
+                                              product: product,
+                                              isFavorite: true,
+                                              onFavoriteToggle: () => _toggleFavorite(product.id),
+                                              onTap: () {
+                                                Navigator.push(context, MaterialPageRoute(
+                                                  builder: (_) => ProductDetailsPage(product: product)
+                                                )).then((_) => _fetchSavedItems());
+                                              },
+                                            ),
+                                          );
+                                        },
+                                      ),
                               );
                             },
                           ),

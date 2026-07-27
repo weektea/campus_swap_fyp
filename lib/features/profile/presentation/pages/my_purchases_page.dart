@@ -6,6 +6,8 @@ import 'package:campus_swap/features/product/presentation/pages/sell_page.dart';
 import 'package:campus_swap/features/profile/presentation/pages/transaction_detail_page.dart';
 import 'package:campus_swap/features/home/presentation/pages/home_page.dart';
 import 'package:campus_swap/features/profile/presentation/pages/rate_experience_page.dart';
+import 'package:campus_swap/features/profile/presentation/pages/e_receipt_modal.dart';
+import 'package:campus_swap/core/services/socket_service.dart';
 
 class MyTransactionsPage extends StatefulWidget {
   final bool isPushed;
@@ -28,6 +30,21 @@ class _MyTransactionsPageState extends State<MyTransactionsPage> with SingleTick
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _fetchAllTransactions();
+
+    SocketService().socket?.on('transaction_status_updated', _onSocketStatusUpdated);
+  }
+
+  void _onSocketStatusUpdated(dynamic data) {
+    if (mounted) {
+      _fetchAllTransactions();
+    }
+  }
+
+  @override
+  void dispose() {
+    SocketService().socket?.off('transaction_status_updated', _onSocketStatusUpdated);
+    _tabController.dispose();
+    super.dispose();
   }
 
   Future<void> _fetchAllTransactions() async {
@@ -264,8 +281,29 @@ class _MyTransactionsPageState extends State<MyTransactionsPage> with SingleTick
                               ),
                             ),
                           ),
+                          if (status.toString().toLowerCase() == 'completed') ...[
+                            const SizedBox(width: 8),
+                            SizedBox(
+                              height: 44,
+                              child: OutlinedButton.icon(
+                                onPressed: () => EReceiptModal.show(context, item),
+                                icon: const Icon(Icons.receipt_long, size: 18, color: Color(0xFF005A43)),
+                                label: Text(
+                                  'Receipt',
+                                  style: theme.textTheme.labelLarge?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    color: const Color(0xFF005A43),
+                                  ),
+                                ),
+                                style: OutlinedButton.styleFrom(
+                                  side: const BorderSide(color: Color(0xFF005A43)),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                ),
+                              ),
+                            ),
+                          ],
                           if (status.toString().toLowerCase() == 'completed' && (isBuying ? item['rating_from_buyer'] == null : item['rating_from_seller'] == null)) ...[
-                            const SizedBox(width: 12),
+                            const SizedBox(width: 8),
                             Expanded(
                               child: SizedBox(
                                 height: 44,
@@ -292,7 +330,7 @@ class _MyTransactionsPageState extends State<MyTransactionsPage> with SingleTick
                                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
                                     ),
                                     child: Text(
-                                      'Rate Experience',
+                                      'Rate',
                                       style: theme.textTheme.labelLarge?.copyWith(
                                         color: theme.colorScheme.onPrimary,
                                         fontWeight: FontWeight.bold,

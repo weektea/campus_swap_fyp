@@ -234,10 +234,14 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                           : null,
                   ),
                  const SizedBox(width: 8),
-                 Text(
-                   widget.sellerName,
-                   style: theme.textTheme.titleMedium?.copyWith(
-                     color: theme.colorScheme.onPrimary,
+                 Expanded(
+                   child: Text(
+                     widget.sellerName,
+                     maxLines: 1,
+                     overflow: TextOverflow.ellipsis,
+                     style: theme.textTheme.titleMedium?.copyWith(
+                       color: theme.colorScheme.onPrimary,
+                     ),
                    ),
                  ),
               ],
@@ -443,9 +447,9 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                                  final lat = targetZone?.coordinates.latitude ?? 0.0;
                                  final lng = targetZone?.coordinates.longitude ?? 0.0;
                                  final url = Uri.parse('https://www.openstreetmap.org/?mlat=$lat&mlon=$lng#map=18/$lat/$lng');
-                                 if (await canLaunchUrl(url)) {
-                                     await launchUrl(url);
-                                 }
+                                 try {
+                                     await launchUrl(url, mode: LaunchMode.externalApplication);
+                                 } catch (_) {}
                              },
                              icon: const Icon(Icons.map, size: 16),
                              label: Text('Open Maps', style: theme.textTheme.labelMedium),

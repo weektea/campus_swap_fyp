@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:campus_swap/core/api/api_client.dart';
 
 class Product {
@@ -62,10 +63,28 @@ class Product {
       return path;
     }).toList();
     
-    var payMethods = json['accepted_payment_methods'] as List? ?? [];
-    List<String> paymentMethods = payMethods.map((p) => p.toString()).toList();
+    List<String> paymentMethods = [];
+    var payMethodsRaw = json['accepted_payment_methods'];
+    if (payMethodsRaw is List) {
+      paymentMethods = payMethodsRaw.map((p) => p.toString()).toList();
+    } else if (payMethodsRaw is String && payMethodsRaw.trim().isNotEmpty) {
+      try {
+        var decoded = jsonDecode(payMethodsRaw);
+        if (decoded is List) {
+          paymentMethods = decoded.map((p) => p.toString()).toList();
+        } else {
+          paymentMethods = [payMethodsRaw];
+        }
+      } catch (_) {
+        paymentMethods = [payMethodsRaw];
+      }
+    }
+    
+    // Standardize 'Online Banking' -> 'Bank Transfer'
+    paymentMethods = paymentMethods.map((m) => m == 'Online Banking' ? 'Bank Transfer' : m).toList();
+
     if (paymentMethods.isEmpty) {
-      paymentMethods = ['Cash', 'TNG', 'Bank Transfer'];
+      paymentMethods = ['Cash'];
     }
     
     String avatar = json['seller']?['profile_image_url'] ?? '';

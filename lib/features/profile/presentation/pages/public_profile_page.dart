@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:campus_swap/core/session/user_session.dart';
 import 'package:campus_swap/features/profile/presentation/pages/report_user_page.dart';
+import 'package:campus_swap/core/widgets/reputation_badge.dart';
 
 class PublicProfilePage extends StatefulWidget {
   final String userId;
@@ -296,28 +297,13 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
                                            const Icon(Icons.star_rounded, size: 20, color: Colors.amber),
                                            const SizedBox(width: 4),
                                            Text(
-                                             '${double.parse(_userProfile!['reputation_score'].toString()).toStringAsFixed(1)} (${_userProfile!['total_reviews'] ?? 0})',
+                                             ((int.tryParse((_userProfile!['completed_transactions_count'] ?? _userProfile!['successful_transactions_count'] ?? 0).toString()) ?? 0) == 0)
+                                                 ? 'No Rating Yet (${_userProfile!['total_reviews'] ?? 0})'
+                                                 : '${double.parse(_userProfile!['reputation_score'].toString()).toStringAsFixed(1)} (${_userProfile!['total_reviews'] ?? 0})',
                                              style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold),
                                            ),
-                                           if (_userProfile!['reputation_level'] != null) ...[
-                                             const SizedBox(width: 8),
-                                             Container(
-                                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                                               decoration: BoxDecoration(
-                                                 color: isDark ? Colors.amber.shade900.withOpacity(0.2) : Colors.amber.shade50,
-                                                 borderRadius: BorderRadius.circular(12),
-                                                 border: Border.all(color: isDark ? Colors.amber.shade800.withOpacity(0.4) : Colors.amber.shade200),
-                                               ),
-                                               child: Text(
-                                                 _userProfile!['reputation_level'],
-                                                 style: GoogleFonts.outfit(
-                                                   color: isDark ? Colors.amber.shade200 : Colors.amber.shade900,
-                                                   fontWeight: FontWeight.bold,
-                                                   fontSize: 11,
-                                                 ),
-                                               ),
-                                             ),
-                                           ],
+                                           const SizedBox(width: 8),
+                                           ReputationBadge.fromUser(_userProfile!),
                                          ],
                                        ),
                                      ],
@@ -492,6 +478,8 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
                              _buildInfoRow('Phone Number', _userProfile!['phone_number']),
                            if (_userProfile!['year_of_study'] != null)
                              _buildInfoRow('Year of Study', 'Year ${_userProfile!['year_of_study']}'),
+                            if (_userProfile!['preference_tags'] != null && (_userProfile!['preference_tags'] as List).isNotEmpty)
+                               _buildTagsRow('Looking For / Interests', List<String>.from(_userProfile!['preference_tags']), isDark),
                           
                           if (_userProfile!['email'] == null && _userProfile!['phone_number'] == null && _userProfile!['year_of_study'] == null)
                             Padding(
@@ -791,6 +779,47 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
             child: Text(
               value,
               style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 14, color: Colors.black87),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTagsRow(String label, List<String> tags, bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            flex: 2,
+            child: Text(
+              label,
+              style: GoogleFonts.outfit(color: Colors.grey.shade600, fontSize: 14),
+            ),
+          ),
+          Expanded(
+            flex: 3,
+            child: Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: tags.map((t) => Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF005A43).withValues(alpha: 0.2) : const Color(0xFFE6F4F1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: isDark ? const Color(0xFF005A43) : const Color(0xFFB2DFDB)),
+                ),
+                child: Text(
+                  t,
+                  style: GoogleFonts.outfit(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? const Color(0xFF80CBC4) : const Color(0xFF005A43),
+                  ),
+                ),
+              )).toList(),
             ),
           ),
         ],

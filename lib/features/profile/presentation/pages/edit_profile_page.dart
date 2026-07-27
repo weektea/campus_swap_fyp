@@ -18,8 +18,23 @@ class _EditProfilePageState extends State<EditProfilePage> {
   final _usernameController = TextEditingController();
   final _fullNameController = TextEditingController();
   String _privacySetting = 'Public';
+  String _primaryIntent = 'browse';
+  List<String> _preferenceTags = [];
   bool _isLoading = false;
   bool _isUploading = false;
+
+  final List<String> _availableCategories = [
+    'Electronics & Gadgets',
+    'Textbooks & Books',
+    'Fashion & Apparel',
+    'Furniture & Dorm',
+    'Sports & Outdoor',
+    'Stationery & Art',
+    'Games & Consoles',
+    'FCI Special',
+    'Year 1 Essentials',
+    'Transport & Bikes',
+  ];
 
   @override
   void initState() {
@@ -49,6 +64,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
         _studentIdController.text = userData['university_id'] ?? '';
         _usernameController.text = userData['username'] ?? '';
         _fullNameController.text = userData['full_name'] ?? '';
+        _primaryIntent = userData['primary_intent'] ?? 'browse';
+        _preferenceTags = List<String>.from(userData['preference_tags'] ?? []);
         if (userData['privacy_setting'] != null) {
           _privacySetting = userData['privacy_setting'];
           if (_privacySetting == 'Friends Only') {
@@ -138,7 +155,11 @@ class _EditProfilePageState extends State<EditProfilePage> {
         'year_of_study': int.tryParse(_yearController.text),
         'bio': _bioController.text,
         'privacy_setting': _privacySetting,
+        'primary_intent': _primaryIntent,
+        'preference_tags': _preferenceTags,
       });
+      UserSession().primaryIntent = _primaryIntent;
+      UserSession().preferenceTags = List<String>.from(_preferenceTags);
       if (mounted) {
         _showSuccessSnackBar(context, 'Profile updated successfully!');
         Navigator.pop(context);
@@ -288,6 +309,35 @@ class _EditProfilePageState extends State<EditProfilePage> {
                     onChanged: (val) {
                       if (val != null) setState(() => _privacySetting = val);
                     },
+                  ),
+                  const SizedBox(height: 32),
+                  Text("Looking For (Interests)", style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey[700])),
+                  const SizedBox(height: 8),
+                  Text("Select interest categories to calibrate your ML recommendation feed:", style: GoogleFonts.outfit(fontSize: 13, color: Colors.grey[600])),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _availableCategories.map((cat) {
+                      final isSelected = _preferenceTags.contains(cat);
+                      return FilterChip(
+                        label: Text(cat, style: GoogleFonts.outfit(fontSize: 13, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
+                        selected: isSelected,
+                        onSelected: (selected) {
+                          setState(() {
+                            if (selected) {
+                              if (!_preferenceTags.contains(cat)) _preferenceTags.add(cat);
+                            } else {
+                              _preferenceTags.remove(cat);
+                            }
+                          });
+                        },
+                        selectedColor: const Color(0xFF005A43),
+                        checkmarkColor: Colors.white,
+                        labelStyle: TextStyle(color: isSelected ? Colors.white : Colors.black87),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                      );
+                    }).toList(),
                   ),
                   const SizedBox(height: 48),
                   SizedBox(

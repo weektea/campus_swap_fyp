@@ -163,40 +163,48 @@ class ProductCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         // Price
-                        RichText(
-                          text: TextSpan(
-                            children: [
-                              TextSpan(
-                                text: isRent 
-                                    ? 'RM ${product.rentalPricePerDay.toStringAsFixed(2)}'
-                                    : 'RM ${product.price.toStringAsFixed(0)}',
-                                style: GoogleFonts.outfit(
-                                  color: Theme.of(context).colorScheme.onSurface,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 18,
-                                ),
-                              ),
-                              if (isRent)
-                                TextSpan(
-                                  text: ' /day',
-                                  style: GoogleFonts.outfit(
-                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                    fontSize: 12,
+                        Expanded(
+                          child: FittedBox(
+                            alignment: Alignment.centerLeft,
+                            fit: BoxFit.scaleDown,
+                            child: RichText(
+                              text: TextSpan(
+                                children: [
+                                  TextSpan(
+                                    text: isRent 
+                                        ? 'RM ${product.rentalPricePerDay.toStringAsFixed(2)}'
+                                        : 'RM ${product.price.toStringAsFixed(0)}',
+                                    style: GoogleFonts.outfit(
+                                      color: Theme.of(context).colorScheme.onSurface,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 18,
+                                    ),
                                   ),
-                                ),
-                            ],
+                                  if (isRent)
+                                    TextSpan(
+                                      text: ' /day',
+                                      style: GoogleFonts.outfit(
+                                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
                           ),
                         ),
-                        const Spacer(),
+                        const SizedBox(width: 6),
                         // Condition Badge
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                           decoration: BoxDecoration(
                             color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF2C2C2C) : Colors.grey[100],
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Text(
                             product.condition,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: GoogleFonts.outfit(
                               color: Theme.of(context).colorScheme.onSurfaceVariant,
                               fontSize: 10,

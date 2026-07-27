@@ -1,12 +1,9 @@
-import { Notification } from '../models/index.js';
+import { Notification, User } from '../models/index.js';
+import { sendFcmNotification } from '../services/fcmService.js';
+import { emitToUser } from '../config/socket.js';
 
 /**
  * Retrieves all notifications for the authenticated user, ordered by creation date descending.
- *
- * @param {import('express').Request} req - The Express request object.
- * @param {import('express').Response} res - The Express response object.
- * @returns {Promise<void>} - Responds with a JSON array of notifications.
- * @throws {Error} - Responds with HTTP 500 if retrieval fails.
  */
 export const getUserNotifications = async (req, res) => {
     try {
@@ -24,11 +21,6 @@ export const getUserNotifications = async (req, res) => {
 
 /**
  * Marks a specific notification as read for the authenticated user.
- *
- * @param {import('express').Request} req - The Express request object containing `id` parameter.
- * @param {import('express').Response} res - The Express response object.
- * @returns {Promise<void>} - Responds with success boolean.
- * @throws {Error} - Responds with HTTP 500 if database update fails.
  */
 export const markAsRead = async (req, res) => {
     try {
@@ -43,19 +35,29 @@ export const markAsRead = async (req, res) => {
 };
 
 /**
- * Helper function to create a new notification. If a matching unread notification
- * with the same title and relatedId exists, it bubbles it to the top instead of duplicating.
- *
- * @param {string|number} userId - The target user identifier.
- * @param {string} title - The notification title.
- * @param {string} message - The notification message content.
- * @param {string} type - The notification category type.
- * @param {string|number} [relatedId] - The optional ID of the related object (e.g. product/transaction).
- * @returns {Promise<void>}
- * @throws {Error} - Catches internally and logs database insert failures.
+ * Saves or updates the FCM device token for the authenticated user.
+ */
+export const saveFcmToken = async (req, res) => {
+    try {
+        const { fcm_token } = req.body;
+        const user_id = req.user.id;
+        if (!fcm_token) {
+            return res.status(400).json({ error: 'fcm_token is required' });
+        }
+        await User.update({ fcm_token }, { where: { id: user_id } });
+        res.json({ success: true, message: 'FCM Token updated successfully' });
+    } catch (error) {
+        console.error('Save FCM Token Error:', error);
+        res.status(500).json({ error: 'Failed to update FCM Token' });
+    }
+};
+
+/**
+ * Helper function to create a new notification and dispatch an FCM Push Notification.
  */
 export const createNotification = async (userId, title, message, type, relatedId) => {
     try {
+        let createdNote;
         if (relatedId) {
             const existing = await Notification.findOne({
                 where: {
@@ -69,16 +71,31 @@ export const createNotification = async (userId, title, message, type, relatedId
                 existing.message = message;
                 existing.createdAt = new Date(); // Bubble to top
                 await existing.save();
-                return;
+                createdNote = existing;
             }
         }
-        await Notification.create({
-            user_id: userId,
-            title,
-            message,
-            type,
-            related_id: relatedId
-        });
+        if (!createdNote) {
+            createdNote = await Notification.create({
+                user_id: userId,
+                title,
+                message,
+                type,
+                related_id: relatedId
+            });
+        }
+
+        // Real-time instant WebSocket notification dispatch (0ms latency)
+        emitToUser(userId, 'new_notification', createdNote.toJSON ? createdNote.toJSON() : createdNote);
+
+        // Fetch user FCM token & dispatch Push Notification
+        const user = await User.findByPk(userId, { attributes: ['fcm_token'] });
+        if (user && user.fcm_token) {
+            await sendFcmNotification(user.fcm_token, title, message, {
+                relatedId: String(relatedId || ''),
+                type: String(type || ''),
+                notificationId: String(createdNote.id)
+            });
+        }
     } catch (error) {
         console.error('Create Notification Error:', error);
     }
@@ -86,11 +103,6 @@ export const createNotification = async (userId, title, message, type, relatedId
 
 /**
  * Deletes a specific notification belonging to the authenticated user.
- *
- * @param {import('express').Request} req - The Express request object containing `id` parameter.
- * @param {import('express').Response} res - The Express response object.
- * @returns {Promise<Response>} - Responds with success status, or 404 if not found/unauthorized.
- * @throws {Error} - Responds with HTTP 500 if deletion fails.
  */
 export const deleteNotification = async (req, res) => {
     try {
@@ -109,11 +121,6 @@ export const deleteNotification = async (req, res) => {
 
 /**
  * Deletes all read notifications belonging to the authenticated user.
- *
- * @param {import('express').Request} req - The Express request object.
- * @param {import('express').Response} res - The Express response object.
- * @returns {Promise<void>} - Responds with success status.
- * @throws {Error} - Responds with HTTP 500 if cleanup query fails.
  */
 export const clearReadNotifications = async (req, res) => {
     try {

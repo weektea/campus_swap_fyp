@@ -721,6 +721,8 @@ class HybridRecommendRequest(BaseModel):
     interactions: List[InteractionItem]
     products: List[ProductItem]
     followed_seller_ids: Optional[List[str]] = None
+    preference_tags: Optional[List[str]] = None
+    primary_intent: Optional[str] = None
 
 class HybridRecommendResponse(BaseModel):
     recommended_product_ids: List[str]
@@ -739,6 +741,7 @@ async def get_hybrid_recommendations(req: HybridRecommendRequest):
     user_id = req.user_id
     interactions_data = [i.dict() for i in req.interactions]
     products_data = [p.dict() for p in req.products]
+    user_pref_tags = req.preference_tags or []
     
     product_ids = [p['id'] for p in products_data]
     if not product_ids:
@@ -765,23 +768,34 @@ async def get_hybrid_recommendations(req: HybridRecommendRequest):
     user_interactions = [i for i in interactions_data if i['user_id'] == user_id]
     
     content_scores = np.zeros(len(products_data))
+    user_profile_vec = np.zeros(tfidf_matrix.shape[1])
+
+    # 1a. Incorporate User Interactions into TF-IDF vector
     if user_interactions:
-        user_profile_vec = np.zeros(tfidf_matrix.shape[1])
         for interaction in user_interactions:
             pid = interaction['product_id']
             if pid in product_id_to_idx:
                 idx = product_id_to_idx[pid]
                 weight = interaction.get('weight', 1.0)
                 user_profile_vec += tfidf_matrix[idx].toarray()[0] * weight
-                
-        if np.any(user_profile_vec):
-            user_profile_vec = user_profile_vec.reshape(1, -1)
-            content_sims = cosine_similarity(user_profile_vec, tfidf_matrix)[0]
-            max_sim = np.max(content_sims)
-            if max_sim > 0:
-                content_scores = content_sims / max_sim
-            else:
-                content_scores = content_sims
+
+    # 1b. Cold Start & Preference Boost: Transform explicit preference tags using TF-IDF and boost vector (weight 5.0)
+    if user_pref_tags:
+        pref_text = " ".join(user_pref_tags).lower()
+        try:
+            pref_vec = vectorizer.transform([pref_text]).toarray()[0]
+            user_profile_vec += pref_vec * 5.0
+        except Exception as pref_err:
+            print(f"Preference vectorization warning: {pref_err}")
+            
+    if np.any(user_profile_vec):
+        user_profile_vec = user_profile_vec.reshape(1, -1)
+        content_sims = cosine_similarity(user_profile_vec, tfidf_matrix)[0]
+        max_sim = np.max(content_sims)
+        if max_sim > 0:
+            content_scores = content_sims / max_sim
+        else:
+            content_scores = content_sims
 
     # 2. Collaborative Filtering (KNN based on Cosine similarity)
     all_users = list(set([i['user_id'] for i in interactions_data]))

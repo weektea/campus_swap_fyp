@@ -87,6 +87,19 @@ const User = sequelize.define('User', {
         allowNull: true,
     },
 
+    primary_intent: {
+        type: DataTypes.ENUM('buy', 'sell', 'browse'),
+        defaultValue: 'browse',
+    },
+    preference_tags: {
+        type: DataTypes.JSON,
+        defaultValue: [],
+    },
+    is_onboarded: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false,
+    },
+
     year_of_study: {
         type: DataTypes.INTEGER,
         allowNull: true,
@@ -126,6 +139,10 @@ const User = sequelize.define('User', {
     carbon_saved_seller: {
         type: DataTypes.FLOAT,
         defaultValue: 0.0,
+    },
+    fcm_token: {
+        type: DataTypes.TEXT,
+        allowNull: true,
     },
     items_reused: {
         type: DataTypes.INTEGER,

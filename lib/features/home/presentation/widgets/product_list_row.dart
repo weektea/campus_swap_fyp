@@ -131,16 +131,19 @@ class ProductListRow extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        Text(
-                          product.category,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.outfit(
-                            color: primaryColor,
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
+                        Expanded(
+                          child: Text(
+                            product.category,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.outfit(
+                              color: primaryColor,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
+                        const SizedBox(width: 6),
                         GestureDetector(
                           onTap: onFavoriteToggle,
                           child: Icon(
@@ -171,28 +174,34 @@ class ProductListRow extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         // Price text
-                        RichText(
-                          text: TextSpan(
-                            children: [
-                              TextSpan(
-                                text: isRent
-                                    ? 'RM ${product.rentalPricePerDay.toStringAsFixed(2)}'
-                                    : 'RM ${product.price.toStringAsFixed(0)}',
-                                style: GoogleFonts.outfit(
-                                  color: Theme.of(context).colorScheme.onSurface,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                ),
-                              ),
-                              if (isRent)
-                                TextSpan(
-                                  text: ' /day',
-                                  style: GoogleFonts.outfit(
-                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                    fontSize: 11,
+                        Expanded(
+                          child: FittedBox(
+                            alignment: Alignment.centerLeft,
+                            fit: BoxFit.scaleDown,
+                            child: RichText(
+                              text: TextSpan(
+                                children: [
+                                  TextSpan(
+                                    text: isRent
+                                        ? 'RM ${product.rentalPricePerDay.toStringAsFixed(2)}'
+                                        : 'RM ${product.price.toStringAsFixed(0)}',
+                                    style: GoogleFonts.outfit(
+                                      color: Theme.of(context).colorScheme.onSurface,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                    ),
                                   ),
-                                ),
-                            ],
+                                  if (isRent)
+                                    TextSpan(
+                                      text: ' /day',
+                                      style: GoogleFonts.outfit(
+                                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                        fontSize: 11,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -205,6 +214,8 @@ class ProductListRow extends StatelessWidget {
                           ),
                           child: Text(
                             product.condition,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: GoogleFonts.outfit(
                               color: Theme.of(context).colorScheme.onSurfaceVariant,
                               fontSize: 9,

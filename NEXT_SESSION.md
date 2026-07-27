@@ -35,4 +35,4 @@
 
 ## 📌 Notes
 - Admin accounts are created via CLI script: `node backend/scripts/createAdmin.js`.
-- Email verification is OFF by default (`is_verified: true`) for testing convenience.
+- Email verification is ON (`BYPASS_EMAIL_VERIFICATION=false`). OTP emails are dispatched via Mailtrap upon registration.

@@ -174,8 +174,25 @@ export const getRecommendations = async (req, res) => {
             }
         });
 
-        // Cold Start Fallback: If user has absolutely no interactions (db + session), return fallback
-        if (userInteractions.length === 0) {
+        // Fetch user preference tags & primary intent for Cold Start ML Personalization
+        let userPrefTags = [];
+        let userPrimaryIntent = 'browse';
+        if (user_id) {
+            try {
+                const uObj = await User.findByPk(user_id, {
+                    attributes: ['preference_tags', 'primary_intent']
+                });
+                if (uObj) {
+                    userPrefTags = Array.isArray(uObj.preference_tags) ? uObj.preference_tags : [];
+                    userPrimaryIntent = uObj.primary_intent || 'browse';
+                }
+            } catch (uErr) {
+                console.error("Failed to query user preferences for ML:", uErr);
+            }
+        }
+
+        // Cold Start Fallback: If user has absolutely no interactions (db + session) AND no preference tags, return fallback
+        if (userInteractions.length === 0 && userPrefTags.length === 0) {
             const fallbackList = await getFallbackRecommendations();
             return res.json({ ab_variant, data: fallbackList });
         }
@@ -254,7 +271,9 @@ export const getRecommendations = async (req, res) => {
                 user_id: user_id || 'guest',
                 interactions: userInteractions, // send user profile interactions
                 products: productsPayload,
-                followed_seller_ids: followedSellerIds
+                followed_seller_ids: followedSellerIds,
+                preference_tags: userPrefTags,
+                primary_intent: userPrimaryIntent
             }, { timeout: 4000 });
 
             recommendedIds = pythonRes.data.recommended_product_ids || [];

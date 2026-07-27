@@ -124,7 +124,7 @@ export const register = async (req, res) => {
             university_id: university_id.toUpperCase().trim(), // Store uniform uppercase
             phone_number,
             role: 'student',
-            is_verified: true,
+            is_verified: bypassEmailVerification ? true : false,
             is_email_verified: bypassEmailVerification ? true : false,
             otp: bypassEmailVerification ? null : otp,
             otp_expiry: bypassEmailVerification ? null : otpExpiry,
@@ -181,7 +181,10 @@ export const register = async (req, res) => {
                 full_name: user.full_name,
                 profile_picture: user.profile_image_url,
                 role: user.role,
-                is_email_verified: user.is_email_verified
+                is_email_verified: user.is_email_verified,
+                is_onboarded: user.is_onboarded || false,
+                primary_intent: user.primary_intent || 'browse',
+                preference_tags: user.preference_tags || []
             }
         });
 
@@ -218,7 +221,28 @@ export const verifyOtp = async (req, res) => {
         user.otp_expiry = null;
         await user.save();
 
-        res.status(200).json({ message: 'Email verified successfully' });
+        const token = jwt.sign(
+            { id: user.id, email: user.email, role: user.role },
+            process.env.JWT_SECRET || 'secret_key_dev',
+            { expiresIn: '30d' }
+        );
+
+        res.status(200).json({
+            message: 'Email verified successfully',
+            token,
+            user: {
+                id: user.id,
+                email: user.email,
+                username: user.username,
+                full_name: user.full_name,
+                profile_picture: user.profile_image_url,
+                role: user.role,
+                is_email_verified: user.is_email_verified,
+                is_onboarded: user.is_onboarded || false,
+                primary_intent: user.primary_intent || 'browse',
+                preference_tags: user.preference_tags || []
+            }
+        });
     } catch (error) {
         console.error('Verify OTP Error:', error);
         res.status(500).json({ error: 'OTP verification failed' });
@@ -315,7 +339,10 @@ export const login = async (req, res) => {
                 username: user.username,
                 full_name: user.full_name,
                 profile_picture: user.profile_image_url,
-                role: user.role
+                role: user.role,
+                is_onboarded: user.is_onboarded || false,
+                primary_intent: user.primary_intent || 'browse',
+                preference_tags: user.preference_tags || []
             }
         });
 
@@ -356,6 +383,9 @@ export const updateProfile = async (req, res) => {
         if (updates.privacy_setting !== undefined) user.privacy_setting = updates.privacy_setting;
         if (updates.show_full_name !== undefined) user.show_full_name = updates.show_full_name;
         if (updates.show_phone_number !== undefined) user.show_phone_number = updates.show_phone_number;
+        if (updates.primary_intent !== undefined) user.primary_intent = updates.primary_intent;
+        if (updates.preference_tags !== undefined) user.preference_tags = updates.preference_tags;
+        if (updates.is_onboarded !== undefined) user.is_onboarded = updates.is_onboarded;
 
         await user.save();
 
@@ -509,15 +539,19 @@ export const getUserProfile = async (req, res) => {
             badges.push({ id: 'verified_student', label: 'Verified Student', icon: 'school' });
         }
 
-        // 4. Reputation Badge Levels
-        const score = user.reputation_score || 0.0;
-        let repLevel = "⛔ High Risk Trader";
-        if (score >= 4.8) {
-            repLevel = "🏆 Exemplary Trader";
-        } else if (score >= 4.0) {
-            repLevel = "⭐ Reliable Trader";
-        } else if (score >= 3.0) {
-            repLevel = "⚠️ Average Trader";
+        // 4. Reputation Badge Levels (Minimum 1 Transaction Rule)
+        const score = user.reputation_score !== undefined && user.reputation_score !== null ? parseFloat(user.reputation_score) : 5.0;
+        let repLevel = "🌱 New Member";
+        if (successfulTransactionsCount === 0) {
+            repLevel = "🌱 New Member";
+        } else {
+            if (score >= 4.5) {
+                repLevel = "🏆 Exemplary Trader";
+            } else if (score >= 3.0) {
+                repLevel = "⭐ Average Trader";
+            } else {
+                repLevel = "⛔ Poor Rating";
+            }
         }
 
         const followerCount = await Follow.count({ where: { following_id: id } });
@@ -529,6 +563,7 @@ export const getUserProfile = async (req, res) => {
         const userJSON = user.toJSON();
         userJSON.badges = badges;
         userJSON.reputation_level = repLevel;
+        userJSON.completed_transactions_count = successfulTransactionsCount;
         userJSON.successful_transactions_count = successfulTransactionsCount;
         userJSON.response_speed = responseSpeedStr;
         userJSON.follower_count = followerCount;
@@ -690,6 +725,188 @@ export const forgotPassword = async (req, res) => {
     } catch (e) {
         console.error("Forgot Password Error:", e);
         res.status(500).json({ error: "Request failed" });
+    }
+};
+
+export const getResetPasswordForm = async (req, res) => {
+    const { token } = req.query;
+
+    if (!token) {
+        return res.status(400).send(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="utf-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1">
+                <title>Invalid Reset Link - Campus Swap</title>
+                <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">
+                <style>
+                    body { font-family: 'Outfit', sans-serif; background: #f4f7f6; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
+                    .card { background: white; max-width: 420px; width: 100%; padding: 32px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); text-align: center; }
+                    h2 { color: #dc2626; margin-top: 0; }
+                    p { color: #475569; font-size: 15px; line-height: 1.5; }
+                </style>
+            </head>
+            <body>
+                <div class="card">
+                    <h2>⚠️ Invalid Link</h2>
+                    <p>No password reset token was provided. Please request a new link from the Campus Swap app.</p>
+                </div>
+            </body>
+            </html>
+        `);
+    }
+
+    try {
+        jwt.verify(token, process.env.JWT_SECRET || 'secret_key_dev');
+    } catch (err) {
+        return res.status(400).send(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="utf-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1">
+                <title>Link Expired - Campus Swap</title>
+                <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">
+                <style>
+                    body { font-family: 'Outfit', sans-serif; background: #f4f7f6; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
+                    .card { background: white; max-width: 420px; width: 100%; padding: 32px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); text-align: center; }
+                    h2 { color: #dc2626; margin-top: 0; }
+                    p { color: #475569; font-size: 15px; line-height: 1.5; }
+                </style>
+            </head>
+            <body>
+                <div class="card">
+                    <h2>⚠️ Link Expired</h2>
+                    <p>This password reset link has expired or is invalid. Please request a new link from the Campus Swap app.</p>
+                </div>
+            </body>
+            </html>
+        `);
+    }
+
+    // Token is valid -> Serve Reset Form
+    res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <title>Reset Password - Campus Swap</title>
+            <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">
+            <style>
+                * { box-sizing: border-box; }
+                body { font-family: 'Outfit', sans-serif; background: #005A43; background: linear-gradient(135deg, #004332 0%, #005A43 100%); display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; }
+                .card { background: white; max-width: 420px; width: 100%; padding: 36px 32px; border-radius: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.2); }
+                .logo { font-size: 24px; font-weight: 700; color: #005A43; text-align: center; margin-bottom: 8px; }
+                .subtitle { text-align: center; color: #64748B; font-size: 14px; margin-bottom: 24px; }
+                label { font-size: 13px; font-weight: 600; color: #334155; margin-bottom: 6px; display: block; }
+                input { width: 100%; padding: 12px 14px; border: 1.5px solid #CBD5E1; border-radius: 10px; font-size: 15px; font-family: inherit; margin-bottom: 16px; transition: border-color 0.2s; outline: none; }
+                input:focus { border-color: #005A43; }
+                button { width: 100%; padding: 14px; background: #005A43; color: white; border: none; border-radius: 10px; font-size: 16px; font-weight: 700; font-family: inherit; cursor: pointer; transition: background 0.2s; }
+                button:hover { background: #004332; }
+                .error { color: #DC2626; font-size: 13px; margin-bottom: 12px; display: none; }
+                .success { display: none; text-align: center; }
+                .success h3 { color: #16A34A; margin-top: 0; }
+            </style>
+        </head>
+        <body>
+            <div class="card">
+                <div id="formContainer">
+                    <div class="logo">🌿 Campus Swap</div>
+                    <div class="subtitle">Set your new account password</div>
+                    <div id="errorMsg" class="error"></div>
+                    <form id="resetForm">
+                        <label for="password">New Password</label>
+                        <input type="password" id="password" required minlength="6" placeholder="Enter new password">
+                        
+                        <label for="confirmPassword">Confirm Password</label>
+                        <input type="password" id="confirmPassword" required minlength="6" placeholder="Confirm new password">
+                        
+                        <button type="submit" id="submitBtn">Update Password</button>
+                    </form>
+                </div>
+                <div id="successContainer" class="success">
+                    <div style="font-size: 48px; margin-bottom: 12px;">✅</div>
+                    <h3>Password Updated!</h3>
+                    <p style="color: #475569; font-size: 14px; line-height: 1.5;">Your password has been successfully reset. You can now open Campus Swap and log in with your new password.</p>
+                </div>
+            </div>
+
+            <script>
+                document.getElementById('resetForm').addEventListener('submit', async function(e) {
+                    e.preventDefault();
+                    const password = document.getElementById('password').value;
+                    const confirmPassword = document.getElementById('confirmPassword').value;
+                    const errorMsg = document.getElementById('errorMsg');
+                    const submitBtn = document.getElementById('submitBtn');
+
+                    if (password !== confirmPassword) {
+                        errorMsg.textContent = 'Passwords do not match.';
+                        errorMsg.style.display = 'block';
+                        return;
+                    }
+
+                    errorMsg.style.display = 'none';
+                    submitBtn.disabled = true;
+                    submitBtn.textContent = 'Updating...';
+
+                    try {
+                        const res = await fetch('/api/auth/reset-password', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ token: '${token}', newPassword: password })
+                        });
+                        const data = await res.json();
+                        if (res.ok) {
+                            document.getElementById('formContainer').style.display = 'none';
+                            document.getElementById('successContainer').style.display = 'block';
+                        } else {
+                            errorMsg.textContent = data.error || 'Failed to reset password.';
+                            errorMsg.style.display = 'block';
+                            submitBtn.disabled = false;
+                            submitBtn.textContent = 'Update Password';
+                        }
+                    } catch (err) {
+                        errorMsg.textContent = 'Network error. Please try again.';
+                        errorMsg.style.display = 'block';
+                        submitBtn.disabled = false;
+                        submitBtn.textContent = 'Update Password';
+                    }
+                });
+            </script>
+        </body>
+        </html>
+    `);
+};
+
+export const resetPassword = async (req, res) => {
+    try {
+        const { token, newPassword } = req.body;
+        if (!token || !newPassword) {
+            return res.status(400).json({ error: 'Missing token or new password' });
+        }
+
+        let decoded;
+        try {
+            decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret_key_dev');
+        } catch (err) {
+            return res.status(400).json({ error: 'Invalid or expired password reset token' });
+        }
+
+        const user = await User.findByPk(decoded.id);
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+        user.password_hash = hashedPassword;
+        await user.save();
+
+        res.json({ message: 'Password has been reset successfully' });
+    } catch (e) {
+        console.error('Reset Password Error:', e);
+        res.status(500).json({ error: 'Failed to reset password' });
     }
 };
 
@@ -1067,3 +1284,37 @@ export const getFollowersList = async (req, res) => {
         res.status(500).json({ error: 'Failed to retrieve followers list' });
     }
 };
+
+// Submit Two-Step Onboarding (First-Time Login)
+export const submitOnboarding = async (req, res) => {
+    try {
+        const { primary_intent, preference_tags } = req.body;
+        const userId = req.user.id;
+
+        const user = await User.findByPk(userId);
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        const validIntents = ['buy', 'sell', 'browse'];
+        const intent = validIntents.includes(primary_intent) ? primary_intent : 'browse';
+        const tags = Array.isArray(preference_tags) ? preference_tags : [];
+
+        user.primary_intent = intent;
+        user.preference_tags = tags;
+        user.is_onboarded = true;
+        await user.save();
+
+        const userJSON = user.toJSON();
+        delete userJSON.password_hash;
+
+        res.status(200).json({
+            message: 'Onboarding completed successfully',
+            user: userJSON
+        });
+    } catch (error) {
+        console.error('Submit Onboarding Error:', error);
+        res.status(500).json({ error: 'Failed to complete onboarding' });
+    }
+};
+

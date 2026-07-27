@@ -1,6 +1,7 @@
 import { Message, User, ActivityLog } from '../models/index.js';
 import { Op } from 'sequelize';
 import { emitToUser } from '../config/socket.js';
+import { createNotification } from './notificationController.js';
 
 // Send Message
 export const sendMessage = async (req, res) => {
@@ -61,6 +62,17 @@ export const sendMessage = async (req, res) => {
 
         // Emit message to receiver socket
         emitToUser(receiver_id, 'receive_new_message', msgWithSender || msg);
+
+        // Generate system notification & trigger FCM push for chat
+        const senderName = msgWithSender?.sender?.full_name || msgWithSender?.sender?.username || 'Someone';
+        const displaySnippet = filteredContent.length > 60 ? filteredContent.substring(0, 57) + '...' : filteredContent;
+        await createNotification(
+            receiver_id,
+            `New Message from ${senderName}`,
+            displaySnippet,
+            'CHAT',
+            msg.id
+        );
 
         res.status(201).json(msg);
     } catch (error) {

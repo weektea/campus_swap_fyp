@@ -12,6 +12,7 @@ import 'package:campus_swap/features/profile/presentation/pages/settings_page.da
 import 'package:campus_swap/features/profile/presentation/pages/help_center_page.dart';
 import 'package:campus_swap/features/profile/presentation/pages/sustainability_dashboard_page.dart';
 import 'package:campus_swap/features/profile/presentation/pages/student_profile_page.dart';
+import 'package:campus_swap/core/widgets/reputation_badge.dart';
 import 'package:campus_swap/features/home/presentation/pages/home_page.dart';
 import 'package:campus_swap/features/profile/presentation/pages/profile_analytics_dashboard_page.dart';
 import 'package:image_picker/image_picker.dart';
@@ -185,9 +186,12 @@ class _ProfilePageState extends State<ProfilePage> {
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(
-                  session.fullName ?? (session.username != null ? '@${session.username}' : 'Guest User'), 
-                  style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                Flexible(
+                  child: Text(
+                    session.fullName ?? (session.username != null ? '@${session.username}' : 'Guest User'), 
+                    style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
                 const SizedBox(width: 8),
                 Container(
@@ -222,8 +226,11 @@ class _ProfilePageState extends State<ProfilePage> {
             
             // Row 4: Rating + View Profile side-by-side
             if (session.isLoggedIn) ...[
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+              Wrap(
+                alignment: WrapAlignment.center,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 12,
+                runSpacing: 8,
                 children: [
                   Row(
                     mainAxisSize: MainAxisSize.min,
@@ -231,15 +238,19 @@ class _ProfilePageState extends State<ProfilePage> {
                       Icon(Icons.star_rounded, size: 20, color: theme.colorScheme.secondary),
                       const SizedBox(width: 4),
                       Text(
-                        '${_reputationScore.toStringAsFixed(1)} ($_totalReviews)',
+                        _totalReviews == 0 ? 'No Rating Yet' : '${_reputationScore.toStringAsFixed(1)} ($_totalReviews)',
                         style: theme.textTheme.bodyMedium?.copyWith(
                           fontWeight: FontWeight.bold,
                           color: theme.colorScheme.onSurface,
                         ),
                       ),
+                      const SizedBox(width: 8),
+                      ReputationBadge(
+                        completedTransactionsCount: _totalReviews,
+                        score: _reputationScore,
+                      ),
                     ],
                   ),
-                  const SizedBox(width: 16),
                   OutlinedButton(
                     onPressed: () {
                       Navigator.push(

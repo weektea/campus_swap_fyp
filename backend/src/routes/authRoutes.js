@@ -1,8 +1,10 @@
 import express from 'express';
-import { register, verifyOtp, login, resendOtp, updateProfile, deleteAccount, changePassword, forgotPassword, getUserProfile, reportUser, checkUsername, reactivateUser, submitSuspensionAppeal, submitPublicAppeal, followUser, unfollowUser, checkFollowStatus, getFollowingList, getFollowersList } from '../controllers/authController.js';
+import { register, verifyOtp, login, resendOtp, updateProfile, deleteAccount, changePassword, forgotPassword, getResetPasswordForm, resetPassword, getUserProfile, reportUser, checkUsername, reactivateUser, submitSuspensionAppeal, submitPublicAppeal, followUser, unfollowUser, checkFollowStatus, getFollowingList, getFollowersList, submitOnboarding } from '../controllers/authController.js';
 import { authenticateToken } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
+
+router.post('/onboarding', authenticateToken, submitOnboarding);
 
 router.get('/check-username', checkUsername);
 router.post('/register', register);
@@ -10,6 +12,8 @@ router.post('/verify-otp', verifyOtp);
 router.post('/resend-otp', resendOtp);
 router.post('/login', login);
 router.post('/forgot-password', forgotPassword);
+router.get('/reset-password', getResetPasswordForm);
+router.post('/reset-password', resetPassword);
 router.post('/change-password', authenticateToken, changePassword);
 router.get('/user/following', authenticateToken, getFollowingList);
 router.get('/user/:id', authenticateToken, getUserProfile);

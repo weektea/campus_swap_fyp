@@ -92,8 +92,8 @@ class _SafeZoneMapPageState extends State<SafeZoneMapPage> {
                   final isSelected = _selectedZone?.id == zone.id;
                   return Marker(
                     point: zone.coordinates,
-                    width: 60,
-                    height: 60,
+                    width: 100,
+                    height: 90,
                     child: GestureDetector(
                       onTap: () {
                         setState(() => _selectedZone = zone);
@@ -119,12 +119,18 @@ class _SafeZoneMapPageState extends State<SafeZoneMapPage> {
                           if (isSelected)
                             Container(
                               margin: const EdgeInsets.only(top: 4),
-                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                               decoration: BoxDecoration(
                                 color: Theme.of(context).colorScheme.primary,
                                 borderRadius: BorderRadius.circular(4),
+                                boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 2, offset: Offset(0, 1))],
                               ),
-                              child: Text(zone.name, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                              child: Text(
+                                zone.name,
+                                style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             )
                         ],
                       ),

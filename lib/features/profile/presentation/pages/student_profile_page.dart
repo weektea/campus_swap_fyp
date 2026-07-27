@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:campus_swap/core/api/api_client.dart';
 import 'package:campus_swap/core/session/user_session.dart';
 import 'package:campus_swap/features/profile/presentation/pages/edit_profile_page.dart';
+import 'package:campus_swap/core/widgets/reputation_badge.dart';
 
 class StudentProfilePage extends StatefulWidget {
   final String? userId;
@@ -209,28 +210,13 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
                                 const Icon(Icons.star_rounded, color: Colors.amber, size: 20),
                                 const SizedBox(width: 4),
                                 Text(
-                                  '${double.tryParse((_userData!['reputation_score'] ?? 5.0).toString())?.toStringAsFixed(1) ?? '5.0'} (${_userData!['total_reviews'] ?? 0} reviews)',
+                                  ((int.tryParse((_userData!['completed_transactions_count'] ?? _userData!['successful_transactions_count'] ?? 0).toString()) ?? 0) == 0)
+                                      ? 'No Rating Yet (${_userData!['total_reviews'] ?? 0} reviews)'
+                                      : '${double.tryParse((_userData!['reputation_score'] ?? 5.0).toString())?.toStringAsFixed(1) ?? '5.0'} (${_userData!['total_reviews'] ?? 0} reviews)',
                                   style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 13),
                                 ),
-                                 if (_userData!['reputation_level'] != null) ...[
-                                  const SizedBox(width: 12),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                                    decoration: BoxDecoration(
-                                      color: isDark ? Colors.amber.shade900.withOpacity(0.2) : Colors.amber.shade50,
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(color: isDark ? Colors.amber.shade800.withOpacity(0.4) : Colors.amber.shade200),
-                                    ),
-                                    child: Text(
-                                      _userData!['reputation_level'],
-                                      style: GoogleFonts.outfit(
-                                        color: isDark ? Colors.amber.shade200 : Colors.amber.shade900,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 11,
-                                      ),
-                                    ),
-                                  ),
-                                ],
+                                const SizedBox(width: 12),
+                                ReputationBadge.fromUser(_userData!),
                               ],
                             ),
                           ],
@@ -309,6 +295,10 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
                       const Divider(),
                       _buildSectionHeader('Personalization & Privacy', Icons.privacy_tip_outlined),
                       _buildDataRow('Bio', _userData!['bio'] ?? 'No bio available.'),
+                      if (_userData!['primary_intent'] != null)
+                        _buildDataRow('Primary Intent', _userData!['primary_intent'] == 'buy' ? '🛍️ Buying' : (_userData!['primary_intent'] == 'sell' ? '📦 Selling' : '👀 Browsing')),
+                      if (_userData!['preference_tags'] != null && (_userData!['preference_tags'] as List).isNotEmpty)
+                        _buildTagsRow('Looking For / Interests', List<String>.from(_userData!['preference_tags']), isDark),
                       _buildDataRow('Privacy Setting', _userData!['privacy_setting'] ?? 'Public'),
                       _buildDataRow('Full Name Visibility', _userData!['show_full_name'] == true ? 'Visible' : 'Hidden (Private)'),
                       _buildDataRow('Phone Visibility', _userData!['show_phone_number'] == true ? 'Visible' : 'Hidden (Private)'),
@@ -501,6 +491,39 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
                     ],
                   ),
                 ),
+    );
+  }
+
+  Widget _buildTagsRow(String label, List<String> tags, bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: GoogleFonts.outfit(color: Colors.grey[600], fontSize: 13, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: tags.map((t) => Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF005A43).withValues(alpha: 0.2) : const Color(0xFFE6F4F1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: isDark ? const Color(0xFF005A43) : const Color(0xFFB2DFDB)),
+              ),
+              child: Text(
+                t,
+                style: GoogleFonts.outfit(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? const Color(0xFF80CBC4) : const Color(0xFF005A43),
+                ),
+              ),
+            )).toList(),
+          ),
+        ],
+      ),
     );
   }
 }
