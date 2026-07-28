@@ -165,7 +165,38 @@ class _TicketChatPageState extends State<TicketChatPage> {
   }
 
   Future<void> _pickAndUploadImage() async {
-    final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_library, color: Color(0xFF006940)),
+              title: Text('Choose Photo from Gallery', style: GoogleFonts.outfit()),
+              onTap: () {
+                Navigator.pop(ctx);
+                _pickFile(ImageSource.gallery);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.camera_alt, color: Color(0xFF006940)),
+              title: Text('Take Photo with Camera', style: GoogleFonts.outfit()),
+              onTap: () {
+                Navigator.pop(ctx);
+                _pickFile(ImageSource.camera);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickFile(ImageSource source) async {
+    final XFile? image = await _picker.pickImage(source: source);
     if (image == null) return;
     
     setState(() => _isSending = true);
@@ -175,7 +206,7 @@ class _TicketChatPageState extends State<TicketChatPage> {
       
       await _apiClient.post('/tickets/thread/${widget.referenceId}', {
         'reference_type': widget.referenceType,
-        'content': '[Image Attached]',
+        'content': '[Attachment]',
         'attachment_url': evidenceUrl,
       });
       await _fetchMessages();

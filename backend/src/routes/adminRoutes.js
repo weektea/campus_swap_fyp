@@ -57,19 +57,23 @@ router.put('/tickets/:id', authenticateToken, isAdminOrModerator, adminControlle
 // Platform Monitoring & Reporting
 router.get('/metrics', authenticateToken, isAdminOrModerator, adminController.getSystemMetrics);
 router.get('/analytics', authenticateToken, isAdminOrModerator, getAdminAnalytics);
+router.get('/analytics/onboarding', authenticateToken, isAdminOrModerator, adminController.getOnboardingAnalytics);
 router.get('/export-report', authenticateToken, isAdminOrModerator, exportEnvironmentalReport);
 router.get('/ml-dashboard', authenticateToken, isAdmin, adminController.getMLDashboardMetrics);
 router.get('/logs', authenticateToken, isAdminOrModerator, adminController.getActivityLogs);
 router.post('/notifications/broadcast', authenticateToken, isAdminOrModerator, adminController.broadcastNotification);
+router.get('/notifications/broadcast/requests', authenticateToken, isAdminOrModerator, adminController.getBroadcastRequests);
+router.post('/notifications/broadcast/requests/:id/approve', authenticateToken, isAdmin, adminController.approveBroadcastRequest);
+router.post('/notifications/broadcast/requests/:id/reject', authenticateToken, isAdmin, adminController.rejectBroadcastRequest);
 
 // Full User Administration (Promoting, Banning)
-router.get('/users/archived', authenticateToken, isAdmin, adminController.getArchivedUsers);
-router.get('/users', authenticateToken, isAdmin, adminController.getAllUsers);
+router.get('/users/archived', authenticateToken, isAdminOrModerator, adminController.getArchivedUsers);
+router.get('/users', authenticateToken, isAdminOrModerator, adminController.getAllUsers);
 router.patch('/users/:id/verify', authenticateToken, isAdminOrModerator, adminController.verifyUser);
 router.patch('/users/:id/flag', authenticateToken, isAdminOrModerator, adminController.flagUser);
 router.post('/users/:id/warn', authenticateToken, isAdminOrModerator, adminController.warnUser);
 router.post('/users/:id/suspend', authenticateToken, isAdminOrModerator, adminController.suspendUser);
-router.get('/users/:id', authenticateToken, isAdmin, adminController.getUserDetails);
+router.get('/users/:id', authenticateToken, isAdminOrModerator, adminController.getUserDetails);
 router.post('/users', authenticateToken, isAdmin, adminController.createUser);
 router.put('/users/:id', authenticateToken, isAdmin, adminController.manageUserRoleOrBan);
 router.delete('/users/:id', authenticateToken, isAdmin, adminController.deleteUser);

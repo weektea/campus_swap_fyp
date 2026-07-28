@@ -143,7 +143,7 @@ class _MyListingsPageState extends State<MyListingsPage> with SingleTickerProvid
     final active = filteredList.where((p) => p.status == 'Available').toList();
     final reserved = filteredList.where((p) => p.status == 'Reserved').toList();
     final sold = filteredList.where((p) => p.status == 'Sold').toList();
-    final suspended = filteredList.where((p) => p.status == 'Suspended').toList();
+    final suspended = filteredList.where((p) => p.status == 'Suspended' || p.status == 'Removed').toList();
 
     return Scaffold(
       appBar: AppBar(
@@ -308,17 +308,25 @@ class _MyListingsPageState extends State<MyListingsPage> with SingleTickerProvid
                                       const SizedBox(height: 8),
                                       Row(
                                       children: [
-                                      Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                          decoration: BoxDecoration(
-                                              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
-                                              borderRadius: BorderRadius.circular(12)
-                                          ),
-                                          child: Text(
-                                              product.status,
-                                              style: GoogleFonts.outfit(color: Theme.of(context).colorScheme.primary, fontSize: 10, fontWeight: FontWeight.bold)
-                                          )
-                                      ),
+                                        Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                            decoration: BoxDecoration(
+                                                color: (product.status == 'Suspended' || product.status == 'Removed')
+                                                    ? Colors.red.withValues(alpha: 0.1)
+                                                    : Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                                                borderRadius: BorderRadius.circular(12)
+                                            ),
+                                            child: Text(
+                                                product.status == 'Suspended' 
+                                                    ? 'Suspended (Policy Violation)' 
+                                                    : (product.status == 'Removed' ? 'Removed by Admin' : product.status),
+                                                style: GoogleFonts.outfit(
+                                                    color: (product.status == 'Suspended' || product.status == 'Removed') ? Colors.red : Theme.of(context).colorScheme.primary, 
+                                                    fontSize: 10, 
+                                                    fontWeight: FontWeight.bold
+                                                )
+                                            )
+                                        ),
                                       const SizedBox(width: 8),
                                       Container(
                                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),

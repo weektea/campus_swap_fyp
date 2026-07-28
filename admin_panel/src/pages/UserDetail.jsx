@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, Edit, Trash2, Box, Info, UserX } from 'lucide-react';
 import api from '../services/api';
 
 const UserDetail = () => {
     const { id } = useParams();
     const navigate = useNavigate();
+    const location = useLocation();
+    const fromReportId = location.state?.fromReportId;
+
     const [user, setUser] = useState(null);
     const [activeListings, setActiveListings] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -73,8 +76,23 @@ const UserDetail = () => {
 
     return (
         <div>
+            {fromReportId && (
+                <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '12px', padding: '12px 16px', marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ color: '#1e40af', fontWeight: 'bold', fontSize: '0.9rem' }}>
+                        🛡️ Inspecting student profile from Report Ticket REP-{fromReportId}
+                    </div>
+                    <button 
+                        className="btn" 
+                        style={{ background: '#2563eb', color: 'white', border: 'none', padding: '6px 14px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}
+                        onClick={() => navigate('/reports', { state: { selectedId: fromReportId } })}
+                    >
+                        <ArrowLeft size={16} /> Return to Report Ticket
+                    </button>
+                </div>
+            )}
+
             <div className="flex items-center gap-4 mb-8">
-                <button onClick={() => navigate('/users')} className="btn" style={{ background: '#f3f4f6', color: '#374151', padding: '8px' }}>
+                <button onClick={() => fromReportId ? navigate('/reports', { state: { selectedId: fromReportId } }) : navigate('/users')} className="btn" style={{ background: '#f3f4f6', color: '#374151', padding: '8px' }}>
                     <ArrowLeft size={20} />
                 </button>
                 <h1 style={{ fontSize: '1.5rem', margin: 0 }}>User Profile Details</h1>

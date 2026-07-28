@@ -109,12 +109,18 @@ SupportTicket.hasMany(TicketMessage, { foreignKey: 'reference_id', constraints: 
 TicketMessage.belongsTo(SupportTicket, { foreignKey: 'reference_id', constraints: false, as: 'support_ticket' });
 
 import ActivityLog from './ActivityLog.js';
+import BroadcastRequest from './BroadcastRequest.js';
+
 User.hasMany(ActivityLog, { foreignKey: 'user_id', as: 'activity_logs' });
 ActivityLog.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+
+User.hasMany(BroadcastRequest, { foreignKey: 'requested_by', as: 'broadcast_requests' });
+BroadcastRequest.belongsTo(User, { foreignKey: 'requested_by', as: 'requestedBy' });
+BroadcastRequest.belongsTo(User, { foreignKey: 'reviewed_by', as: 'reviewedBy' });
 
 export { 
     User, Product, Transaction, SavedItem, Message, Review, 
     Notification, UserInteraction, Category, SubCategory, 
     Report, SupportTicket, Dispute, SafeMeetupZone, BackupLog, TicketMessage, ActivityLog,
-    Follow, SystemSetting, PlatformPolicy
+    Follow, SystemSetting, PlatformPolicy, BroadcastRequest
 };

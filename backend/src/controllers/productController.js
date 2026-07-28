@@ -139,7 +139,7 @@ export const getAllProducts = async (req, res) => {
         };
 
         if (seller_id) {
-            whereClause.status = { [Op.or]: ['Available', 'Reserved', 'Sold', 'Removed'] }; // Fetch all valid DB states
+            whereClause.status = { [Op.or]: ['Available', 'Reserved', 'Sold', 'Removed', 'Suspended'] }; // Fetch all valid DB states including Suspended
             whereClause.seller_id = seller_id;
         }
 
@@ -549,10 +549,19 @@ export const getPriceSuggestion = async (req, res) => {
         const min_price = suggested * 0.90;
         const max_price = suggested * 1.10;
 
+        const suggested_rental_price = Math.max(1, suggested * 0.015);
+        const min_rental_price = Math.max(1, suggested * 0.010);
+        const max_rental_price = Math.max(1, suggested * 0.025);
+        const suggested_deposit = Math.max(5, suggested * 0.30);
+
         res.json({
             suggested_price: parseFloat(suggested.toFixed(2)),
             min_price: parseFloat(min_price.toFixed(2)),
             max_price: parseFloat(max_price.toFixed(2)),
+            suggested_rental_price: parseFloat(suggested_rental_price.toFixed(2)),
+            min_rental_price: parseFloat(min_rental_price.toFixed(2)),
+            max_rental_price: parseFloat(max_rental_price.toFixed(2)),
+            suggested_deposit: parseFloat(suggested_deposit.toFixed(2)),
             estimated_price: parseFloat(suggested.toFixed(2)),
             note: "Calculated using local depreciation fallback (ML service unavailable)."
         });

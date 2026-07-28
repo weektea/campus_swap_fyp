@@ -1,10 +1,12 @@
-import { User, Product, Transaction, Report, SupportTicket, Category, SubCategory, Dispute, BackupLog, Review, SafeMeetupZone, Notification, TicketMessage, UserInteraction, Follow, SavedItem, Message, ActivityLog } from '../models/index.js';
+import { User, Product, Transaction, Report, SupportTicket, Category, SubCategory, Dispute, BackupLog, Review, SafeMeetupZone, Notification, TicketMessage, UserInteraction, Follow, SavedItem, Message, ActivityLog, BroadcastRequest } from '../models/index.js';
 import sequelize from '../config/database.js';
 import { Op } from 'sequelize';
 import { exec } from 'child_process';
 import path from 'path';
 import { getCarbonValue } from './transactionController.js';
+import { createNotification } from './notificationController.js';
 import { executeBackup, executeRestore } from '../utils/backupHelper.js';
+import { emitToUser } from '../config/socket.js';
 
 // ======================= MODERATOR & ADMIN SHARED =======================
 
@@ -138,13 +140,13 @@ export const resolveReport = async (req, res) => {
                     await tx.save();
 
                     // Notify the buyer
-                    await Notification.create({
-                        user_id: tx.buyer_id,
-                        title: 'Order Cancelled - Item Suspended',
-                        message: `The item "${product.title}" in your order #${tx.id.toString().substring(0, 8).toUpperCase()} has been suspended due to platform policy violations. The order has been automatically cancelled.`,
-                        type: 'System',
-                        related_id: tx.id
-                    });
+                    await createNotification(
+                        tx.buyer_id,
+                        'Order Cancelled - Item Suspended',
+                        `The item "${product.title}" in your order #${tx.id.toString().substring(0, 8).toUpperCase()} has been suspended due to platform policy violations. The order has been automatically cancelled.`,
+                        'System',
+                        tx.id
+                    );
                 }
             }
         }
@@ -169,17 +171,22 @@ export const resolveReport = async (req, res) => {
                     ? `Your account has been suspended following report #${report.id.toString().substring(0, 8).toUpperCase()} due to accumulating ${user.warning_count} warnings for violating Campus Swap Community Guidelines.`
                     : `A formal warning has been issued to your account following report #${report.id.toString().substring(0, 8).toUpperCase()} for violating Campus Swap Community Guidelines. You have received ${user.warning_count}/3 warnings. Receiving 3 warnings will result in automatic account suspension.`;
 
-                await Notification.create({
-                    user_id: user.id,
-                    title: isSuspended ? 'Account Suspended' : 'Account Warning Issued',
-                    message: messageText,
-                    type: 'System',
-                    related_id: report.id
-                });
+                await createNotification(
+                    user.id,
+                    isSuspended ? 'Account Suspended' : 'Account Warning Issued',
+                    messageText,
+                    'System',
+                    report.id
+                );
             }
         }
 
-        res.json({ message: 'Report updated', report });
+        const isProductSuspended = status === 'Uphold' && !!report.product_id;
+        res.json({ 
+            message: isProductSuspended ? 'Report upheld and listing automatically suspended.' : 'Report updated successfully.', 
+            product_suspended: isProductSuspended,
+            report 
+        });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
@@ -324,13 +331,13 @@ export const replyTicket = async (req, res) => {
         });
 
         // Notify the student
-        await Notification.create({
-            user_id: ticket.user_id,
-            title: 'Support Ticket Reply',
-            message: `Your ticket regarding "${ticket.subject}" has been updated. Reply: ${reply_content}`,
-            type: 'System',
-            related_id: ticket.id
-        });
+        await createNotification(
+            ticket.user_id,
+            'Support Ticket Reply',
+            `Your ticket regarding "${ticket.subject}" has been updated. Reply: ${reply_content}`,
+            'System',
+            ticket.id
+        );
 
         res.json({ message: 'Ticket replied and lock released', ticket });
     } catch (e) {
@@ -736,8 +743,16 @@ export const deleteListing = async (req, res) => {
         const product = await Product.findByPk(req.params.id);
         if (!product) return res.status(404).json({ error: 'Product not found' });
         
-        await product.destroy();
-        res.json({ message: 'Product permanently deleted successfully' });
+        product.status = 'Removed';
+        await product.save();
+
+        // Cancel active transactions for this removed product
+        await Transaction.update(
+            { status: 'Cancelled' },
+            { where: { product_id: product.id, status: ['Pending', 'Scheduled', 'To Confirm'] } }
+        );
+
+        res.json({ message: 'Product status set to Removed successfully' });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
@@ -1378,55 +1393,173 @@ export const getActivityLogs = async (req, res) => {
     }
 };
 
+// Helper to perform actual notification dispatch to all active student users
+const executeBroadcastDispatch = async (adminId, title, message, category) => {
+    const activeStudents = await User.findAll({
+        where: {
+            status: 'active',
+            role: 'student'
+        },
+        attributes: ['id']
+    });
+
+    if (activeStudents.length === 0) {
+        return { total_notified: 0 };
+    }
+
+    const categoryUpper = (category || 'ANNOUNCEMENT').toUpperCase();
+    const notificationType = categoryUpper === 'PROMOTION' ? 'Promotion' : 'System';
+
+    const notificationsData = activeStudents.map(student => ({
+        user_id: student.id,
+        title,
+        message,
+        type: notificationType,
+        is_read: false
+    }));
+
+    await Notification.bulkCreate(notificationsData);
+
+    // Socket real-time push to active students
+    activeStudents.forEach(student => {
+        emitToUser(student.id, 'new_notification', {
+            title,
+            message,
+            type: notificationType
+        });
+    });
+
+    await ActivityLog.create({
+        user_id: adminId,
+        action: `BROADCAST_SENT: ${title}`
+    });
+
+    return { total_notified: activeStudents.length };
+};
+
 export const broadcastNotification = async (req, res) => {
     try {
         const { title, message, category } = req.body;
-        if (!title || !message || !category) {
-            return res.status(400).json({ error: 'Missing title, message, or category' });
+        if (!title || !message) {
+            return res.status(400).json({ error: 'Title and message are required' });
         }
 
-        // a. Fetch all active student user IDs (status = 'active', role = 'student')
-        const activeStudents = await User.findAll({
-            where: {
-                status: 'active',
-                role: 'student'
-            },
-            attributes: ['id']
-        });
+        // If user is Moderator, submission creates a pending request requiring Admin approval
+        if (req.user.role === 'moderator') {
+            const request = await BroadcastRequest.create({
+                title,
+                message,
+                category: category || 'ANNOUNCEMENT',
+                requested_by: req.user.id,
+                status: 'Pending'
+            });
 
-        if (activeStudents.length === 0) {
-            return res.json({ message: 'No active student users to notify', total_notified: 0 });
+            await ActivityLog.create({
+                user_id: req.user.id,
+                action: `BROADCAST_REQUEST_SUBMITTED: ${title}`
+            });
+
+            return res.status(202).json({
+                message: 'Broadcast announcement request submitted for Admin approval.',
+                requires_approval: true,
+                request
+            });
         }
 
-        // b. Perform a bulk insert into the Notification table
-        // Map category ('ANNOUNCEMENT', 'MAINTENANCE', 'PROMOTION') to valid notification type enums ('System', 'Promotion')
-        const categoryUpper = category.toUpperCase();
-        const notificationType = categoryUpper === 'PROMOTION' ? 'Promotion' : 'System';
-
-        const notificationsData = activeStudents.map(student => ({
-            user_id: student.id,
-            title,
-            message,
-            type: notificationType,
-            is_read: false
-        }));
-
-        await Notification.bulkCreate(notificationsData);
-
-        // Log the action to database activity trail
-        await ActivityLog.create({
-            user_id: req.user.id,
-            action: `BROADCAST_SENT: ${title}`
+        // If user is Admin, perform immediate broadcast
+        const result = await executeBroadcastDispatch(req.user.id, title, message, category);
+        return res.json({
+            message: 'Broadcast sent successfully to all active students',
+            total_notified: result.total_notified
         });
 
-        // c. Return JSON response with notified count
-        res.json({
-            message: 'Broadcast sent successfully',
-            total_notified: activeStudents.length
-        });
     } catch (error) {
         console.error('Error broadcasting notification:', error);
         res.status(500).json({ error: 'Failed to broadcast notification' });
+    }
+};
+
+export const getBroadcastRequests = async (req, res) => {
+    try {
+        const requests = await BroadcastRequest.findAll({
+            include: [
+                { model: User, as: 'requestedBy', attributes: ['id', 'username', 'full_name', 'role', 'email'] },
+                { model: User, as: 'reviewedBy', attributes: ['id', 'username', 'full_name', 'role'] }
+            ],
+            order: [['createdAt', 'DESC']]
+        });
+        res.json(requests);
+    } catch (error) {
+        console.error('Error fetching broadcast requests:', error);
+        res.status(500).json({ error: 'Failed to fetch broadcast requests' });
+    }
+};
+
+export const approveBroadcastRequest = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const request = await BroadcastRequest.findByPk(id);
+        if (!request) {
+            return res.status(404).json({ error: 'Broadcast request not found' });
+        }
+
+        if (request.status !== 'Pending') {
+            return res.status(400).json({ error: `Request is already ${request.status.toLowerCase()}` });
+        }
+
+        // Perform actual broadcast to active students
+        const result = await executeBroadcastDispatch(req.user.id, request.title, request.message, request.category);
+
+        request.status = 'Approved';
+        request.reviewed_by = req.user.id;
+        await request.save();
+
+        await ActivityLog.create({
+            user_id: req.user.id,
+            action: `BROADCAST_REQUEST_APPROVED: ${request.title}`
+        });
+
+        res.json({
+            message: 'Broadcast request approved and dispatched successfully',
+            total_notified: result.total_notified,
+            request
+        });
+    } catch (error) {
+        console.error('Error approving broadcast request:', error);
+        res.status(500).json({ error: 'Failed to approve broadcast request' });
+    }
+};
+
+export const rejectBroadcastRequest = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { reason } = req.body;
+        const request = await BroadcastRequest.findByPk(id);
+        if (!request) {
+            return res.status(404).json({ error: 'Broadcast request not found' });
+        }
+
+        if (request.status !== 'Pending') {
+            return res.status(400).json({ error: `Request is already ${request.status.toLowerCase()}` });
+        }
+
+        request.status = 'Rejected';
+        request.reviewed_by = req.user.id;
+        request.rejection_reason = reason || 'Rejected by Administrator';
+        await request.save();
+
+        await ActivityLog.create({
+            user_id: req.user.id,
+            action: `BROADCAST_REQUEST_REJECTED: ${request.title}`
+        });
+
+        res.json({
+            message: 'Broadcast request rejected',
+            request
+        });
+    } catch (error) {
+        console.error('Error rejecting broadcast request:', error);
+        res.status(500).json({ error: 'Failed to reject broadcast request' });
     }
 };
 
@@ -1578,5 +1711,69 @@ export const suspendUser = async (req, res) => {
     } catch (error) {
         console.error('Suspend User Error:', error);
         res.status(500).json({ error: 'Failed to suspend user' });
+    }
+};
+
+// GET /api/admin/analytics/onboarding
+export const getOnboardingAnalytics = async (req, res) => {
+    try {
+        const users = await User.findAll({
+            attributes: ['id', 'primary_intent', 'preference_tags', 'is_onboarded']
+        });
+
+        let buyCount = 0;
+        let rentCount = 0;
+        let sellCount = 0;
+        let browseCount = 0;
+
+        const categoryCounts = {};
+        let totalOnboarded = 0;
+
+        users.forEach(user => {
+            if (user.is_onboarded) {
+                totalOnboarded++;
+            }
+
+            const intent = (user.primary_intent || 'browse').toLowerCase();
+            if (intent === 'buy') buyCount++;
+            else if (intent === 'rent') rentCount++;
+            else if (intent === 'sell') sellCount++;
+            else browseCount++;
+
+            let tags = user.preference_tags;
+            if (typeof tags === 'string') {
+                try { tags = JSON.parse(tags); } catch (e) { tags = []; }
+            }
+            if (Array.isArray(tags)) {
+                tags.forEach(tag => {
+                    const cleanTag = String(tag).trim();
+                    if (cleanTag) {
+                        categoryCounts[cleanTag] = (categoryCounts[cleanTag] || 0) + 1;
+                    }
+                });
+            }
+        });
+
+        const totalUsersCount = users.length || 1;
+        const intentDistribution = [
+            { name: 'Buy', id: 'buy', count: buyCount, percentage: parseFloat(((buyCount / totalUsersCount) * 100).toFixed(1)) },
+            { name: 'Rent', id: 'rent', count: rentCount, percentage: parseFloat(((rentCount / totalUsersCount) * 100).toFixed(1)) },
+            { name: 'Sell', id: 'sell', count: sellCount, percentage: parseFloat(((sellCount / totalUsersCount) * 100).toFixed(1)) },
+            { name: 'Browse', id: 'browse', count: browseCount, percentage: parseFloat(((browseCount / totalUsersCount) * 100).toFixed(1)) }
+        ];
+
+        const topCategories = Object.keys(categoryCounts)
+            .map(name => ({ name, count: categoryCounts[name] }))
+            .sort((a, b) => b.count - a.count);
+
+        res.json({
+            total_users: users.length,
+            total_onboarded_users: totalOnboarded,
+            intent_distribution: intentDistribution,
+            top_categories: topCategories
+        });
+    } catch (error) {
+        console.error('Get Onboarding Analytics Error:', error);
+        res.status(500).json({ error: 'Failed to retrieve onboarding analytics' });
     }
 };

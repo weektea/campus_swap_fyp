@@ -88,7 +88,7 @@ const User = sequelize.define('User', {
     },
 
     primary_intent: {
-        type: DataTypes.ENUM('buy', 'sell', 'browse'),
+        type: DataTypes.ENUM('buy', 'sell', 'browse', 'rent'),
         defaultValue: 'browse',
     },
     preference_tags: {

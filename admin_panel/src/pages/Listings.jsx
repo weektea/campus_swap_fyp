@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
-import { Search, Edit, Trash2 } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { Search, Edit, Trash2, ArrowLeft } from 'lucide-react';
 import api, { IMAGE_BASE_URL } from '../services/api';
 
 const Listings = () => {
     const location = useLocation();
+    const navigate = useNavigate();
+    const fromReportId = location.state?.fromReportId;
     const [listings, setListings] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
@@ -93,6 +95,21 @@ const Listings = () => {
 
     return (
         <div>
+            {fromReportId && (
+                <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '12px', padding: '12px 16px', marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ color: '#1e40af', fontWeight: 'bold', fontSize: '0.9rem' }}>
+                        🛡️ Inspecting listing from Report Ticket REP-{fromReportId}
+                    </div>
+                    <button 
+                        className="btn" 
+                        style={{ background: '#2563eb', color: 'white', border: 'none', padding: '6px 14px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}
+                        onClick={() => navigate('/reports', { state: { selectedId: fromReportId } })}
+                    >
+                        <ArrowLeft size={16} /> Return to Report Ticket
+                    </button>
+                </div>
+            )}
+
             <div className="flex justify-between items-center mb-8">
                 <h1 style={{ fontSize: '1.5rem', margin: 0 }}>Listings Management</h1>
                 <div className="flex gap-4 items-center">
@@ -123,6 +140,7 @@ const Listings = () => {
                         <option value="Available">Available</option>
                         <option value="Reserved">Reserved</option>
                         <option value="Sold">Sold</option>
+                        <option value="Suspended">Suspended</option>
                         <option value="Removed">Removed</option>
                     </select>
                 </div>
@@ -298,10 +316,11 @@ const Listings = () => {
                                             onChange={(e) => setEditStatus(e.target.value)}
                                             style={{ width: '100%', marginBottom: 0 }}
                                         >
-                                            <option value="Available">Available</option>
+                                            <option value="Available">Available (Active)</option>
                                             <option value="Reserved">Reserved</option>
                                             <option value="Sold">Sold</option>
-                                            <option value="Removed">Removed (Suspended)</option>
+                                            <option value="Suspended">Suspended (Policy Violation)</option>
+                                            <option value="Removed">Removed (Admin Deleted)</option>
                                         </select>
                                     </div>
                                 </div>

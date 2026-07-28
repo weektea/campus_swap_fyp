@@ -1,4 +1,5 @@
 import { Transaction, Product, User, Review, Category, SubCategory, Dispute, UserInteraction, ActivityLog } from '../models/index.js';
+import { Op } from 'sequelize';
 import { createNotification } from './notificationController.js';
 import { emitToUser, emitToAdmins } from '../config/socket.js';
 import { sendError, isStaff } from '../middleware/authMiddleware.js';
@@ -59,6 +60,8 @@ export const createTransaction = async (req, res) => {
         let rentType = 'Short-term';
         let grpSize = 1;
         let coRenterId = null;
+        let depositAmount = 0.0;
+        let depositStatus = 'Waived';
 
         if (product.type === 'Rent') {
             if (!rental_start_date || !rental_end_date) {
@@ -78,6 +81,22 @@ export const createTransaction = async (req, res) => {
                 return res.status(400).json({ error: 'Rental end date cannot be before the start date.' });
             }
 
+            // Date-Range Overlap Conflict Detection with existing active rental bookings
+            const overlappingTx = await Transaction.findOne({
+                where: {
+                    product_id,
+                    status: ['Pending', 'Scheduled', 'To Confirm'],
+                    rental_start_date: { [Op.lte]: endDate },
+                    rental_end_date: { [Op.gte]: startDate }
+                }
+            });
+
+            if (overlappingTx) {
+                return res.status(409).json({
+                    error: 'Conflict Detected: The item is already booked for the selected date range. Please select different dates.'
+                });
+            }
+
             const diffTime = endDate.getTime() - startDate.getTime();
             const rentalDays = Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1);
             
@@ -85,7 +104,7 @@ export const createTransaction = async (req, res) => {
                 return res.status(400).json({ error: `Cannot exceed maximum rental duration of ${product.max_rental_duration} days.` });
             }
 
-            let subtotal = rentalDays * parseFloat(product.rental_price_per_day);
+            let subtotal = rentalDays * parseFloat(product.rental_price_per_day || product.price);
 
             // 1. Long-term check: 30 days or more
             if (rentalDays >= 30) {
@@ -115,7 +134,11 @@ export const createTransaction = async (req, res) => {
             let deposit = product.rental_deposit ? parseFloat(product.rental_deposit) : 0.0;
             if (buyer && parseFloat(buyer.reputation_score || 5.0) >= 4.8) {
                 deposit = 0.0;
+                depositStatus = 'Waived';
+            } else {
+                depositStatus = deposit > 0 ? 'Held' : 'Waived';
             }
+            depositAmount = deposit;
 
             // Shared logic: Only split rental fee (subtotal), hold full deposit
             let finalAmount = 0.0;
@@ -157,7 +180,9 @@ export const createTransaction = async (req, res) => {
             selected_payment_method,
             rental_type: rentType,
             group_size: grpSize,
-            co_renter_id: coRenterId
+            co_renter_id: coRenterId,
+            deposit_amount: depositAmount.toFixed(2),
+            deposit_status: depositStatus
         });
 
         // Notify Seller
@@ -869,5 +894,111 @@ export const getTransactionReceipt = async (req, res) => {
     } catch (error) {
         console.error('Get Receipt Error:', error);
         res.status(500).json({ error: 'Failed to generate receipt' });
+    }
+};
+
+// GET /api/transactions/product/:product_id/booked-dates
+export const getBookedDates = async (req, res) => {
+    try {
+        const { product_id } = req.params;
+        const activeBookings = await Transaction.findAll({
+            where: {
+                product_id,
+                status: ['Pending', 'Scheduled', 'To Confirm'],
+                rental_start_date: { [Op.ne]: null },
+                rental_end_date: { [Op.ne]: null }
+            },
+            attributes: ['id', 'rental_start_date', 'rental_end_date', 'rental_type', 'status']
+        });
+
+        res.json(activeBookings);
+    } catch (error) {
+        console.error('Error fetching booked dates:', error);
+        res.status(500).json({ error: 'Failed to fetch booked dates' });
+    }
+};
+
+// POST /api/transactions/:id/return-rental (Seller/Renter confirms return & deposit refund)
+export const returnRentalAndRefundDeposit = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const transaction = await Transaction.findByPk(id, { include: [{ model: Product, as: 'product' }] });
+        if (!transaction) {
+            return res.status(404).json({ error: 'Transaction not found' });
+        }
+
+        const reqUserId = String(req.user.id);
+        if (reqUserId !== String(transaction.seller_id) && reqUserId !== String(transaction.buyer_id)) {
+            return res.status(403).json({ error: 'Not authorized to process rental return' });
+        }
+
+        transaction.deposit_status = 'Refunded';
+        transaction.status = 'Completed';
+        transaction.completed_at = new Date();
+        await transaction.save();
+
+        // Release Product status back to Available for future rentals
+        if (transaction.product) {
+            transaction.product.status = 'Available';
+            await transaction.product.save();
+        }
+
+        // Notify Buyer
+        await createNotification(
+            transaction.buyer_id,
+            'Rental Returned & Deposit Refunded',
+            `Your rental item "${transaction.product?.title || 'item'}" has been marked as returned cleanly. Deposit status: Refunded.`,
+            'Transaction',
+            transaction.id
+        );
+
+        res.json({ message: 'Rental returned successfully. Deposit marked as refunded.', transaction });
+    } catch (error) {
+        console.error('Error returning rental:', error);
+        res.status(500).json({ error: 'Failed to process rental return' });
+    }
+};
+
+// POST /api/transactions/:id/claim-deposit (Seller claims deposit due to damage)
+export const claimRentalDeposit = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { reason } = req.body;
+
+        const transaction = await Transaction.findByPk(id, { include: [{ model: Product, as: 'product' }] });
+        if (!transaction) {
+            return res.status(404).json({ error: 'Transaction not found' });
+        }
+
+        if (String(req.user.id) !== String(transaction.seller_id)) {
+            return res.status(403).json({ error: 'Only the item owner/seller can claim damage deposit.' });
+        }
+
+        transaction.deposit_status = 'Claimed_Forfeited';
+        transaction.status = 'Disputed';
+        await transaction.save();
+
+        // Automatically file a Dispute ticket for moderation review
+        const dispute = await Dispute.create({
+            transaction_id: transaction.id,
+            complainant_id: transaction.seller_id,
+            reason: 'Rental Damage',
+            description: reason || 'Seller reported damage/late return on rental item and requested deposit claim.',
+            status: 'New'
+        });
+
+        // Notify Buyer
+        await createNotification(
+            transaction.buyer_id,
+            'Deposit Claimed - Rental Dispute Opened',
+            `The seller requested a deposit claim on rental item "${transaction.product?.title || 'item'}". A dispute ticket has been created for staff review.`,
+            'Dispute',
+            dispute.id
+        );
+
+        res.json({ message: 'Deposit claim recorded and dispute initiated for moderator review.', dispute, transaction });
+    } catch (error) {
+        console.error('Error claiming rental deposit:', error);
+        res.status(500).json({ error: 'Failed to claim deposit' });
     }
 };

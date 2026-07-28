@@ -554,6 +554,28 @@ if (process.env.NODE_ENV !== 'test') {
                         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='logs' AND column_name='admin_id') THEN
                             ALTER TABLE "logs" ADD COLUMN "admin_id" UUID;
                         END IF;
+
+                        -- 19. Ensure Module 6 Rental System columns exist in Products table
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='Products' AND column_name='rental_unit') THEN
+                            ALTER TABLE "Products" ADD COLUMN "rental_unit" VARCHAR(50) DEFAULT 'Day';
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='Products' AND column_name='rental_price_per_hour') THEN
+                            ALTER TABLE "Products" ADD COLUMN "rental_price_per_hour" DECIMAL(10, 2);
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='Products' AND column_name='rental_price_per_month') THEN
+                            ALTER TABLE "Products" ADD COLUMN "rental_price_per_month" DECIMAL(10, 2);
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='Products' AND column_name='rental_price_per_semester') THEN
+                            ALTER TABLE "Products" ADD COLUMN "rental_price_per_semester" DECIMAL(10, 2);
+                        END IF;
+
+                        -- 20. Ensure deposit_amount and deposit_status columns exist in Transactions table
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='Transactions' AND column_name='deposit_amount') THEN
+                            ALTER TABLE "Transactions" ADD COLUMN "deposit_amount" DECIMAL(10, 2) DEFAULT 0.00;
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='Transactions' AND column_name='deposit_status') THEN
+                            ALTER TABLE "Transactions" ADD COLUMN "deposit_status" VARCHAR(50) DEFAULT 'Held';
+                        END IF;
                     END $$;
                 `);
 
@@ -646,8 +668,10 @@ import sustainabilityRoutes from './routes/sustainabilityRoutes.js';
 import ticketRoutes from './routes/ticketRoutes.js';
 import zoneRoutes from './routes/zoneRoutes.js';
 import analyticsRoutes from './routes/analyticsRoutes.js';
+import onboardingRoutes from './routes/onboardingRoutes.js';
 
 app.use('/api/auth', authRoutes);
+app.use('/api/onboarding', onboardingRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/items', itemRoutes);
 app.use('/api/transactions', transactionRoutes);

@@ -388,6 +388,10 @@ const Tickets = () => {
                                          <div style={{ textAlign: 'center', padding: '12px', background: '#fff7ed', borderRadius: '8px', color: '#ea580c', fontWeight: '500', fontSize: '0.9rem' }}>
                                              🔒 Escalated to Administrator. Chat is locked for Moderators.
                                          </div>
+                                     ) : (selectedTicket.lockedBy && selectedTicket.lockedBy !== currentUser?.id && isModerator) ? (
+                                         <div style={{ textAlign: 'center', padding: '12px', background: '#fef2f2', borderRadius: '8px', color: '#dc2626', fontWeight: '500', fontSize: '0.9rem' }}>
+                                             🔒 Ticket is locked by another moderator. Chat is view-only.
+                                         </div>
                                      ) : (
                                          <form onSubmit={handleSendChatMessage} className="flex gap-2">
                                              <input 

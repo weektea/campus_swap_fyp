@@ -2,6 +2,12 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": "Campus Swap (Mobile - Auto ADB Reverse)",
+      "request": "launch",
+      "type": "dart",
+      "preLaunchTask": "adb-reverse-3000"
+    },
+    {
       "name": "Campus Swap (Web - HTML Renderer)",
       "request": "launch",
       "type": "dart",

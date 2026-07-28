@@ -9,7 +9,7 @@ import 'package:campus_swap/core/services/socket_service.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'package:campus_swap/features/auth/presentation/pages/forgot_password_page.dart';
-import 'package:campus_swap/features/auth/presentation/pages/otp_verification_page.dart';
+import 'package:campus_swap/features/profile/presentation/pages/terms_guidelines_page.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/services.dart';
 
@@ -29,6 +29,7 @@ class _LoginPageState extends State<LoginPage> {
   bool _isPasswordVisible = false;
   bool _isLoading = false;
   bool _rememberMe = false;
+  bool _agreedToTerms = false;
 
 
   @override
@@ -129,6 +130,10 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   void _login() async {
+    if (!_agreedToTerms) {
+      _showErrorSnackBar(context, 'Please read and agree to the Terms & Policy to continue.');
+      return;
+    }
     if (_formKey.currentState!.validate()) {
       setState(() => _isLoading = true);
       await _saveUserCredentials(); // Save credentials if checked
@@ -775,6 +780,55 @@ class _LoginPageState extends State<LoginPage> {
                                 style: TextStyle(fontSize: 16),
                               ),
                             ),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          SizedBox(
+                            height: 22,
+                            width: 22,
+                            child: Checkbox(
+                              value: _agreedToTerms,
+                              activeColor: Theme.of(context).colorScheme.primary,
+                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              onChanged: (value) {
+                                setState(() {
+                                  _agreedToTerms = value ?? false;
+                                });
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: GestureDetector(
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (_) => const TermsGuidelinesPage()),
+                                );
+                              },
+                              child: RichText(
+                                text: TextSpan(
+                                  style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey[700]),
+                                  children: [
+                                    const TextSpan(text: 'I have read & agree to the '),
+                                    TextSpan(
+                                      text: 'Terms & Conditions',
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 12,
+                                        color: Theme.of(context).colorScheme.primary,
+                                        fontWeight: FontWeight.bold,
+                                        decoration: TextDecoration.underline,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 16),
                       Wrap(

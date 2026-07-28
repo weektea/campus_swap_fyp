@@ -30,6 +30,11 @@ class _EditListingPageState extends State<EditListingPage> {
   double? _minSuggestedPrice;
   double? _maxSuggestedPrice;
 
+  double? _suggestedRentalPrice;
+  double? _minSuggestedRentalPrice;
+  double? _maxSuggestedRentalPrice;
+  double? _suggestedDeposit;
+
   final List<String> _conditions = ['New', 'Like New', 'Good', 'Fair', 'Poor'];
   final List<String> _statuses = ['Available', 'Reserved', 'Suspended']; // Removed Sold to prevent manual sold marking without transaction
   
@@ -105,19 +110,29 @@ class _EditListingPageState extends State<EditListingPage> {
               double minPrice = double.tryParse((res['min_price'] ?? (suggested * 0.9)).toString()) ?? (suggested * 0.9);
               double maxPrice = double.tryParse((res['max_price'] ?? (suggested * 1.1)).toString()) ?? (suggested * 1.1);
               
-              if (_listingType == 'Rent') {
-                  suggested = suggested * 0.1; // Rule of thumb: Rent is 10% of value
-                  minPrice = minPrice * 0.1;
-                  maxPrice = maxPrice * 0.1;
-              }
+              double suggestedRental = double.tryParse((res['suggested_rental_price'] ?? (suggested * 0.015)).toString()) ?? (suggested * 0.015);
+              double minRental = double.tryParse((res['min_rental_price'] ?? (suggested * 0.010)).toString()) ?? (suggested * 0.010);
+              double maxRental = double.tryParse((res['max_rental_price'] ?? (suggested * 0.025)).toString()) ?? (suggested * 0.025);
+              double suggestedDep = double.tryParse((res['suggested_deposit'] ?? (suggested * 0.30)).toString()) ?? (suggested * 0.30);
               
               setState(() {
                   _suggestedPrice = suggested;
                   _minSuggestedPrice = minPrice;
                   _maxSuggestedPrice = maxPrice;
-                  _priceController.text = suggested.toStringAsFixed(2);
+
+                  _suggestedRentalPrice = suggestedRental;
+                  _minSuggestedRentalPrice = minRental;
+                  _maxSuggestedRentalPrice = maxRental;
+                  _suggestedDeposit = suggestedDep;
+
+                  if (_listingType == 'Sale') {
+                    _priceController.text = suggested.toStringAsFixed(2);
+                  } else {
+                    _priceController.text = suggestedRental.toStringAsFixed(2);
+                    _depositController.text = suggestedDep.toStringAsFixed(2);
+                  }
               });
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Price Suggested!')));
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Smart Price Suggestion Calculated!')));
           }
       } catch (e) {
           if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to get suggestion: $e')));
@@ -281,16 +296,16 @@ class _EditListingPageState extends State<EditListingPage> {
                   key: const ValueKey('ai_pricing_assistant_edit'),
                   title: Row(
                     children: [
-                      Icon(Icons.auto_awesome, color: Theme.of(context).colorScheme.primary, size: 20),
+                      Icon(Icons.lightbulb_outline_rounded, color: Theme.of(context).colorScheme.primary, size: 20),
                       const SizedBox(width: 8),
                       Text(
-                        'AI Pricing Assistant',
+                        'Smart Pricing Assistant',
                         style: GoogleFonts.outfit(fontWeight: FontWeight.bold),
                       ),
                     ],
                   ),
                   subtitle: Text(
-                    'Estimate optimal listing price range using AI',
+                    'Estimate optimal selling price or rental rate & deposit',
                     style: GoogleFonts.outfit(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12),
                   ),
                   childrenPadding: const EdgeInsets.all(16),
@@ -338,7 +353,7 @@ class _EditListingPageState extends State<EditListingPage> {
                     if (_suggestedPrice != null) ...[
                       const SizedBox(height: 16),
                       Container(
-                        padding: const EdgeInsets.all(12),
+                        padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
                           color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.05),
                           borderRadius: BorderRadius.circular(12),
@@ -347,43 +362,125 @@ class _EditListingPageState extends State<EditListingPage> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: Theme.of(context).colorScheme.primary,
-                                    borderRadius: BorderRadius.circular(8),
+                            if (_listingType == 'Rent') ...[
+                              // Rental Suggestion Box
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Suggested Rental Rate',
+                                        style: GoogleFonts.outfit(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold, fontSize: 12),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        'RM ${_suggestedRentalPrice!.toStringAsFixed(2)} / day',
+                                        style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary, fontSize: 16),
+                                      ),
+                                      Text(
+                                        'Range: RM ${_minSuggestedRentalPrice!.toStringAsFixed(2)} - RM ${_maxSuggestedRentalPrice!.toStringAsFixed(2)} / day',
+                                        style: GoogleFonts.outfit(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 11),
+                                      ),
+                                    ],
                                   ),
-                                  child: const Text(
-                                    'AI Suggested',
-                                    style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                  TextButton(
+                                    onPressed: () {
+                                      setState(() {
+                                        _priceController.text = _suggestedRentalPrice!.toStringAsFixed(2);
+                                      });
+                                    },
+                                    child: Text('Apply Rate', style: GoogleFonts.outfit()),
                                   ),
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  'RM ${_suggestedPrice!.toStringAsFixed(2)}',
-                                  style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Suggested Range: RM ${_minSuggestedPrice!.toStringAsFixed(2)} - RM ${_maxSuggestedPrice!.toStringAsFixed(2)}',
-                              style: GoogleFonts.outfit(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12),
-                            ),
-                            const SizedBox(height: 8),
-                            Align(
-                              alignment: Alignment.centerRight,
-                              child: TextButton(
-                                onPressed: () {
-                                  setState(() {
-                                    _priceController.text = _suggestedPrice!.toStringAsFixed(2);
-                                  });
-                                },
-                                child: Text('Apply Price', style: GoogleFonts.outfit()),
+                                ],
                               ),
-                            ),
+                              const Divider(height: 16),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Suggested Security Deposit',
+                                        style: GoogleFonts.outfit(color: Colors.amber[800], fontWeight: FontWeight.bold, fontSize: 12),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        'RM ${_suggestedDeposit!.toStringAsFixed(2)}',
+                                        style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Colors.amber[900], fontSize: 16),
+                                      ),
+                                      Text(
+                                        '~30% of item value (RM ${_suggestedPrice!.toStringAsFixed(2)})',
+                                        style: GoogleFonts.outfit(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 11),
+                                      ),
+                                    ],
+                                  ),
+                                  TextButton(
+                                    onPressed: () {
+                                      setState(() {
+                                        _depositController.text = _suggestedDeposit!.toStringAsFixed(2);
+                                      });
+                                    },
+                                    child: Text('Apply Deposit', style: GoogleFonts.outfit()),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              SizedBox(
+                                width: double.infinity,
+                                child: OutlinedButton.icon(
+                                  onPressed: () {
+                                    setState(() {
+                                      _priceController.text = _suggestedRentalPrice!.toStringAsFixed(2);
+                                      _depositController.text = _suggestedDeposit!.toStringAsFixed(2);
+                                    });
+                                  },
+                                  icon: const Icon(Icons.done_all, size: 16),
+                                  label: Text('Apply Both Rate & Deposit', style: GoogleFonts.outfit()),
+                                ),
+                              ),
+                            ] else ...[
+                              // Sale Suggestion Box
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(context).colorScheme.primary,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: const Text(
+                                      'Suggested Price',
+                                      style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'RM ${_suggestedPrice!.toStringAsFixed(2)}',
+                                    style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary, fontSize: 16),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Suggested Range: RM ${_minSuggestedPrice!.toStringAsFixed(2)} - RM ${_maxSuggestedPrice!.toStringAsFixed(2)}',
+                                style: GoogleFonts.outfit(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12),
+                              ),
+                              const SizedBox(height: 8),
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: TextButton(
+                                  onPressed: () {
+                                    setState(() {
+                                      _priceController.text = _suggestedPrice!.toStringAsFixed(2);
+                                    });
+                                  },
+                                  child: Text('Apply Price', style: GoogleFonts.outfit()),
+                                ),
+                              ),
+                            ],
                           ],
                         ),
                       ),

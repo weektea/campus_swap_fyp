@@ -11,47 +11,53 @@ class TermsGuidelinesPage extends StatefulWidget {
 
 class _TermsGuidelinesPageState extends State<TermsGuidelinesPage> {
   final ApiClient _apiClient = ApiClient();
-  String _content = '';
-  String _version = '';
+  
+  String _termsContent = '';
+  String _privacyContent = '';
+  String _guidelinesContent = '';
+  
   bool _isLoading = true;
   bool _hasError = false;
 
   @override
   void initState() {
     super.initState();
-    _fetchTerms();
+    _fetchAllPolicies();
   }
 
-  Future<void> _fetchTerms() async {
+  Future<void> _fetchAllPolicies() async {
     setState(() {
       _isLoading = true;
       _hasError = false;
     });
 
     try {
-      final res = await _apiClient.get('/policies/TERMS');
-      if (res != null && res['content'] != null) {
+      final results = await Future.wait([
+        _apiClient.get('/policies/TERMS'),
+        _apiClient.get('/policies/PRIVACY'),
+        _apiClient.get('/policies/COMMUNITY_RULES'),
+      ]);
+
+      if (mounted) {
         setState(() {
-          _content = res['content'];
-          _version = res['version'] ?? '1.0.0';
+          _termsContent = results[0]?['content'] ?? '';
+          _privacyContent = results[1]?['content'] ?? '';
+          _guidelinesContent = results[2]?['content'] ?? '';
           _isLoading = false;
         });
-      } else {
+      }
+    } catch (e) {
+      debugPrint('Error fetching all policies: $e');
+      if (mounted) {
         setState(() {
           _hasError = true;
           _isLoading = false;
         });
       }
-    } catch (e) {
-      debugPrint('Error fetching terms: $e');
-      setState(() {
-        _hasError = true;
-        _isLoading = false;
-      });
     }
   }
 
-  List<Widget> _renderContent(String content) {
+  List<Widget> _renderMarkdown(String content) {
     if (content.trim().isEmpty) return [];
     
     final lines = content.split('\n');
@@ -59,11 +65,11 @@ class _TermsGuidelinesPageState extends State<TermsGuidelinesPage> {
       final trimmed = line.trim();
       if (trimmed.startsWith('# ')) {
         return Padding(
-          padding: const EdgeInsets.only(top: 20.0, bottom: 8.0),
+          padding: const EdgeInsets.only(top: 16.0, bottom: 8.0),
           child: Text(
             trimmed.substring(2),
             style: GoogleFonts.outfit(
-              fontSize: 22, 
+              fontSize: 20, 
               fontWeight: FontWeight.bold, 
               color: const Color(0xFF006940)
             ),
@@ -71,11 +77,11 @@ class _TermsGuidelinesPageState extends State<TermsGuidelinesPage> {
         );
       } else if (trimmed.startsWith('## ')) {
         return Padding(
-          padding: const EdgeInsets.only(top: 16.0, bottom: 6.0),
+          padding: const EdgeInsets.only(top: 14.0, bottom: 6.0),
           child: Text(
             trimmed.substring(3),
             style: GoogleFonts.outfit(
-              fontSize: 18, 
+              fontSize: 17, 
               fontWeight: FontWeight.bold, 
               color: Colors.black87
             ),
@@ -83,25 +89,25 @@ class _TermsGuidelinesPageState extends State<TermsGuidelinesPage> {
         );
       } else if (trimmed.startsWith('### ')) {
         return Padding(
-          padding: const EdgeInsets.only(top: 12.0, bottom: 4.0),
+          padding: const EdgeInsets.only(top: 10.0, bottom: 4.0),
           child: Text(
             trimmed.substring(4),
             style: GoogleFonts.outfit(
-              fontSize: 16, 
+              fontSize: 15, 
               fontWeight: FontWeight.bold, 
               color: Colors.black87
             ),
           ),
         );
       } else if (trimmed.isEmpty) {
-        return const SizedBox(height: 10);
+        return const SizedBox(height: 8);
       } else {
         return Padding(
-          padding: const EdgeInsets.only(bottom: 8.0),
+          padding: const EdgeInsets.only(bottom: 6.0),
           child: Text(
             line,
             style: GoogleFonts.outfit(
-              fontSize: 15, 
+              fontSize: 14, 
               color: Colors.grey[800], 
               height: 1.5
             ),
@@ -111,14 +117,37 @@ class _TermsGuidelinesPageState extends State<TermsGuidelinesPage> {
     }).toList();
   }
 
+  Widget _buildSectionTitle(String title, IconData icon) {
+    return Container(
+      margin: const EdgeInsets.only(top: 24, bottom: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF006940).withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF006940).withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: const Color(0xFF006940), size: 22),
+          const SizedBox(width: 10),
+          Text(
+            title,
+            style: GoogleFonts.outfit(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: const Color(0xFF006940),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
     return Scaffold(
       appBar: AppBar(
-        title: Text('Terms & Guidelines', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+        title: Text('Terms & Conditions', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
         elevation: 0,
       ),
       body: _isLoading
@@ -133,7 +162,7 @@ class _TermsGuidelinesPageState extends State<TermsGuidelinesPage> {
                         const Icon(Icons.error_outline, size: 48, color: Colors.red),
                         const SizedBox(height: 16),
                         Text(
-                          "Failed to load Policy Guidelines",
+                          "Failed to load Terms & Conditions",
                           style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(height: 8),
@@ -144,7 +173,7 @@ class _TermsGuidelinesPageState extends State<TermsGuidelinesPage> {
                         ),
                         const SizedBox(height: 24),
                         ElevatedButton.icon(
-                          onPressed: _fetchTerms,
+                          onPressed: _fetchAllPolicies,
                           icon: const Icon(Icons.refresh),
                           label: Text("Retry", style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
                           style: ElevatedButton.styleFrom(
@@ -158,29 +187,23 @@ class _TermsGuidelinesPageState extends State<TermsGuidelinesPage> {
                   ),
                 )
               : SingleChildScrollView(
-                  padding: const EdgeInsets.all(24.0),
+                  padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Version info header
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: isDark ? Colors.grey[800] : Colors.grey[200],
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          "Version: $_version",
-                          style: GoogleFonts.outfit(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: isDark ? Colors.white70 : Colors.grey[800]
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      // Parsed Markdown elements
-                      ..._renderContent(_content),
+                      // Section 1: Terms of Service
+                      _buildSectionTitle('Terms of Service', Icons.gavel_rounded),
+                      ..._renderMarkdown(_termsContent.isNotEmpty ? _termsContent : 'No terms content available.'),
+
+                      // Section 2: Privacy Policy
+                      _buildSectionTitle('Privacy Policy', Icons.security_rounded),
+                      ..._renderMarkdown(_privacyContent.isNotEmpty ? _privacyContent : 'No privacy content available.'),
+
+                      // Section 3: Community Guidelines
+                      _buildSectionTitle('Community Guidelines', Icons.verified_user_rounded),
+                      ..._renderMarkdown(_guidelinesContent.isNotEmpty ? _guidelinesContent : 'No community rules available.'),
+                      
+                      const SizedBox(height: 32),
                     ],
                   ),
                 ),

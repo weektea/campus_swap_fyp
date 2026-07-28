@@ -1,4 +1,5 @@
 import { User, Product, Transaction, Report, SupportTicket, Dispute, Notification } from '../models/index.js';
+import { createNotification } from './notificationController.js';
 import { Op } from 'sequelize';
 
 // ======================= MODERATOR EXCLUSIVE =======================
@@ -32,12 +33,13 @@ export const updateReportStatus = async (req, res) => {
                     await tx.save();
                     
                     // Create Notification for the buyer
-                    await Notification.create({
-                        user_id: tx.buyer_id,
-                        type: 'Order_Cancelled',
-                        message: `您的预订商品因违规已被下架，订单(ID: ${tx.id})已自动取消，请勿进行线下付款。`,
-                        is_read: false
-                    });
+                    await createNotification(
+                        tx.buyer_id,
+                        'Order Cancelled - Item Suspended',
+                        `您的预订商品因违规已被下架，订单(ID: ${tx.id})已自动取消，请勿进行线下付款。`,
+                        'System',
+                        tx.id
+                    );
                 }
             }
         }
@@ -62,13 +64,13 @@ export const updateReportStatus = async (req, res) => {
                     ? `Your account has been suspended following report #${report.id.toString().substring(0, 8).toUpperCase()} due to accumulating ${user.warning_count} warnings for violating Campus Swap Community Guidelines.`
                     : `A formal warning has been issued to your account following report #${report.id.toString().substring(0, 8).toUpperCase()} for violating Campus Swap Community Guidelines. You have received ${user.warning_count}/3 warnings. Receiving 3 warnings will result in automatic account suspension.`;
 
-                await Notification.create({
-                    user_id: user.id,
-                    title: isSuspended ? 'Account Suspended' : 'Account Warning Issued',
-                    message: messageText,
-                    type: 'System',
-                    related_id: report.id
-                });
+                await createNotification(
+                    user.id,
+                    isSuspended ? 'Account Suspended' : 'Account Warning Issued',
+                    messageText,
+                    'System',
+                    report.id
+                );
             }
         }
 
@@ -76,13 +78,13 @@ export const updateReportStatus = async (req, res) => {
         let msg = status === 'Uphold' 
             ? 'Thank you for your contribution to a safer campus.' 
             : 'Your report was reviewed and dismissed.';
-        await Notification.create({
-            user_id: report.reporter_id,
-            title: `Report ${status}`,
-            message: msg,
-            type: 'System',
-            related_id: report.id
-        });
+        await createNotification(
+            report.reporter_id,
+            `Report ${status}`,
+            msg,
+            'System',
+            report.id
+        );
 
         res.json({ message: `Report updated to ${status}`, report });
     } catch (e) {
@@ -137,13 +139,13 @@ export const triageDispute = async (req, res) => {
         await dispute.save();
 
         // Notify complainant
-        await Notification.create({
-            user_id: dispute.complainant_id,
-            title: 'Dispute Updated',
-            message: `Your dispute status was updated to ${dispute.status}.`,
-            type: 'System',
-            related_id: dispute.id
-        });
+        await createNotification(
+            dispute.complainant_id,
+            'Dispute Updated',
+            `Your dispute status was updated to ${dispute.status}.`,
+            'Dispute',
+            dispute.id
+        );
 
         res.json({ message: 'Dispute triaged successfully', dispute });
     } catch (e) {
@@ -175,13 +177,13 @@ export const claimTicket = async (req, res) => {
         await ticket.save();
 
         // Notify user of claim
-        await Notification.create({
-            user_id: ticket.user_id,
-            title: 'Support Ticket In-Progress',
-            message: 'A moderator has claimed and is reviewing your support ticket.',
-            type: 'System',
-            related_id: ticket.id
-        });
+        await createNotification(
+            ticket.user_id,
+            'Support Ticket In-Progress',
+            'A moderator has claimed and is reviewing your support ticket.',
+            'System',
+            ticket.id
+        );
 
         res.json({ message: 'Ticket locked successfully', ticket });
     } catch (e) {
@@ -214,13 +216,13 @@ export const resolveTicket = async (req, res) => {
         await ticket.save();
 
         // Notify user
-        await Notification.create({
-            user_id: ticket.user_id,
-            title: 'Support Ticket Resolved',
-            message: 'A moderator has replied and resolved your ticket.',
-            type: 'System',
-            related_id: ticket.id
-        });
+        await createNotification(
+            ticket.user_id,
+            'Support Ticket Resolved',
+            'A moderator has replied and resolved your ticket.',
+            'System',
+            ticket.id
+        );
 
         res.json({ message: 'Ticket resolved successfully', ticket });
     } catch (e) {

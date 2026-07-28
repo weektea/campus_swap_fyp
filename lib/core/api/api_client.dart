@@ -190,8 +190,9 @@ class ApiClient {
 
     // Show a dialog on the current UI navigator context and redirect to login screen
     final context = navigatorKey.currentContext;
-    if (context != null) {
+    if (context != null && context.mounted) {
       Future.delayed(Duration.zero, () {
+        if (!context.mounted) return;
         showDialog(
           context: context,
           barrierDismissible: false,

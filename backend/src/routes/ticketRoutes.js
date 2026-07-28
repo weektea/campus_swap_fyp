@@ -3,6 +3,7 @@ import { Op } from 'sequelize';
 import { authenticateToken as verifyToken, sendError, isStaff } from '../middleware/authMiddleware.js';
 import { Report, Dispute, SupportTicket, TicketMessage, Product, User, Transaction, ActivityLog } from '../models/index.js';
 import Notification from '../models/Notification.js';
+import { createNotification } from '../controllers/notificationController.js';
 import { emitToUser, emitToAdmins } from '../config/socket.js';
 
 const router = express.Router();
@@ -128,12 +129,13 @@ router.get('/my-tickets', verifyToken, async (req, res) => {
 router.get('/thread/:reference_id', verifyToken, async (req, res) => {
     try {
         const refId = req.params.reference_id;
+        const reqUserId = String(req.user.id).toLowerCase().trim();
         const dispute = await Dispute.findByPk(refId);
         if (dispute) {
             const tx = await Transaction.findByPk(dispute.transaction_id);
-            if (!tx || (String(req.user.id) !== String(dispute.complainant_id) && 
-                        String(req.user.id) !== String(tx.buyer_id) && 
-                        String(req.user.id) !== String(tx.seller_id) && 
+            if (!tx || (reqUserId !== String(dispute.complainant_id).toLowerCase().trim() && 
+                        reqUserId !== String(tx.buyer_id).toLowerCase().trim() && 
+                        reqUserId !== String(tx.seller_id).toLowerCase().trim() && 
                         !isStaff(req.user))) {
                 return sendError(res, 403, 'Access Denied: You are not authorized to view this dispute thread.');
             }
@@ -142,7 +144,7 @@ router.get('/thread/:reference_id', verifyToken, async (req, res) => {
             if (!ticket) {
                 return sendError(res, 404, 'Thread not found.');
             }
-            if (String(req.user.id) !== String(ticket.user_id) && !isStaff(req.user)) {
+            if (reqUserId !== String(ticket.user_id).toLowerCase().trim() && !isStaff(req.user)) {
                 return sendError(res, 403, 'Access Denied: You are not authorized to view this support ticket thread.');
             }
         }
@@ -164,13 +166,14 @@ router.get('/thread/:reference_id/status', verifyToken, async (req, res) => {
         let status = 'Open';
         let type = 'SupportTicket';
         const refId = req.params.reference_id;
+        const reqUserId = String(req.user.id).toLowerCase().trim();
         
         const dispute = await Dispute.findByPk(refId);
         if (dispute) {
             const tx = await Transaction.findByPk(dispute.transaction_id);
-            if (!tx || (String(req.user.id) !== String(dispute.complainant_id) && 
-                        String(req.user.id) !== String(tx.buyer_id) && 
-                        String(req.user.id) !== String(tx.seller_id) && 
+            if (!tx || (reqUserId !== String(dispute.complainant_id).toLowerCase().trim() && 
+                        reqUserId !== String(tx.buyer_id).toLowerCase().trim() && 
+                        reqUserId !== String(tx.seller_id).toLowerCase().trim() && 
                         !isStaff(req.user))) {
                 return sendError(res, 403, 'Access Denied: You are not authorized to view this dispute status.');
             }
@@ -181,7 +184,7 @@ router.get('/thread/:reference_id/status', verifyToken, async (req, res) => {
             if (!ticket) {
                 return sendError(res, 404, 'Thread not found.');
             }
-            if (String(req.user.id) !== String(ticket.user_id) && !isStaff(req.user)) {
+            if (reqUserId !== String(ticket.user_id).toLowerCase().trim() && !isStaff(req.user)) {
                 return sendError(res, 403, 'Access Denied: You are not authorized to view this support ticket status.');
             }
             status = ticket.status;
@@ -206,9 +209,10 @@ router.post('/thread/:reference_id', verifyToken, async (req, res) => {
                 return sendError(res, 404, 'Dispute not found.');
             }
             const tx = await Transaction.findByPk(dispute.transaction_id);
-            if (!tx || (String(req.user.id) !== String(dispute.complainant_id) && 
-                        String(req.user.id) !== String(tx.buyer_id) && 
-                        String(req.user.id) !== String(tx.seller_id) && 
+            const reqUserId = String(req.user.id).toLowerCase().trim();
+            if (!tx || (reqUserId !== String(dispute.complainant_id).toLowerCase().trim() && 
+                        reqUserId !== String(tx.buyer_id).toLowerCase().trim() && 
+                        reqUserId !== String(tx.seller_id).toLowerCase().trim() && 
                         !isStaff(req.user))) {
                 return sendError(res, 403, 'Access Denied: You are not authorized to post to this dispute.');
             }
@@ -220,11 +224,18 @@ router.post('/thread/:reference_id', verifyToken, async (req, res) => {
             if (!ticket) {
                 return sendError(res, 404, 'Support ticket not found.');
             }
-            if (String(req.user.id) !== String(ticket.user_id) && !isStaff(req.user)) {
+            const reqUserId = String(req.user.id).toLowerCase().trim();
+            if (reqUserId !== String(ticket.user_id).toLowerCase().trim() && !isStaff(req.user)) {
                 return sendError(res, 403, 'Access Denied: You are not authorized to post to this support ticket.');
             }
             if (ticket.status === 'Resolved') {
                 return sendError(res, 400, 'This support ticket is resolved and closed.');
+            }
+            if (ticket.status === 'Escalated' && req.user.role === 'moderator') {
+                return sendError(res, 403, 'Ticket is escalated to Administrator. Chat is locked for Moderators.');
+            }
+            if (ticket.lockedByModeratorId && String(ticket.lockedByModeratorId).toLowerCase().trim() !== reqUserId && req.user.role !== 'admin') {
+                return sendError(res, 403, 'Ticket is locked by another moderator.');
             }
         } else {
             return sendError(res, 400, 'Invalid thread reference type.');
@@ -286,31 +297,15 @@ router.post('/thread/:reference_id', verifyToken, async (req, res) => {
 
             if (targetUserId) {
                 const title = reference_type === 'Dispute' ? 'Dispute Message' : 'Support Ticket Message';
-                const messageText = `A moderator has replied to your ${reference_type.toLowerCase()}.`;
+                const displayMsg = content ? (content.length > 60 ? content.substring(0, 57) + '...' : content) : 'New staff message received';
 
-                // Deduplicate unread notifications for this thread
-                const existingNotification = await Notification.findOne({
-                    where: {
-                        user_id: targetUserId,
-                        related_id: req.params.reference_id,
-                        title,
-                        is_read: false
-                    }
-                });
-
-                if (existingNotification) {
-                    existingNotification.message = messageText;
-                    existingNotification.createdAt = new Date(); // Bubble to top
-                    await existingNotification.save();
-                } else {
-                    await Notification.create({
-                        user_id: targetUserId,
-                        title,
-                        message: messageText,
-                        type: 'System',
-                        related_id: req.params.reference_id
-                    });
-                }
+                await createNotification(
+                    targetUserId,
+                    title,
+                    displayMsg,
+                    reference_type === 'Dispute' ? 'Dispute' : 'System',
+                    req.params.reference_id
+                );
             }
         }
 

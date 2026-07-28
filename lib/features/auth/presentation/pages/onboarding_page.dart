@@ -16,6 +16,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
   String _selectedIntent = 'buy';
   final List<String> _selectedTags = [];
   bool _isSubmitting = false;
+  bool _isLoadingOptions = true;
 
   final List<Map<String, String>> _intents = [
     {
@@ -23,6 +24,12 @@ class _OnboardingPageState extends State<OnboardingPage> {
       'emoji': '🛍️',
       'title': "I'm looking to buy",
       'subtitle': 'Discover great deals on textbooks, electronics, & dorm items',
+    },
+    {
+      'id': 'rent',
+      'emoji': '🔑',
+      'title': 'I want to rent items',
+      'subtitle': 'Short-term & semester rentals for gadgets, tools & books',
     },
     {
       'id': 'sell',
@@ -40,16 +47,57 @@ class _OnboardingPageState extends State<OnboardingPage> {
 
   final List<Map<String, String>> _categories = [
     {'name': 'Electronics & Gadgets', 'icon': '📱'},
-    {'name': 'Textbooks & Books', 'icon': '📚'},
-    {'name': 'Fashion & Apparel', 'icon': '👕'},
-    {'name': 'Furniture & Dorm', 'icon': '🛋️'},
-    {'name': 'Sports & Outdoor', 'icon': '🏀'},
-    {'name': 'Stationery & Art', 'icon': '✏️'},
-    {'name': 'Games & Consoles', 'icon': '🎮'},
-    {'name': 'FCI Special', 'icon': '🏛️'},
-    {'name': 'Year 1 Essentials', 'icon': '🎓'},
-    {'name': 'Transport & Bikes', 'icon': '🛵'},
+    {'name': 'Books & Study Materials', 'icon': '📚'},
+    {'name': 'Fashion & Accessories', 'icon': '👕'},
+    {'name': 'Furniture & Appliances', 'icon': '🛋️'},
+    {'name': 'Sports', 'icon': '🏀'},
+    {'name': 'Stationery', 'icon': '✏️'},
+    {'name': 'Others', 'icon': '📦'},
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchOnboardingOptions();
+  }
+
+  Future<void> _fetchOnboardingOptions() async {
+    try {
+      final response = await ApiClient().get('/onboarding/options');
+      if (mounted && response != null) {
+        if (response['intents'] != null) {
+          final List dynamicIntents = response['intents'];
+          _intents.clear();
+          for (var item in dynamicIntents) {
+            _intents.add({
+              'id': item['id'].toString(),
+              'emoji': item['emoji'].toString(),
+              'title': item['title'].toString(),
+              'subtitle': item['subtitle'].toString(),
+            });
+          }
+        }
+        if (response['categories'] != null) {
+          final List dynamicCats = response['categories'];
+          _categories.clear();
+          for (var item in dynamicCats) {
+            _categories.add({
+              'name': item['name'].toString(),
+              'icon': item['icon']?.toString() ?? '🏷️',
+            });
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint("Using default onboarding options fallback: $e");
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingOptions = false;
+        });
+      }
+    }
+  }
 
   Future<void> _submitOnboarding() async {
     if (_selectedTags.length < 3) return;
@@ -59,7 +107,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
     });
 
     try {
-      final response = await ApiClient().post('/auth/onboarding', {
+      final response = await ApiClient().post('/onboarding/preferences', {
         'primary_intent': _selectedIntent,
         'preference_tags': _selectedTags,
       });
@@ -117,6 +165,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
               ),
               child: const Icon(Icons.swap_horiz_rounded, color: Color(0xFF005A43), size: 24),
             ),
+            const SizedBox(width: 10),
             Flexible(
               child: Text(
                 "Campus Swap",
@@ -133,81 +182,83 @@ class _OnboardingPageState extends State<OnboardingPage> {
         ),
       ),
       body: SafeArea(
-        child: Column(
-          children: [
-            // Progress Bar
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-              child: LinearProgressIndicator(
-                value: _currentStep / 2.0,
-                backgroundColor: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
-                color: const Color(0xFF005A43),
-                borderRadius: BorderRadius.circular(10),
-                minHeight: 6,
-              ),
-            ),
+        child: _isLoadingOptions
+            ? const Center(child: CircularProgressIndicator(color: Color(0xFF005A43)))
+            : Column(
+                children: [
+                  // Progress Bar
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                    child: LinearProgressIndicator(
+                      value: _currentStep / 2.0,
+                      backgroundColor: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
+                      color: const Color(0xFF005A43),
+                      borderRadius: BorderRadius.circular(10),
+                      minHeight: 6,
+                    ),
+                  ),
 
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
-                child: _currentStep == 1 ? _buildStep1Intent(isDark) : _buildStep2Preferences(isDark),
-              ),
-            ),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(24),
+                      child: _currentStep == 1 ? _buildStep1Intent(isDark) : _buildStep2Preferences(isDark),
+                    ),
+                  ),
 
-            // Bottom Action Bar
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-                boxShadow: [
-                  BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, -4)),
+                  // Bottom Action Bar
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+                      boxShadow: [
+                        BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, -4)),
+                      ],
+                    ),
+                    child: SafeArea(
+                      child: _currentStep == 1
+                          ? ElevatedButton(
+                              onPressed: () {
+                                setState(() {
+                                  _currentStep = 2;
+                                });
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF005A43),
+                                foregroundColor: Colors.white,
+                                minimumSize: const Size(double.infinity, 52),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                elevation: 2,
+                              ),
+                              child: Text(
+                                "Next: Select Interests",
+                                style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold),
+                              ),
+                            )
+                          : ElevatedButton(
+                              onPressed: (_selectedTags.length >= 3 && !_isSubmitting) ? _submitOnboarding : null,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF005A43),
+                                disabledBackgroundColor: isDark ? Colors.grey.shade800 : Colors.grey.shade300,
+                                foregroundColor: Colors.white,
+                                minimumSize: const Size(double.infinity, 52),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                elevation: _selectedTags.length >= 3 ? 2 : 0,
+                              ),
+                              child: _isSubmitting
+                                  ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
+                                  : Text(
+                                      _selectedTags.length >= 3 ? "Complete & Start Swapping" : "Select at least 3 categories",
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                        color: _selectedTags.length >= 3 ? Colors.white : Colors.grey.shade500,
+                                      ),
+                                    ),
+                            ),
+                    ),
+                  ),
                 ],
               ),
-              child: SafeArea(
-                child: _currentStep == 1
-                    ? ElevatedButton(
-                        onPressed: () {
-                          setState(() {
-                            _currentStep = 2;
-                          });
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF005A43),
-                          foregroundColor: Colors.white,
-                          minimumSize: const Size(double.infinity, 52),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                          elevation: 2,
-                        ),
-                        child: Text(
-                          "Next: Select Interests",
-                          style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold),
-                        ),
-                      )
-                    : ElevatedButton(
-                        onPressed: (_selectedTags.length >= 3 && !_isSubmitting) ? _submitOnboarding : null,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF005A43),
-                          disabledBackgroundColor: isDark ? Colors.grey.shade800 : Colors.grey.shade300,
-                          foregroundColor: Colors.white,
-                          minimumSize: const Size(double.infinity, 52),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                          elevation: _selectedTags.length >= 3 ? 2 : 0,
-                        ),
-                        child: _isSubmitting
-                            ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
-                            : Text(
-                                _selectedTags.length >= 3 ? "Complete & Start Swapping" : "Select at least 3 categories",
-                                style: GoogleFonts.outfit(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: _selectedTags.length >= 3 ? Colors.white : Colors.grey.shade500,
-                                ),
-                              ),
-                      ),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

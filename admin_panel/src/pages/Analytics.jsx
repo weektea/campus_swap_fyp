@@ -32,11 +32,12 @@ const Analytics = () => {
     const fetchMetrics = async (selectedRange) => {
         setLoading(true);
         try {
-            const [metricsRes, analyticsRes] = await Promise.all([
+            const [metricsRes, analyticsRes, onboardingRes] = await Promise.all([
                 api.get(`/admin/metrics?range=${selectedRange}`),
-                api.get('/admin/analytics')
+                api.get('/admin/analytics'),
+                api.get('/admin/analytics/onboarding').catch(() => ({ data: {} }))
             ]);
-            setMetrics({ ...metricsRes.data, ...analyticsRes.data });
+            setMetrics({ ...metricsRes.data, ...analyticsRes.data, onboarding: onboardingRes.data });
         } catch (err) {
             console.error('Failed to fetch metrics', err);
         } finally {
@@ -595,6 +596,64 @@ const Analytics = () => {
                                 ))}
                             </tbody>
                         </table>
+                    </div>
+                </div>
+            </div>
+
+            {/* ONBOARDING & EXPLICIT INTEREST ANALYTICS */}
+            <div className="print-domain-section mb-8">
+                <h2 className="print-domain-title" style={{ fontSize: '1.2rem', margin: '0 0 1rem 0', display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--primary)', borderBottom: '2px solid var(--border)', paddingBottom: '8px' }}>
+                    <Users size={20} />
+                    <span>Onboarding & Explicit Preference Elicitation</span>
+                </h2>
+                <div className="dashboard-grid-2 mb-6" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+                    {/* Doughnut Chart: Student Intent Distribution */}
+                    <div className="card flex-col" style={{ height: '320px' }}>
+                        <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '0.95rem', fontWeight: 'bold' }}>Student Platform Intent Distribution</h3>
+                        <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>Primary goal selected during 1st-time user onboarding</p>
+                        <div style={{ flex: 1, width: '100%' }}>
+                            <ResponsiveContainer width="100%" height={210}>
+                                <PieChart>
+                                    <Pie
+                                        data={metrics?.onboarding?.intent_distribution || [
+                                            { name: 'Buy', count: 0 },
+                                            { name: 'Rent', count: 0 },
+                                            { name: 'Sell', count: 0 },
+                                            { name: 'Browse', count: 0 }
+                                        ]}
+                                        cx="50%"
+                                        cy="50%"
+                                        innerRadius={45}
+                                        outerRadius={75}
+                                        paddingAngle={5}
+                                        dataKey="count"
+                                    >
+                                        {(metrics?.onboarding?.intent_distribution || []).map((entry, index) => (
+                                            <Cell key={`intent-cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                        ))}
+                                    </Pie>
+                                    <Tooltip formatter={(value, name) => [`${value} students`, name]} />
+                                    <Legend iconType="circle" wrapperStyle={{ fontSize: '11px' }} />
+                                </PieChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+
+                    {/* Bar Chart: Top Selected Interest Categories */}
+                    <div className="card flex-col" style={{ height: '320px' }}>
+                        <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '0.95rem', fontWeight: 'bold' }}>Top Onboarding Interest Categories</h3>
+                        <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>Used by ML Cold-Start engine for Day 1 personalization</p>
+                        <div style={{ flex: 1, width: '100%' }}>
+                            <ResponsiveContainer width="100%" height={210}>
+                                <BarChart data={(metrics?.onboarding?.top_categories || []).slice(0, 6)} layout="vertical">
+                                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e5e7eb" />
+                                    <XAxis type="number" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#6b7280' }} />
+                                    <YAxis dataKey="name" type="category" width={110} axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#6b7280' }} />
+                                    <Tooltip formatter={(value) => [`${value} selections`, 'Popularity']} />
+                                    <Bar dataKey="count" fill="#0d503c" radius={[0, 6, 6, 0]} barSize={16} />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
                     </div>
                 </div>
             </div>

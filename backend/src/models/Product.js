@@ -64,12 +64,28 @@ const Product = sequelize.define('Product', {
         type: DataTypes.ENUM('Sale', 'Rent'),
         defaultValue: 'Sale',
     },
+    rental_unit: {
+        type: DataTypes.ENUM('Hour', 'Day', 'Month', 'Semester'),
+        defaultValue: 'Day',
+    },
+    rental_price_per_hour: {
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: true,
+    },
     rental_price_per_day: {
         type: DataTypes.DECIMAL(10, 2),
         allowNull: true,
     },
+    rental_price_per_month: {
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: true,
+    },
+    rental_price_per_semester: {
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: true,
+    },
     max_rental_duration: {
-        type: DataTypes.INTEGER, // in days
+        type: DataTypes.INTEGER, // in days or hours based on rental_unit
         allowNull: true,
     },
     rental_deposit: {

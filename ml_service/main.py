@@ -324,11 +324,16 @@ class PriceSuggestMLRequest(BaseModel):
     months_used: float
     condition: str
     subcategory_id: Optional[str] = None
+    listing_type: Optional[str] = 'Sale'
 
 class PriceSuggestMLResponse(BaseModel):
     suggested_price: float
     min_price: float
     max_price: float
+    suggested_rental_price: Optional[float] = None
+    min_rental_price: Optional[float] = None
+    max_rental_price: Optional[float] = None
+    suggested_deposit: Optional[float] = None
     note: str
 
 def get_db_connection():
@@ -432,10 +437,20 @@ async def suggest_price(req: PriceSuggestMLRequest):
     min_price = max(1.0, round(suggested * 0.90, 2))
     max_price = max(1.0, round(suggested * 1.10, 2))
 
+    # Rental & Deposit Calculations (1% - 2.5% daily rental rate, 30% deposit)
+    suggested_rental = max(1.0, round(suggested * 0.015, 2))
+    min_rental = max(1.0, round(suggested * 0.010, 2))
+    max_rental = max(1.0, round(suggested * 0.025, 2))
+    suggested_deposit = max(5.0, round(suggested * 0.30, 2))
+
     return {
         "suggested_price": suggested,
         "min_price": min_price,
         "max_price": max_price,
+        "suggested_rental_price": suggested_rental,
+        "min_rental_price": min_rental,
+        "max_rental_price": max_rental,
+        "suggested_deposit": suggested_deposit,
         "note": note
     }
 
@@ -724,6 +739,29 @@ class HybridRecommendRequest(BaseModel):
     preference_tags: Optional[List[str]] = None
     primary_intent: Optional[str] = None
 
+class UserPreferenceSyncRequest(BaseModel):
+    user_id: str
+    primary_intent: str
+    preference_tags: List[str]
+
+user_preferences_cache: Dict[str, dict] = {}
+
+@app.post("/api/user/sync-preferences")
+async def sync_user_preferences(req: UserPreferenceSyncRequest):
+    """
+    Syncs and caches first-time user onboarding explicit preferences for Cold-Start ML vectorization.
+    """
+    user_preferences_cache[req.user_id] = {
+        "primary_intent": req.primary_intent,
+        "preference_tags": req.preference_tags,
+        "synced_at": time.time()
+    }
+    return {
+        "message": "User onboarding preferences synced successfully",
+        "user_id": req.user_id,
+        "cached_tags_count": len(req.preference_tags)
+    }
+
 class HybridRecommendResponse(BaseModel):
     recommended_product_ids: List[str]
 
@@ -735,13 +773,14 @@ async def get_hybrid_recommendations(req: HybridRecommendRequest):
     Deep Learning models (Wide & Deep, NCF) are bypassed in this MVP version to mitigate the Cold Start problem 
     and data sparsity inherent in new campus platforms, favoring this Hybrid TF-IDF + KNN approach for better initial accuracy.
     """
-    # Justification Note: Deep Learning models (Wide & Deep, NCF) are bypassed in this MVP version to mitigate 
-    # the Cold Start problem and data sparsity inherent in new campus platforms, favoring this Hybrid TF-IDF + KNN 
-    # approach for better initial accuracy.
     user_id = req.user_id
     interactions_data = [i.dict() for i in req.interactions]
     products_data = [p.dict() for p in req.products]
     user_pref_tags = req.preference_tags or []
+
+    # Fallback to cached preferences if not provided in payload
+    if not user_pref_tags and user_id in user_preferences_cache:
+        user_pref_tags = user_preferences_cache[user_id].get("preference_tags", [])
     
     product_ids = [p['id'] for p in products_data]
     if not product_ids:

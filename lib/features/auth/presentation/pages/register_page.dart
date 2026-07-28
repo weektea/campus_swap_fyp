@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:campus_swap/core/api/api_client.dart';
 import 'package:campus_swap/features/auth/presentation/pages/otp_verification_page.dart';
+import 'package:campus_swap/features/profile/presentation/pages/terms_guidelines_page.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -24,6 +26,7 @@ class _RegisterPageState extends State<RegisterPage> {
   bool _isLoading = false;
   bool _isPasswordVisible = false;
   bool _isConfirmPasswordVisible = false;
+  bool _agreedToTerms = false;
 
   Timer? _usernameDebounce;
   bool _isCheckingUsername = false;
@@ -124,17 +127,6 @@ class _RegisterPageState extends State<RegisterPage> {
     );
   }
 
-  void _showSuccessSnackBar(BuildContext context, String message) {
-    final theme = Theme.of(context);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: theme.colorScheme.primary,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
-
   String _getFriendlyErrorMessage(dynamic e) {
     final message = e.toString();
     if (message.contains('SocketException') || message.contains('Connection error') || message.contains('Failed host lookup')) {
@@ -147,6 +139,10 @@ class _RegisterPageState extends State<RegisterPage> {
   }
 
   Future<void> _register() async {
+    if (!_agreedToTerms) {
+      _showErrorSnackBar(context, 'Please read and agree to the Terms & Policy to register.');
+      return;
+    }
     if (_formKey.currentState!.validate()) {
       if (_passwordController.text != _confirmPasswordController.text) {
         _showErrorSnackBar(context, 'Passwords do not match');
@@ -396,7 +392,56 @@ class _RegisterPageState extends State<RegisterPage> {
                   ),
                 ),
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  SizedBox(
+                    height: 22,
+                    width: 22,
+                    child: Checkbox(
+                      value: _agreedToTerms,
+                      activeColor: Theme.of(context).colorScheme.primary,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      onChanged: (value) {
+                        setState(() {
+                          _agreedToTerms = value ?? false;
+                        });
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const TermsGuidelinesPage()),
+                        );
+                      },
+                      child: RichText(
+                        text: TextSpan(
+                          style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey[700]),
+                          children: [
+                            const TextSpan(text: 'I have read & agree to the '),
+                            TextSpan(
+                              text: 'Terms & Conditions',
+                              style: GoogleFonts.outfit(
+                                fontSize: 12,
+                                color: Theme.of(context).colorScheme.primary,
+                                fontWeight: FontWeight.bold,
+                                decoration: TextDecoration.underline,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(

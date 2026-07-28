@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:campus_swap/core/api/api_client.dart';
 import 'package:campus_swap/core/session/user_session.dart';
 import 'package:campus_swap/core/services/socket_service.dart';
@@ -264,6 +265,72 @@ class _CustomerSupportChatPageState extends State<CustomerSupportChatPage> {
           _scrollToBottom();
         }
       }
+    }
+  }
+
+  Future<void> _pickAndUploadAttachment() async {
+    if (_ticketId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please send your question first to connect with support.')),
+      );
+      return;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_library, color: Color(0xFF006940)),
+              title: Text('Choose Photo from Gallery', style: GoogleFonts.outfit()),
+              onTap: () {
+                Navigator.pop(ctx);
+                _uploadAttachment(ImageSource.gallery);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.camera_alt, color: Color(0xFF006940)),
+              title: Text('Take Photo with Camera', style: GoogleFonts.outfit()),
+              onTap: () {
+                Navigator.pop(ctx);
+                _uploadAttachment(ImageSource.camera);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _uploadAttachment(ImageSource source) async {
+    final ImagePicker picker = ImagePicker();
+    final XFile? file = await picker.pickImage(source: source);
+    if (file == null) return;
+
+    setState(() => _isSending = true);
+    try {
+      final uploadRes = await _apiClient.postMultipart('/upload', file);
+      final attachmentUrl = uploadRes['url'];
+
+      await _apiClient.post('/tickets/thread/$_ticketId', {
+        'reference_type': 'SupportTicket',
+        'content': '[Attachment]',
+        'attachment_url': attachmentUrl,
+      });
+
+      await _fetchMessagesSilently();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Upload failed: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSending = false);
     }
   }
 
@@ -595,6 +662,10 @@ class _CustomerSupportChatPageState extends State<CustomerSupportChatPage> {
                   child: SafeArea(
                     child: Row(
                       children: [
+                        IconButton(
+                          icon: const Icon(Icons.attach_file, color: Colors.grey),
+                          onPressed: _pickAndUploadAttachment,
+                        ),
                         Expanded(
                           child: TextField(
                             controller: _msgController,

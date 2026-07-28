@@ -358,6 +358,16 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
                                 Text(_transaction['selected_payment_method'] ?? 'Cash', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Colors.teal)),
                             ],
                         ),
+                        if (_transaction['rental_start_date'] != null || _transaction['product']?['type'] == 'Rent') ...[
+                            const SizedBox(height: 8),
+                            Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                    Text('Deposit Status:', style: GoogleFonts.outfit(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                                    _buildDepositBadge(_transaction['deposit_status']?.toString() ?? 'Held'),
+                                ],
+                            ),
+                        ],
                         const Divider(height: 24),
                         Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -492,9 +502,9 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
                                     Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                         decoration: BoxDecoration(
-                                            color: Colors.orange.withOpacity(0.1),
+                                            color: Colors.orange.withValues(alpha: 0.1),
                                             borderRadius: BorderRadius.circular(4),
-                                            border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                                            border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
                                         ),
                                         child: Text(
                                             'Offer Price',
@@ -722,7 +732,7 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
                               border: Border.all(color: Colors.amber.withValues(alpha: 0.2)),
                           ),
                           child: Text(
-                              'Item is currently rented. Once the buyer has safely returned the item, click "Confirm Safe Return" to release the security deposit and complete the transaction.', 
+                              'Item is currently rented. Once the buyer has safely returned the item, confirm item return to release/refund the security deposit.', 
                               style: GoogleFonts.outfit(color: Colors.amber[800])
                           ),
                       ),
@@ -730,13 +740,14 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
                       SizedBox(
                           width: double.infinity,
                           height: 48,
-                          child: ElevatedButton(
-                              onPressed: () => _updateStatus('Completed'),
+                          child: ElevatedButton.icon(
+                              onPressed: _confirmReturnRentalAndRefundDeposit,
+                              icon: const Icon(Icons.check_circle_outline, color: Colors.white),
                               style: ElevatedButton.styleFrom(
                                   backgroundColor: Theme.of(context).colorScheme.primary,
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                               ),
-                              child: Text('Confirm Safe Return & Complete', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
+                              label: Text('Confirm Item Return & Refund Deposit', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
                           ),
                       ),
                       const SizedBox(height: 12),
@@ -744,19 +755,9 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
                           width: double.infinity,
                           height: 48,
                           child: OutlinedButton.icon(
-                              onPressed: () async {
-                                  final result = await Navigator.push(context, MaterialPageRoute(
-                                      builder: (_) => OpenDisputePage(
-                                          transaction: _transaction,
-                                          prefilledCategory: 'Rental Damage',
-                                      )
-                                  ));
-                                  if (result == true) {
-                                      _fetchTransactionDetails();
-                                  }
-                              },
+                              onPressed: _confirmClaimRentalDeposit,
                               icon: const Icon(Icons.broken_image_outlined, color: Colors.red),
-                              label: Text('Report Damage (Open Dispute)', style: GoogleFonts.outfit(color: Colors.red, fontWeight: FontWeight.bold)),
+                              label: Text('Report Damage & Claim Deposit', style: GoogleFonts.outfit(color: Colors.red, fontWeight: FontWeight.bold)),
                               style: OutlinedButton.styleFrom(
                                   side: const BorderSide(color: Colors.red),
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -1141,5 +1142,137 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
       }
 
       return const SizedBox.shrink();
+  }
+
+  Widget _buildDepositBadge(String status) {
+    Color bg = Colors.amber.withValues(alpha: 0.1);
+    Color fg = Colors.amber[900]!;
+    String text = 'Held';
+
+    if (status == 'Waived') {
+      bg = Colors.blue.withValues(alpha: 0.1);
+      fg = Colors.blue[800]!;
+      text = 'Waived (High Trust)';
+    } else if (status == 'Refunded') {
+      bg = Colors.green.withValues(alpha: 0.1);
+      fg = Colors.green[800]!;
+      text = 'Refunded';
+    } else if (status == 'Claimed_Forfeited') {
+      bg = Colors.red.withValues(alpha: 0.1);
+      fg = Colors.red[800]!;
+      text = 'Claimed / Forfeited';
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(6)),
+      child: Text(text, style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.bold, color: fg)),
+    );
+  }
+
+  Future<void> _confirmReturnRentalAndRefundDeposit() async {
+    final bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Confirm Return & Refund Deposit', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+        content: Text(
+          'Are you sure the rental item has been returned safely and in good condition? This will mark deposit as Refunded and complete the order.',
+          style: GoogleFonts.outfit(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Cancel', style: GoogleFonts.outfit(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.primary),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('Confirm Return', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        final apiClient = ApiClient();
+        await apiClient.post('/transactions/${widget.transactionId}/return-rental', {});
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Rental item marked as returned! Deposit status: Refunded.', style: GoogleFonts.outfit()),
+            backgroundColor: Colors.green,
+          ));
+          _fetchTransactionDetails();
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Failed to process return: $e'),
+            backgroundColor: Colors.red,
+          ));
+        }
+      }
+    }
+  }
+
+  Future<void> _confirmClaimRentalDeposit() async {
+    final TextEditingController reasonController = TextEditingController();
+    final bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Report Damage & Claim Deposit', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Describe the damage or reason for claiming the security deposit:', style: GoogleFonts.outfit(fontSize: 13)),
+            const SizedBox(height: 12),
+            TextField(
+              controller: reasonController,
+              maxLines: 3,
+              decoration: InputDecoration(
+                hintText: 'e.g. Item returned damaged or unreturned...',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              style: GoogleFonts.outfit(fontSize: 14),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Cancel', style: GoogleFonts.outfit(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('Claim Deposit', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        final apiClient = ApiClient();
+        await apiClient.post('/transactions/${widget.transactionId}/claim-deposit', {
+          'reason': reasonController.text.trim(),
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Deposit claim recorded and dispute initiated for moderator review.', style: GoogleFonts.outfit()),
+            backgroundColor: Colors.amber[900],
+          ));
+          _fetchTransactionDetails();
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Failed to claim deposit: $e'),
+            backgroundColor: Colors.red,
+          ));
+        }
+      }
+    }
   }
 }

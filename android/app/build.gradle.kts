@@ -47,3 +47,14 @@ dependencies {
 flutter {
     source = "../.."
 }
+
+val adbReverseTask = tasks.register<Exec>("adbReverse") {
+    commandLine("adb", "reverse", "tcp:3000", "tcp:3000")
+    isIgnoreExitValue = true
+}
+
+tasks.matching { 
+    it.name.startsWith("compileFlutter") || it.name.startsWith("install") || it.name.startsWith("assemble") 
+}.configureEach {
+    dependsOn(adbReverseTask)
+}

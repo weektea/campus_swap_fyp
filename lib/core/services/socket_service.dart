@@ -49,7 +49,20 @@ class SocketService {
       // Real-time Chat message instant system pop-up notification
       socket?.on('receive_new_message', (data) {
         if (data != null) {
+          final currentUserId = session.userId;
           final senderId = data['sender_id']?.toString() ?? data['sender']?['id']?.toString() ?? '';
+          final receiverId = data['receiver_id']?.toString();
+
+          // 1. Do NOT pop up a toast notification for messages sent by the user themselves
+          if (senderId.isNotEmpty && senderId == currentUserId) {
+            return;
+          }
+
+          // 2. Privacy & Isolation check: If message targets a specific receiver, ignore if it doesn't match current user
+          if (receiverId != null && receiverId.isNotEmpty && receiverId != currentUserId) {
+            return;
+          }
+
           final senderName = data['sender']?['full_name'] ?? data['sender']?['username'] ?? 'Chat Partner';
           final content = data['content']?.toString() ?? 'New message received';
           final avatar = data['sender']?['profile_image_url']?.toString() ?? '';

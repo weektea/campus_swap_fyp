@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:table_calendar/table_calendar.dart';
 import 'package:campus_swap/core/api/api_client.dart';
 import 'package:campus_swap/core/session/user_session.dart';
 import 'package:campus_swap/features/home/domain/entities/product.dart';
@@ -118,33 +119,196 @@ class _CheckoutPageState extends State<CheckoutPage> {
   }
 
   Future<void> _pickDateRange() async {
-    final picked = await showDateRangePicker(
-      context: context,
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
-      builder: (context, child) => Theme(
-        data: Theme.of(context).copyWith(
-          colorScheme: Theme.of(context).colorScheme,
-        ),
-        child: child!,
-      ),
-    );
-    if (picked != null) {
-      final days = picked.end.difference(picked.start).inDays + 1;
-      if (widget.product.maxRentalDuration > 0 && days > widget.product.maxRentalDuration) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Max rental is ${widget.product.maxRentalDuration} days'),
-            backgroundColor: Colors.red,
-          ));
+    // 1. Fetch booked dates from backend
+    List<DateTimeRange> bookedRanges = [];
+    try {
+      final apiClient = ApiClient();
+      final res = await apiClient.get('/transactions/product/${widget.product.id}/booked-dates');
+      if (res is List) {
+        for (var item in res) {
+          if (item['rental_start_date'] != null && item['rental_end_date'] != null) {
+            DateTime start = DateTime.parse(item['rental_start_date'].toString());
+            DateTime end = DateTime.parse(item['rental_end_date'].toString());
+            bookedRanges.add(DateTimeRange(start: DateTime(start.year, start.month, start.day), end: DateTime(end.year, end.month, end.day)));
+          }
         }
-        return;
       }
-      setState(() {
-        _rentStartDate = picked.start;
-        _rentEndDate = picked.end;
-      });
+    } catch (e) {
+      debugPrint('Failed to fetch booked dates: $e');
     }
+
+    if (!mounted) return;
+
+    // Helper to check if a day is booked
+    bool isDayBooked(DateTime day) {
+      final target = DateTime(day.year, day.month, day.day);
+      final today = DateTime.now();
+      final todayTrunc = DateTime(today.year, today.month, today.day);
+      if (target.isBefore(todayTrunc)) return true; // Disable past dates
+
+      for (var range in bookedRanges) {
+        if (!target.isBefore(range.start) && !target.isAfter(range.end)) {
+          return true; // Booked!
+        }
+      }
+      return false;
+    }
+
+    // 2. Open interactive TableCalendar Modal Bottom Sheet
+    DateTime focusedDay = _rentStartDate ?? DateTime.now();
+    DateTime? rangeStart = _rentStartDate;
+    DateTime? rangeEnd = _rentEndDate;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Interactive Booking Calendar',
+                        style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
+                  ),
+                  Row(
+                    children: [
+                      Container(
+                        width: 10, height: 10,
+                        decoration: const BoxDecoration(color: Colors.redAccent, shape: BoxShape.circle),
+                      ),
+                      const SizedBox(width: 6),
+                      Text('Booked / Unavailable', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey[600])),
+                      const SizedBox(width: 16),
+                      Container(
+                        width: 10, height: 10,
+                        decoration: BoxDecoration(color: Theme.of(context).colorScheme.primary, shape: BoxShape.circle),
+                      ),
+                      const SizedBox(width: 6),
+                      Text('Selected Range', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey[600])),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  TableCalendar(
+                    firstDay: DateTime.now(),
+                    lastDay: DateTime.now().add(const Duration(days: 365)),
+                    focusedDay: focusedDay,
+                    rangeSelectionMode: RangeSelectionMode.toggledOn,
+                    rangeStartDay: rangeStart,
+                    rangeEndDay: rangeEnd,
+                    enabledDayPredicate: (day) => !isDayBooked(day),
+                    headerStyle: HeaderStyle(
+                      formatButtonVisible: false,
+                      titleCentered: true,
+                      titleTextStyle: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 16),
+                    ),
+                    calendarStyle: CalendarStyle(
+                      disabledTextStyle: const TextStyle(color: Colors.redAccent, decoration: TextDecoration.lineThrough),
+                      todayDecoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
+                        shape: BoxShape.circle,
+                      ),
+                      rangeStartDecoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.primary,
+                        shape: BoxShape.circle,
+                      ),
+                      rangeEndDecoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.primary,
+                        shape: BoxShape.circle,
+                      ),
+                      rangeHighlightColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
+                    ),
+                    onRangeSelected: (start, end, focused) {
+                      setModalState(() {
+                        focusedDay = focused;
+                        rangeStart = start;
+                        rangeEnd = end;
+                      });
+
+                      if (start != null && end != null) {
+                        // Check if range contains any booked days
+                        bool hasOverlap = false;
+                        DateTime cur = start;
+                        while (!cur.isAfter(end)) {
+                          if (isDayBooked(cur)) {
+                            hasOverlap = true;
+                            break;
+                          }
+                          cur = cur.add(const Duration(days: 1));
+                        }
+
+                        if (hasOverlap) {
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                            content: Text('Selected range overlaps with a booked date. Please select an available range.'),
+                            backgroundColor: Colors.red,
+                          ));
+                          setModalState(() {
+                            rangeStart = null;
+                            rangeEnd = null;
+                          });
+                          return;
+                        }
+
+                        final days = end.difference(start).inDays + 1;
+                        if (widget.product.maxRentalDuration > 0 && days > widget.product.maxRentalDuration) {
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                            content: Text('Exceeds maximum rental duration of ${widget.product.maxRentalDuration} days.'),
+                            backgroundColor: Colors.red,
+                          ));
+                          setModalState(() {
+                            rangeStart = null;
+                            rangeEnd = null;
+                          });
+                        }
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Theme.of(context).colorScheme.primary,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onPressed: (rangeStart != null && rangeEnd != null) ? () {
+                        setState(() {
+                          _rentStartDate = rangeStart;
+                          _rentEndDate = rangeEnd;
+                        });
+                        Navigator.pop(context);
+                      } : null,
+                      child: Text(
+                        (rangeStart != null && rangeEnd != null)
+                            ? 'Confirm Selected Dates (${rangeEnd!.difference(rangeStart!).inDays + 1} Days)'
+                            : 'Select Start & End Dates',
+                        style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   Future<void> _confirmOrder() async {

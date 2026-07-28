@@ -102,6 +102,14 @@ const Transaction = sequelize.define('Transaction', {
         type: DataTypes.UUID,
         allowNull: true,
     },
+    deposit_amount: {
+        type: DataTypes.DECIMAL(10, 2),
+        defaultValue: 0.00,
+    },
+    deposit_status: {
+        type: DataTypes.ENUM('Waived', 'Held', 'Refunded', 'Claimed_Forfeited'),
+        defaultValue: 'Held',
+    },
     cancelled_by_id: {
         type: DataTypes.UUID,
         allowNull: true,

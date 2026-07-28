@@ -17,6 +17,7 @@ const Reports = () => {
     const [privateTranscript, setPrivateTranscript] = useState(null);
     const [loadingTranscript, setLoadingTranscript] = useState(false);
     const [showTranscriptModal, setShowTranscriptModal] = useState(false);
+    const [showInspectModal, setShowInspectModal] = useState(false);
 
     const fetchPrivateTranscript = async () => {
         const reporterId = selectedReport?.raw?.reporter_id;
@@ -94,6 +95,7 @@ const Reports = () => {
                     setActiveTab('Pending');
                 }
             }
+            return data;
         } catch (err) {
             console.error('Failed to fetch reports', err);
         } finally {
@@ -104,14 +106,31 @@ const Reports = () => {
     const handleSubmitAction = async () => {
         if (!selectedReport) return;
         try {
-            await api.put(`/admin/reports/${selectedReport.realId}`, {
+            const res = await api.put(`/admin/reports/${selectedReport.realId}`, {
                 status: action,
                 admin_notes: modNotes
             });
-            alert('Action applied successfully!');
+
+            if (action === 'Uphold') {
+                const prodTitle = selectedReport.raw.product?.title || 'item';
+                alert(`✅ ACTION EXECUTED!\n\n1. Report status set to UPHELD.\n2. Listing "${prodTitle}" HAS BEEN DIRECTLY SUSPENDED & HIDDEN FROM MARKETPLACE.\n3. Active orders holding this item have been automatically cancelled.`);
+            } else if (action === 'Escalated') {
+                alert('⚠️ Report escalated to Administrator.');
+            } else {
+                alert('ℹ️ Report dismissed.');
+            }
+
             setModNotes('');
-            setSelectedReport(null);
-            fetchReports();
+            const currentRealId = selectedReport.realId;
+            const updatedData = await fetchReports();
+            
+            // Re-select current report from newly fetched list so user sees updated status immediately
+            if (updatedData) {
+                const updatedReport = updatedData.find(r => r.realId === currentRealId);
+                if (updatedReport) {
+                    setSelectedReport(updatedReport);
+                }
+            }
         } catch (err) {
             alert(err.response?.data?.error || 'Failed to submit action');
         }
@@ -234,7 +253,7 @@ const Reports = () => {
                                             <button 
                                                 className="btn" 
                                                 style={{ padding: '6px 12px', fontSize: '0.8rem', background: 'var(--primary)', color: 'white', border: 'none' }}
-                                                onClick={() => navigate('/listings', { state: { selectedId: selectedReport.raw.product_id } })}
+                                                onClick={() => setShowInspectModal(true)}
                                             >
                                                 🔍 View Listing & Student Profile
                                             </button>
@@ -263,7 +282,7 @@ const Reports = () => {
                                             <button 
                                                 className="btn" 
                                                 style={{ padding: '6px 12px', fontSize: '0.8rem', background: '#0284c7', color: 'white', border: 'none', width: 'fit-content' }}
-                                                onClick={() => navigate('/users', { state: { selectedId: selectedReport.raw.reported_user_id } })}
+                                                onClick={() => navigate(`/users/${selectedReport.raw.reported_user_id}`, { state: { fromReportId: selectedReport.realId } })}
                                             >
                                                 🔍 View Student Details
                                             </button>
@@ -476,6 +495,130 @@ const Reports = () => {
                                     );
                                 })
                             )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Quick Inspection Modal for Reported Listing & Seller */}
+            {showInspectModal && selectedReport?.raw?.product && (
+                <div 
+                    onClick={() => setShowInspectModal(false)}
+                    style={{
+                        position: 'fixed',
+                        top: 0, left: 0, width: '100vw', height: '100vh',
+                        backgroundColor: 'rgba(15, 23, 42, 0.75)',
+                        backdropFilter: 'blur(6px)',
+                        zIndex: 9997,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        padding: '1.5rem'
+                    }}
+                >
+                    <div 
+                        className="card" 
+                        onClick={e => e.stopPropagation()}
+                        style={{ width: '750px', maxHeight: '85vh', overflowY: 'auto', background: 'white', padding: '2rem', borderRadius: '16px' }}
+                    >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)', paddingBottom: '1rem', marginBottom: '1.5rem' }}>
+                            <div>
+                                <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                    Report Ticket #{selectedReport.id} Inspection
+                                </span>
+                                <h2 style={{ margin: '4px 0 0 0', fontSize: '1.4rem' }}>{selectedReport.raw.product.title}</h2>
+                            </div>
+                            <button 
+                                className="btn"
+                                style={{ background: '#f3f4f6', color: '#374151', padding: '6px 16px', fontSize: '0.85rem', fontWeight: 'bold' }}
+                                onClick={() => setShowInspectModal(false)}
+                            >
+                                ✕ Return to Report Ticket
+                            </button>
+                        </div>
+
+                        {/* Product Gallery & Details */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
+                            <div>
+                                {selectedReport.raw.product.image_urls && selectedReport.raw.product.image_urls.length > 0 ? (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                        <img 
+                                            src={`${IMAGE_BASE_URL}${selectedReport.raw.product.image_urls[0]}`} 
+                                            alt="Product main" 
+                                            style={{ width: '100%', height: '220px', objectFit: 'cover', borderRadius: '12px', border: '1px solid var(--border)' }}
+                                        />
+                                        {selectedReport.raw.product.image_urls.length > 1 && (
+                                            <div style={{ display: 'flex', gap: '8px', overflowX: 'auto' }}>
+                                                {selectedReport.raw.product.image_urls.slice(1).map((img, i) => (
+                                                    <img key={i} src={`${IMAGE_BASE_URL}${img}`} alt="thumbnail" style={{ width: '60px', height: '60px', objectFit: 'cover', borderRadius: '8px', border: '1px solid var(--border)' }} />
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <div style={{ width: '100%', height: '200px', background: '#f8fafc', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8' }}>
+                                        No Image Uploaded
+                                    </div>
+                                )}
+                            </div>
+
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.9rem' }}>
+                                <div><strong>Price:</strong> RM {selectedReport.raw.product.price}</div>
+                                <div><strong>Listing Type:</strong> {selectedReport.raw.product.type || 'Sale'}</div>
+                                <div><strong>Condition:</strong> {selectedReport.raw.product.condition || 'N/A'}</div>
+                                <div><strong>Category:</strong> {selectedReport.raw.product.category || 'General'}</div>
+                                <div><strong>Status:</strong> <span style={{ padding: '2px 8px', borderRadius: '6px', background: '#f1f5f9', fontWeight: 'bold' }}>{selectedReport.raw.product.status}</span></div>
+                                <div style={{ marginTop: '8px' }}>
+                                    <strong>Description:</strong>
+                                    <div style={{ background: '#f8fafc', padding: '10px', borderRadius: '8px', marginTop: '4px', fontSize: '0.85rem', color: '#334155', maxHeight: '100px', overflowY: 'auto' }}>
+                                        {selectedReport.raw.product.description || 'No description provided.'}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Seller Information */}
+                        {selectedReport.raw.product.seller && (
+                            <div style={{ background: '#f8fafc', padding: '1.25rem', borderRadius: '12px', border: '1px solid var(--border)', marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <div>
+                                    <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase' }}>Seller Details</span>
+                                    <div style={{ fontWeight: 'bold', fontSize: '1.1rem', color: '#0f172a', marginTop: '2px' }}>
+                                        {selectedReport.raw.product.seller.full_name} (@{selectedReport.raw.product.seller.username})
+                                    </div>
+                                    <div style={{ fontSize: '0.85rem', color: '#475569', marginTop: '2px' }}>
+                                        Email: {selectedReport.raw.product.seller.email} | Reputation: ★ {parseFloat(selectedReport.raw.product.seller.reputation_score || 0).toFixed(1)}
+                                    </div>
+                                </div>
+                                <button 
+                                    className="btn btn-secondary"
+                                    onClick={() => {
+                                        setShowInspectModal(false);
+                                        navigate(`/users/${selectedReport.raw.product.seller_id}`, { state: { fromReportId: selectedReport.realId } });
+                                    }}
+                                    style={{ fontSize: '0.8rem', padding: '6px 12px' }}
+                                >
+                                    👤 View Full Student Details →
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Actions */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
+                            <button 
+                                className="btn btn-secondary"
+                                onClick={() => {
+                                    setShowInspectModal(false);
+                                    navigate('/listings', { state: { selectedId: selectedReport.raw.product_id, fromReportId: selectedReport.realId } });
+                                }}
+                                style={{ fontSize: '0.85rem' }}
+                            >
+                                📋 Open in Full Listings Page →
+                            </button>
+                            <button 
+                                className="btn btn-primary"
+                                onClick={() => setShowInspectModal(false)}
+                                style={{ fontSize: '0.85rem', background: 'var(--primary)' }}
+                            >
+                                ✕ Return to Report Ticket
+                            </button>
                         </div>
                     </div>
                 </div>
