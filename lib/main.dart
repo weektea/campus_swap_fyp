@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'core/services/notification_service.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/presentation/pages/login_page.dart';
@@ -13,6 +14,7 @@ import 'features/chat/presentation/pages/chat_detail_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  GoogleFonts.config.allowRuntimeFetching = true;
 
   // Load persistent theme preference (Dark/Light mode) and accessibility settings
   await ThemeProvider.instance.initFromStorage();

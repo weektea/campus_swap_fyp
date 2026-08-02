@@ -1,6 +1,7 @@
 import { Product, User, Report, Category, SubCategory, ActivityLog, SavedItem, Follow, Transaction } from '../models/index.js';
 import { createNotification } from './notificationController.js';
 import { Op } from 'sequelize';
+import sequelize from '../config/database.js';
 import fs from 'fs';
 import FormData from 'form-data';
 import axios from 'axios';
@@ -241,7 +242,28 @@ export const getAllProducts = async (req, res) => {
             order: order
         });
 
-        res.json(products);
+        // Enrich with favorite_count
+        const productIds = products.map(p => p.id);
+        const favoriteCounts = await SavedItem.findAll({
+            where: { product_id: { [Op.in]: productIds } },
+            attributes: ['product_id', [sequelize.fn('COUNT', sequelize.col('saved_item_id')), 'count']],
+            group: ['product_id'],
+            raw: true
+        });
+        const countMap = {};
+        favoriteCounts.forEach(fc => {
+            countMap[fc.product_id] = parseInt(fc.count, 10) || 0;
+        });
+
+        const enrichedProducts = products.map(p => {
+            const json = p.toJSON();
+            json.favorite_count = countMap[p.id] || 0;
+            json.save_count = countMap[p.id] || 0;
+            return json;
+        });
+
+        res.set('X-Total-Count', enrichedProducts.length);
+        res.json(enrichedProducts);
     } catch (error) {
         console.error('Get Products Error:', error);
         res.status(500).json({
@@ -503,6 +525,11 @@ export const getProductById = async (req, res) => {
                 prodObj.seller.reputation_level = "⛔ Poor Rating";
             }
         }
+        
+        const favCount = await SavedItem.count({ where: { product_id: id } });
+        prodObj.favorite_count = favCount;
+        prodObj.save_count = favCount;
+
         res.json(prodObj);
     } catch (error) {
         console.error('Get Product By Id Error:', error);

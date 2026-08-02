@@ -100,36 +100,51 @@ class ProductCard extends StatelessWidget {
                     ),
                   ),
 
-                  // Top Right Badge: Favorite Heart
+                  // Top Right Badge: Favorite Heart & Counter
                   Positioned(
                     top: 8,
                     right: 8,
-                      child: Container(
-                        width: 32,
-                        height: 32,
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF2C2C2C) : Colors.white,
-                          shape: BoxShape.circle,
-                          boxShadow: Theme.of(context).brightness == Brightness.dark 
-                              ? [] 
-                              : [
-                                  BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.1),
-                                    blurRadius: 4,
-                                    offset: const Offset(0, 2),
-                                  )
-                                ],
-                        ),
-                        child: IconButton(
-                          padding: EdgeInsets.zero,
-                          icon: Icon(
-                            isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded, 
-                            size: 18, 
-                            color: isFavorite ? Colors.red : (Theme.of(context).brightness == Brightness.dark ? Colors.white70 : const Color(0xFF1E293B))
-                          ),
-                          onPressed: onFavoriteToggle,
+                    child: Container(
+                      height: 32,
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF2C2C2C) : Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: Theme.of(context).brightness == Brightness.dark 
+                            ? [] 
+                            : [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.1),
+                                  blurRadius: 4,
+                                  offset: const Offset(0, 2),
+                                )
+                              ],
+                      ),
+                      child: InkWell(
+                        onTap: onFavoriteToggle,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded, 
+                              size: 16, 
+                              color: isFavorite ? Colors.red : (Theme.of(context).brightness == Brightness.dark ? Colors.white70 : const Color(0xFF1E293B))
+                            ),
+                            if (product.favoriteCount > 0) ...[
+                              const SizedBox(width: 4),
+                              Text(
+                                '${product.favoriteCount}',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: isFavorite ? Colors.red : (Theme.of(context).brightness == Brightness.dark ? Colors.white70 : const Color(0xFF1E293B)),
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                       ),
+                    ),
                   ),
                 ],
               ),

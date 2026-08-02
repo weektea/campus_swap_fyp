@@ -736,6 +736,7 @@ class HybridRecommendRequest(BaseModel):
     interactions: List[InteractionItem]
     products: List[ProductItem]
     followed_seller_ids: Optional[List[str]] = None
+    followed_interacted_product_ids: Optional[List[str]] = None
     preference_tags: Optional[List[str]] = None
     primary_intent: Optional[str] = None
 
@@ -887,17 +888,35 @@ async def get_hybrid_recommendations(req: HybridRecommendRequest):
         else:
             cf_scores = product_cf_raw
 
-    # 3. Hybrid Score Combination
-    # Combine content-based (0.7) and collaborative filtering (0.3)
-    final_scores = 0.7 * content_scores + 0.3 * cf_scores
+    # 3. Adaptive Hybrid Score Combination
+    # Solve Data Sparsity & Cold Start for new platform with small initial user base:
+    # If KNN cluster confidence is low (sum_similarities < 0.2) or user interactions are sparse,
+    # rely 100% on privatized Content-Based Filtering (CB = 1.0, CF = 0.0).
+    # Only shift to CF (CB = 0.75, CF = 0.25) when a confident cluster of similar users is detected.
+    if 'sum_similarities' in locals() and sum_similarities >= 0.2 and len(all_users) >= 5:
+        cb_weight = 0.75
+        cf_weight = 0.25
+    else:
+        cb_weight = 1.00
+        cf_weight = 0.00
+
+    final_scores = cb_weight * content_scores + cf_weight * cf_scores
     
-    # Follow Synergy Boost: increase final relevance by +20% (multiply by 1.2) if seller_id is followed
+    # 1. Followed Seller Boost: increase final relevance by +50% (1.5x multiplier) if seller is followed
     followed_sellers = set(req.followed_seller_ids or [])
     if followed_sellers:
         for idx, p in enumerate(products_data):
             seller_id = p.get('seller_id')
             if seller_id and seller_id in followed_sellers:
-                final_scores[idx] *= 1.20
+                final_scores[idx] *= 1.50
+
+    # 2. Social Collaborative Network Boost: increase relevance by +30% (1.3x multiplier) for items saved/messaged/bought by followed network (last 30 days)
+    followed_network_pids = set(req.followed_interacted_product_ids or [])
+    if followed_network_pids:
+        for idx, p in enumerate(products_data):
+            pid = p.get('id')
+            if pid and pid in followed_network_pids:
+                final_scores[idx] *= 1.30
 
     scored_products = list(zip(product_ids, final_scores))
     scored_products.sort(key=lambda x: x[1], reverse=True)

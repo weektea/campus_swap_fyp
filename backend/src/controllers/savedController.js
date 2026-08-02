@@ -19,13 +19,22 @@ export const toggleSave = async (req, res) => {
 
         const existing = await SavedItem.findOne({ where: { user_id, product_id } });
 
+        let isSaved = false;
         if (existing) {
             await existing.destroy();
-            return res.json({ message: 'Removed from saved items', isSaved: false });
+            isSaved = false;
         } else {
             await SavedItem.create({ user_id, product_id });
-            return res.json({ message: 'Added to saved items', isSaved: true });
+            isSaved = true;
         }
+
+        const favorite_count = await SavedItem.count({ where: { product_id } });
+        return res.json({
+            message: isSaved ? 'Added to saved items' : 'Removed from saved items',
+            isSaved,
+            favorite_count,
+            save_count: favorite_count
+        });
     } catch (error) {
         console.error('Toggle Save Error:', error);
         res.status(500).json({ error: 'Failed to toggle save' });

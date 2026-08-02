@@ -30,6 +30,7 @@ class ProductDetailsPage extends StatefulWidget {
 class _ProductDetailsPageState extends State<ProductDetailsPage> {
   bool _isSaved = false;
   bool _isBuying = false;
+  int _favoriteCount = 0;
   List<Product> _sellerProducts = [];
   List<Product> _similarProducts = [];
 
@@ -37,6 +38,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
   void initState() {
     super.initState();
     _isSaved = widget.initialIsSaved;
+    _favoriteCount = widget.product.favoriteCount;
     _checkIfSaved();
     _trackView();
     _fetchSellerProducts();
@@ -342,6 +344,31 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                       )
                     ],
                   ).animate().fadeIn(duration: 400.ms).slideX(begin: -0.1),
+                  if (_favoriteCount > 0) ...[
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.red.withValues(alpha: 0.25)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.favorite_rounded, size: 14, color: Colors.red),
+                          const SizedBox(width: 4),
+                          Text(
+                            '$_favoriteCount ${_favoriteCount == 1 ? 'user saved' : 'users saved'} this item',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: Colors.red[700],
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 16),
                   Text(
                     widget.product.title,
@@ -879,13 +906,21 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
 
       setState(() {
          _isSaved = !_isSaved; 
+         _favoriteCount += _isSaved ? 1 : -1;
+         if (_favoriteCount < 0) _favoriteCount = 0;
       });
 
       try {
          final apiClient = ApiClient();
-         await apiClient.post('/saved/toggle', {
+         final res = await apiClient.post('/saved/toggle', {
            'product_id': widget.product.id
          });
+
+         if (res is Map && res['favorite_count'] != null && mounted) {
+           setState(() {
+             _favoriteCount = int.tryParse(res['favorite_count'].toString()) ?? _favoriteCount;
+           });
+         }
          
          if (_isSaved) {
              apiClient.post('/recommendations/track', {
@@ -895,7 +930,11 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
          }
 
       } catch (e) {
-         setState(() => _isSaved = !_isSaved);
+         setState(() {
+           _isSaved = !_isSaved;
+           _favoriteCount += _isSaved ? 1 : -1;
+           if (_favoriteCount < 0) _favoriteCount = 0;
+         });
       }
   }
 

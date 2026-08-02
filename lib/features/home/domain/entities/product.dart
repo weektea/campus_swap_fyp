@@ -25,6 +25,7 @@ class Product {
   final int sellerTotalReviews;
   final List<String> acceptedPaymentMethods;
   final String sellerAvatar;
+  final int favoriteCount;
 
   const Product({
     required this.id,
@@ -50,6 +51,7 @@ class Product {
     this.sellerTotalReviews = 0,
     this.acceptedPaymentMethods = const ['Cash', 'TNG', 'Bank Transfer'],
     this.sellerAvatar = '',
+    this.favoriteCount = 0,
   });
 
   factory Product.fromJson(Map<String, dynamic> json) {
@@ -117,6 +119,7 @@ class Product {
       sellerTotalReviews: int.tryParse(json['seller']?['total_reviews']?.toString() ?? '0') ?? 0,
       acceptedPaymentMethods: paymentMethods,
       sellerAvatar: avatar,
+      favoriteCount: int.tryParse(json['favorite_count']?.toString() ?? json['save_count']?.toString() ?? '0') ?? 0,
     );
   }
 }
