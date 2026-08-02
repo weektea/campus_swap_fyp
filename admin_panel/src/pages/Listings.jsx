@@ -3,6 +3,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Search, Edit, Trash2, ArrowLeft } from 'lucide-react';
 import api, { IMAGE_BASE_URL } from '../services/api';
 
+import PaginationControls from '../components/PaginationControls';
+
 const Listings = () => {
     const location = useLocation();
     const navigate = useNavigate();
@@ -12,6 +14,19 @@ const Listings = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [filterStatus, setFilterStatus] = useState('All');
     
+    // Pagination & Sort states
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize, setPageSize] = useState(10);
+    const [sortBy, setSortBy] = useState('newest');
+
+    const sortOptions = [
+        { label: 'Date: Newest First', value: 'newest' },
+        { label: 'Date: Oldest First', value: 'oldest' },
+        { label: 'Price: High to Low', value: 'price_desc' },
+        { label: 'Price: Low to High', value: 'price_asc' },
+        { label: 'Title: A to Z', value: 'title_asc' }
+    ];
+
     // Auth context
     const [currentUser, setCurrentUser] = useState(null);
 
@@ -91,6 +106,19 @@ const Listings = () => {
         return matchSearch && matchStatus;
     });
 
+    // Apply Sorting
+    const sortedListings = [...filteredListings].sort((a, b) => {
+        if (sortBy === 'newest') return new Date(b.createdAt) - new Date(a.createdAt);
+        if (sortBy === 'oldest') return new Date(a.createdAt) - new Date(b.createdAt);
+        if (sortBy === 'price_desc') return (parseFloat(b.price) || 0) - (parseFloat(a.price) || 0);
+        if (sortBy === 'price_asc') return (parseFloat(a.price) || 0) - (parseFloat(b.price) || 0);
+        if (sortBy === 'title_asc') return (a.title || '').localeCompare(b.title || '');
+        return 0;
+    });
+
+    const totalPages = Math.ceil(sortedListings.length / pageSize) || 1;
+    const paginatedListings = sortedListings.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
     if (loading) return <div className="p-8 text-center text-gray-500">Loading listings...</div>;
 
     return (
@@ -111,7 +139,12 @@ const Listings = () => {
             )}
 
             <div className="flex justify-between items-center mb-8">
-                <h1 style={{ fontSize: '1.5rem', margin: 0 }}>Listings Management</h1>
+                <div className="flex items-center gap-3">
+                    <h1 style={{ fontSize: '1.5rem', margin: 0 }}>Listings Management</h1>
+                    <span style={{ fontSize: '0.85rem', padding: '4px 12px', borderRadius: '12px', background: '#eff6ff', color: '#2563eb', fontWeight: 'bold', border: '1px solid #bfdbfe' }}>
+                        Showing {filteredListings.length} of {listings.length} listings
+                    </span>
+                </div>
                 <div className="flex gap-4 items-center">
                     <div style={{ 
                         display: 'flex', alignItems: 'center', 
@@ -150,17 +183,20 @@ const Listings = () => {
                 <table>
                     <thead>
                         <tr>
+                            <th style={{ width: '50px', textAlign: 'center' }}>NO.</th>
                             <th>LISTING</th>
                             <th>PRICE</th>
                             <th>SELLER</th>
                             <th>TYPE</th>
+                            <th>POSTED / UPDATED</th>
                             <th>STATUS</th>
                             <th>ACTIONS</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {filteredListings.map(item => (
+                        {paginatedListings.map((item, index) => (
                             <tr key={item.id}>
+                                <td style={{ textAlign: 'center', fontWeight: 'bold', color: 'var(--text-muted)' }}>{(currentPage - 1) * pageSize + index + 1}</td>
                                 <td style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                                     <div style={{ width: '40px', height: '40px', background: '#f3f4f6', borderRadius: '8px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                         {item.image_urls && item.image_urls.length > 0 ? (
@@ -202,6 +238,14 @@ const Listings = () => {
                                     </span>
                                 </td>
                                 <td>
+                                    <div style={{ fontSize: '0.8rem', fontWeight: 'bold', color: 'var(--text-main)' }}>
+                                        {item.createdAt ? new Date(item.createdAt).toLocaleDateString() : 'N/A'}
+                                    </div>
+                                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                                        Upd: {item.updatedAt ? new Date(item.updatedAt).toLocaleDateString() : 'N/A'}
+                                    </div>
+                                </td>
+                                <td>
                                     <span style={{ 
                                         padding: '4px 12px', 
                                         borderRadius: '12px', 
@@ -227,14 +271,26 @@ const Listings = () => {
                                 </td>
                             </tr>
                         ))}
-                        {filteredListings.length === 0 && (
+                        {paginatedListings.length === 0 && (
                             <tr>
-                                <td colSpan="6" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>No listings found.</td>
+                                <td colSpan="8" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>No listings found.</td>
                             </tr>
                         )}
                     </tbody>
                 </table>
             </div>
+
+            <PaginationControls
+                currentPage={currentPage}
+                totalPages={totalPages}
+                pageSize={pageSize}
+                totalItems={sortedListings.length}
+                onPageChange={(page) => setCurrentPage(page)}
+                onPageSizeChange={(size) => { setPageSize(size); setCurrentPage(1); }}
+                sortBy={sortBy}
+                sortOptions={sortOptions}
+                onSortChange={(sort) => { setSortBy(sort); setCurrentPage(1); }}
+            />
 
             {/* Edit Modal */}
             {isEditModalOpen && selectedListing && (
@@ -258,19 +314,26 @@ const Listings = () => {
                                     <span>Condition: <strong style={{ color: 'var(--text)' }}>{selectedListing.condition}</strong></span>
                                     <span>Price: <strong style={{ color: 'var(--primary)' }}>RM {selectedListing.type === 'Rent' ? `${selectedListing.rental_price_per_day}/day` : selectedListing.price}</strong></span>
                                 </div>
-                                <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                                    <strong>Status:</strong> <span style={{ 
-                                        padding: '2px 8px', 
-                                        borderRadius: '8px', 
-                                        fontSize: '0.75rem', 
-                                        fontWeight: 'bold',
-                                        background: selectedListing.status === 'Available' ? '#dcfce7' : 
-                                                    selectedListing.status === 'Sold' ? '#f3f4f6' : 
-                                                    selectedListing.status === 'Reserved' ? '#fef3c7' : '#fee2e2',
-                                        color: selectedListing.status === 'Available' ? '#16a34a' : 
-                                               selectedListing.status === 'Sold' ? '#4b5563' : 
-                                               selectedListing.status === 'Reserved' ? '#d97706' : '#dc2626'
-                                    }}>{selectedListing.status}</span>
+                                <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <div>
+                                        <strong>Status:</strong> <span style={{ 
+                                            padding: '2px 8px', 
+                                            borderRadius: '8px', 
+                                            fontSize: '0.75rem', 
+                                            fontWeight: 'bold',
+                                            background: selectedListing.status === 'Available' ? '#dcfce7' : 
+                                                        selectedListing.status === 'Sold' ? '#f3f4f6' : 
+                                                        selectedListing.status === 'Reserved' ? '#fef3c7' : '#fee2e2',
+                                            color: selectedListing.status === 'Available' ? '#16a34a' : 
+                                                   selectedListing.status === 'Sold' ? '#4b5563' : 
+                                                   selectedListing.status === 'Reserved' ? '#d97706' : '#dc2626'
+                                        }}>{selectedListing.status}</span>
+                                    </div>
+                                </div>
+                                {/* Timestamps Metadata Badges */}
+                                <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px dashed var(--border)', fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', gap: '16px' }}>
+                                    <span>📅 <strong>Posted:</strong> {selectedListing.createdAt ? new Date(selectedListing.createdAt).toLocaleString() : 'N/A'}</span>
+                                    <span>🔄 <strong>Updated:</strong> {selectedListing.updatedAt ? new Date(selectedListing.updatedAt).toLocaleString() : 'N/A'}</span>
                                 </div>
                             </div>
                         </div>

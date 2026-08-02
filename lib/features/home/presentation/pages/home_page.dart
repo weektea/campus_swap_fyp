@@ -934,13 +934,13 @@ class HomePageState extends State<HomePage> {
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
                               color: _activeAbVariant!.contains('Hybrid_ML') 
-                                  ? Colors.blue.withOpacity(0.1) 
-                                  : Colors.green.withOpacity(0.1),
+                                  ? Colors.blue.withValues(alpha: 0.1) 
+                                  : Colors.green.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(8),
                               border: Border.all(
                                 color: _activeAbVariant!.contains('Hybrid_ML') 
-                                    ? Colors.blue.withOpacity(0.3) 
-                                    : Colors.green.withOpacity(0.3),
+                                    ? Colors.blue.withValues(alpha: 0.3) 
+                                    : Colors.green.withValues(alpha: 0.3),
                               ),
                             ),
                             child: Row(
@@ -972,6 +972,44 @@ class HomePageState extends State<HomePage> {
                 ),
               ),
             if (_selectedTab == 'For You') const SliverToBoxAdapter(child: SizedBox(height: 12)),
+
+            // Search / Filter Total Count Header Banner
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 4.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      _selectedTab == 'Newest'
+                          ? 'Found ${_newestProducts.length} items'
+                          : 'Found ${_products.length} items',
+                      style: GoogleFonts.outfit(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                    ),
+                    if (_searchController.text.isNotEmpty || _selectedCategoryIndex != 0 || _selectedSubCategoryId != null || _selectedCondition != null || _selectedListingType != 'All')
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          'Filtered Results',
+                          style: GoogleFonts.outfit(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
 
             // Product Grid / List
             if (_selectedTab == 'Newest') ...[

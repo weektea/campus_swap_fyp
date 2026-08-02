@@ -3,6 +3,8 @@ import { Search, Edit, UserPlus, Trash2, UserX } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 
+import PaginationControls from '../components/PaginationControls';
+
 const Users = () => {
     const navigate = useNavigate();
     const [users, setUsers] = useState([]);
@@ -11,6 +13,20 @@ const Users = () => {
     const [filterStatus, setFilterStatus] = useState('All');
     const [viewTab, setViewTab] = useState('active'); // 'active' or 'archived'
     
+    // Pagination & Sort states
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize, setPageSize] = useState(10);
+    const [sortBy, setSortBy] = useState('newest');
+
+    const sortOptions = [
+        { label: 'Date: Newest First', value: 'newest' },
+        { label: 'Date: Oldest First', value: 'oldest' },
+        { label: 'Name: A to Z', value: 'name_asc' },
+        { label: 'Reputation: High to Low', value: 'reputation_desc' },
+        { label: 'Reputation: Low to High', value: 'reputation_asc' },
+        { label: 'Warnings: High to Low', value: 'warnings_desc' }
+    ];
+
     const [currentUser, setCurrentUser] = useState(null);
 
     // Modal state for Edit
@@ -121,12 +137,30 @@ const Users = () => {
         return matchSearch && matchStatus;
     });
 
+    const sortedUsers = [...filteredUsers].sort((a, b) => {
+        if (sortBy === 'newest') return new Date(b.createdAt) - new Date(a.createdAt);
+        if (sortBy === 'oldest') return new Date(a.createdAt) - new Date(b.createdAt);
+        if (sortBy === 'name_asc') return (a.full_name || '').localeCompare(b.full_name || '');
+        if (sortBy === 'reputation_desc') return (parseFloat(b.reputation_score) || 0) - (parseFloat(a.reputation_score) || 0);
+        if (sortBy === 'reputation_asc') return (parseFloat(a.reputation_score) || 0) - (parseFloat(b.reputation_score) || 0);
+        if (sortBy === 'warnings_desc') return (parseInt(b.warning_count) || 0) - (parseInt(a.warning_count) || 0);
+        return 0;
+    });
+
+    const totalPages = Math.ceil(sortedUsers.length / pageSize) || 1;
+    const paginatedUsers = sortedUsers.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
     if (loading) return <div className="p-8 text-center text-gray-500">Loading users...</div>;
 
     return (
         <div>
             <div className="flex justify-between items-center mb-8">
-                <h1 style={{ fontSize: '1.5rem', margin: 0 }}>User Directory</h1>
+                <div className="flex items-center gap-3">
+                    <h1 style={{ fontSize: '1.5rem', margin: 0 }}>User Directory</h1>
+                    <span style={{ fontSize: '0.85rem', padding: '4px 12px', borderRadius: '12px', background: '#eff6ff', color: '#2563eb', fontWeight: 'bold', border: '1px solid #bfdbfe' }}>
+                        Showing {filteredUsers.length} of {users.length} users
+                    </span>
+                </div>
                 <div className="flex gap-4 items-center">
                     <div style={{ 
                         display: 'flex', alignItems: 'center', 
@@ -201,6 +235,7 @@ const Users = () => {
                 <table>
                     <thead>
                         <tr>
+                            <th style={{ width: '50px', textAlign: 'center' }}>NO.</th>
                             <th>USER ID</th>
                             <th>NAME/EMAIL</th>
                             <th>ROLE</th>
@@ -212,8 +247,9 @@ const Users = () => {
                         </tr>
                     </thead>
                     <tbody>
-                        {filteredUsers.map(user => (
+                        {paginatedUsers.map((user, index) => (
                             <tr key={user.id}>
+                                <td style={{ textAlign: 'center', fontWeight: 'bold', color: 'var(--text-muted)' }}>{(currentPage - 1) * pageSize + index + 1}</td>
                                 <td style={{ color: 'var(--text-muted)' }}>{user.id.substring(0,8)}</td>
                                 <td>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -297,14 +333,26 @@ const Users = () => {
                                 </td>
                             </tr>
                         ))}
-                        {filteredUsers.length === 0 && (
+                        {paginatedUsers.length === 0 && (
                             <tr>
-                                <td colSpan="8" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>No users found.</td>
+                                <td colSpan="9" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>No users found.</td>
                             </tr>
                         )}
                     </tbody>
                 </table>
             </div>
+
+            <PaginationControls
+                currentPage={currentPage}
+                totalPages={totalPages}
+                pageSize={pageSize}
+                totalItems={sortedUsers.length}
+                onPageChange={(page) => setCurrentPage(page)}
+                onPageSizeChange={(size) => { setPageSize(size); setCurrentPage(1); }}
+                sortBy={sortBy}
+                sortOptions={sortOptions}
+                onSortChange={(sort) => { setSortBy(sort); setCurrentPage(1); }}
+            />
 
             {/* Edit Modal */}
             {isEditModalOpen && selectedUser && (

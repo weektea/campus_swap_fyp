@@ -544,6 +544,11 @@ if (process.env.NODE_ENV !== 'test') {
                             ALTER TABLE "Users" ADD COLUMN "fcm_token" TEXT;
                         END IF;
 
+                        -- 19. Ensure cancellation_reason column exists in Transactions table
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='Transactions' AND column_name='cancellation_reason') THEN
+                            ALTER TABLE "Transactions" ADD COLUMN "cancellation_reason" TEXT;
+                        END IF;
+
                         -- 18. Ensure logs table has event_type, description, and admin_id columns
                         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='logs' AND column_name='event_type') THEN
                             ALTER TABLE "logs" ADD COLUMN "event_type" VARCHAR(255);
@@ -569,12 +574,15 @@ if (process.env.NODE_ENV !== 'test') {
                             ALTER TABLE "Products" ADD COLUMN "rental_price_per_semester" DECIMAL(10, 2);
                         END IF;
 
-                        -- 20. Ensure deposit_amount and deposit_status columns exist in Transactions table
+                        -- 20. Ensure deposit_amount, deposit_status, and platform_fee columns exist in Transactions table
                         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='Transactions' AND column_name='deposit_amount') THEN
                             ALTER TABLE "Transactions" ADD COLUMN "deposit_amount" DECIMAL(10, 2) DEFAULT 0.00;
                         END IF;
                         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='Transactions' AND column_name='deposit_status') THEN
                             ALTER TABLE "Transactions" ADD COLUMN "deposit_status" VARCHAR(50) DEFAULT 'Held';
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='Transactions' AND column_name='platform_fee') THEN
+                            ALTER TABLE "Transactions" ADD COLUMN "platform_fee" DECIMAL(10, 2) DEFAULT 0.00;
                         END IF;
                     END $$;
                 `);
@@ -663,6 +671,7 @@ import uploadRoutes from './routes/uploadRoutes.js';
 import recommendationRoutes from './routes/recommendationRoutes.js';
 import { startCronJobs } from './scripts/cronJobs.js';
 import categoryRoutes from './routes/categoryRoutes.js';
+import subcategoryRoutes from './routes/subcategoryRoutes.js';
 import disputeRoutes from './routes/disputeRoutes.js';
 import sustainabilityRoutes from './routes/sustainabilityRoutes.js';
 import ticketRoutes from './routes/ticketRoutes.js';
@@ -683,6 +692,7 @@ app.use('/api/upload', uploadRoutes);
 app.use('/api/recommendations', recommendationRoutes);
 app.use('/api/interactions', recommendationRoutes);
 app.use('/api/categories', categoryRoutes);
+app.use('/api/subcategories', subcategoryRoutes);
 app.use('/api/disputes', disputeRoutes);
 app.use('/api/sustainability', sustainabilityRoutes);
 app.use('/api/tickets', ticketRoutes);

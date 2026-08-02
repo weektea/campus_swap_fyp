@@ -161,16 +161,25 @@ export const createTransaction = async (req, res) => {
             return res.status(409).json({ error: 'Conflict Detected: Item already reserved' });
         }
 
-        // Calculate 2% Platform Fee
-        const itemPrice = parseFloat(amount);
-        const platformFee = parseFloat((itemPrice * 0.02).toFixed(2));
+        // Calculate 2% Platform Fee (Differentiate SALE vs RENT)
+        const totalAmount = parseFloat(amount);
+        let rentalFee = totalAmount;
+        let platformFee = 0.0;
+
+        if (product.type === 'Rent') {
+            rentalFee = Math.max(0, totalAmount - depositAmount);
+            platformFee = parseFloat((rentalFee * 0.02).toFixed(2));
+        } else {
+            rentalFee = totalAmount;
+            platformFee = parseFloat((totalAmount * 0.02).toFixed(2));
+        }
 
         // Create Transaction
         const transaction = await Transaction.create({
             buyer_id,
             seller_id,
             product_id,
-            amount: itemPrice.toFixed(2),
+            amount: totalAmount.toFixed(2),
             platform_fee: platformFee.toFixed(2),
             meetup_location,
             scheduled_at,
@@ -195,12 +204,14 @@ export const createTransaction = async (req, res) => {
         );
 
         const resObj = transaction.toJSON();
-        const sellerNetEarnings = parseFloat((itemPrice - platformFee).toFixed(2));
-        resObj.item_price = itemPrice;
+        const sellerNetEarnings = parseFloat((rentalFee - platformFee).toFixed(2));
+        resObj.rental_fee = rentalFee;
+        resObj.deposit_amount = depositAmount;
+        resObj.item_price = rentalFee;
         resObj.platform_fee = platformFee;
-        resObj.total_amount_paid_by_buyer = itemPrice;
+        resObj.total_amount_paid_by_buyer = totalAmount;
         resObj.seller_net_earnings = sellerNetEarnings;
-        resObj.total_payment = itemPrice;
+        resObj.total_payment = totalAmount;
 
         res.status(201).json(resObj);
     } catch (error) {
@@ -236,17 +247,24 @@ export const getUserTransactions = async (req, res) => {
         const maskedTransactions = transactions.map(tx => {
             const txObj = tx.toJSON();
             
-            const itemPrice = parseFloat(txObj.amount || 0);
-            const platformFee = txObj.platform_fee !== undefined && txObj.platform_fee !== null && parseFloat(txObj.platform_fee) > 0
-                ? parseFloat(txObj.platform_fee)
-                : parseFloat((itemPrice * 0.02).toFixed(2));
-            const sellerNetEarnings = parseFloat((itemPrice - platformFee).toFixed(2));
+            const totalAmount = parseFloat(txObj.amount || 0);
+            const depositVal = txObj.deposit_amount ? parseFloat(txObj.deposit_amount) : 0.0;
+            const isRent = txObj.product?.type === 'Rent' || txObj.rental_start_date != null;
+            const rentalFee = isRent ? Math.max(0, totalAmount - depositVal) : totalAmount;
 
-            txObj.item_price = itemPrice;
+            // Read stored platform_fee directly from DB to preserve historical integrity
+            const platformFee = txObj.platform_fee !== undefined && txObj.platform_fee !== null
+                ? parseFloat(txObj.platform_fee)
+                : parseFloat((rentalFee * 0.02).toFixed(2));
+            const sellerNetEarnings = parseFloat((rentalFee - platformFee).toFixed(2));
+
+            txObj.rental_fee = rentalFee;
+            txObj.deposit_amount = depositVal;
+            txObj.item_price = rentalFee;
             txObj.platform_fee = platformFee;
-            txObj.total_amount_paid_by_buyer = itemPrice;
+            txObj.total_amount_paid_by_buyer = totalAmount;
             txObj.seller_net_earnings = sellerNetEarnings;
-            txObj.total_payment = itemPrice;
+            txObj.total_payment = totalAmount;
 
             // Filter reviews in memory to match reviewer_id = user_id (avoid Sequelize query filtering gotcha)
             if (txObj.reviews) {
@@ -293,17 +311,24 @@ export const getTransactionById = async (req, res) => {
         }
 
         const txObj = transaction.toJSON();
-        const itemPrice = parseFloat(txObj.amount || 0);
-        const platformFee = txObj.platform_fee !== undefined && txObj.platform_fee !== null && parseFloat(txObj.platform_fee) > 0
-            ? parseFloat(txObj.platform_fee)
-            : parseFloat((itemPrice * 0.02).toFixed(2));
-        const sellerNetEarnings = parseFloat((itemPrice - platformFee).toFixed(2));
+        const totalAmount = parseFloat(txObj.amount || 0);
+        const depositVal = txObj.deposit_amount ? parseFloat(txObj.deposit_amount) : 0.0;
+        const isRent = txObj.product?.type === 'Rent' || txObj.rental_start_date != null;
+        const rentalFee = isRent ? Math.max(0, totalAmount - depositVal) : totalAmount;
 
-        txObj.item_price = itemPrice;
+        // Read stored platform_fee directly from DB
+        const platformFee = txObj.platform_fee !== undefined && txObj.platform_fee !== null
+            ? parseFloat(txObj.platform_fee)
+            : parseFloat((rentalFee * 0.02).toFixed(2));
+        const sellerNetEarnings = parseFloat((rentalFee - platformFee).toFixed(2));
+
+        txObj.rental_fee = rentalFee;
+        txObj.deposit_amount = depositVal;
+        txObj.item_price = rentalFee;
         txObj.platform_fee = platformFee;
-        txObj.total_amount_paid_by_buyer = itemPrice;
+        txObj.total_amount_paid_by_buyer = totalAmount;
         txObj.seller_net_earnings = sellerNetEarnings;
-        txObj.total_payment = itemPrice;
+        txObj.total_payment = totalAmount;
 
         if (txObj.review_status !== 'PUBLISHED') {
             if (reqUserId === String(txObj.buyer_id)) {
@@ -430,7 +455,7 @@ export const getCarbonValue = (category, subCategory, product = null) => {
 export const updateTransactionStatus = async (req, res) => {
     try {
         const { id } = req.params;
-        const { status } = req.body; // 'Completed', 'Cancelled', 'Scheduled'
+        const { status, cancellation_reason } = req.body; // 'Completed', 'Cancelled', 'Scheduled'
 
         const transaction = await Transaction.findByPk(id);
         if (!transaction) {
@@ -447,16 +472,16 @@ export const updateTransactionStatus = async (req, res) => {
             ]
         });
 
-        // Intercept Completed requested for a Rent item in To Confirm status -> Set target status to 'On Rent'
+        // Intercept Completed requested for a Rent item in To Confirm or Scheduled status -> Set target status to 'On Rent'
         let targetStatus = status;
-        if (targetStatus === 'Completed' && oldStatus === 'To Confirm' && product && product.type === 'Rent') {
+        if (targetStatus === 'Completed' && (oldStatus === 'To Confirm' || oldStatus === 'Scheduled') && product && product.type === 'Rent') {
             targetStatus = 'On Rent';
         }
 
         // State Machine Validation
         const validTransitions = {
             'Pending': ['Scheduled', 'Cancelled'],
-            'Scheduled': ['To Confirm', 'Cancelled'],
+            'Scheduled': ['To Confirm', 'Completed', 'Cancelled'],
             'To Confirm': ['On Rent', 'Completed', 'Cancelled', 'Disputed'],
             'On Rent': ['Completed', 'Disputed'],
             'Completed': [],
@@ -480,8 +505,9 @@ export const updateTransactionStatus = async (req, res) => {
         const otherPartyId = String(requesterId) === String(transaction.buyer_id) ? transaction.seller_id : transaction.buyer_id;
 
         const updatePayload = { status: targetStatus };
-        if (targetStatus === 'Cancelled' && requesterId) {
-            updatePayload.cancelled_by_id = requesterId;
+        if (targetStatus === 'Cancelled') {
+            if (requesterId) updatePayload.cancelled_by_id = requesterId;
+            if (cancellation_reason) updatePayload.cancellation_reason = cancellation_reason;
         }
 
         // Atomic status update to prevent race conditions (double clicks)
@@ -578,9 +604,19 @@ export const updateTransactionStatus = async (req, res) => {
             transaction.review_status = 'PENDING_REVIEWS';
             transaction.awarded_carbon_points = co2Saved;
             
-            // Calculate 2% Platform Fee (based on transaction.amount)
-            const platformFee = parseFloat((parseFloat(transaction.amount) * 0.02).toFixed(2));
+            // Calculate 2% Platform Fee based strictly on Rental Fee (amount - deposit_amount)
+            const totalAmt = parseFloat(transaction.amount || 0);
+            const depAmt = transaction.deposit_amount ? parseFloat(transaction.deposit_amount) : 0.0;
+            const isRentItem = (product && product.type === 'Rent') || transaction.rental_start_date != null;
+            const rentFee = isRentItem ? Math.max(0, totalAmt - depAmt) : totalAmt;
+
+            const platformFee = parseFloat((rentFee * 0.02).toFixed(2));
             transaction.platform_fee = platformFee;
+
+            // Safeguard 4: Update deposit_status to 'Refunded' ONLY IF not already 'Claimed_Forfeited' (e.g. set by Moderator)
+            if (isRentItem && transaction.deposit_status !== 'Claimed_Forfeited') {
+                transaction.deposit_status = 'Refunded';
+            }
             await transaction.save();
             
             if (product) {
@@ -650,9 +686,13 @@ export const updateTransactionStatus = async (req, res) => {
             }
             const isBuyerCancelling = String(requesterId) === String(transaction.buyer_id);
             const cancelTitle = isBuyerCancelling ? 'Order Cancelled by Buyer' : 'Request Declined by Seller';
-            const cancelMsg = isBuyerCancelling 
+            let cancelMsg = isBuyerCancelling 
                 ? `Buyer has cancelled their order for "${productTitle}".` 
                 : `Seller has declined your request for "${productTitle}".`;
+
+            if (cancellation_reason && cancellation_reason.trim().length > 0) {
+                cancelMsg += ` Reason: ${cancellation_reason.trim()}`;
+            }
 
             await createNotification(
                 otherPartyId,

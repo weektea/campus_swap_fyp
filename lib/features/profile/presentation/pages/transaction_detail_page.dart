@@ -8,6 +8,8 @@ import 'package:campus_swap/features/profile/presentation/pages/rate_experience_
 import 'package:campus_swap/features/profile/presentation/pages/e_receipt_modal.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:campus_swap/core/services/socket_service.dart';
+import 'package:campus_swap/features/product/presentation/pages/product_details_page.dart';
+import 'package:campus_swap/features/home/domain/entities/product.dart';
 
 class TransactionDetailPage extends StatefulWidget {
   final String transactionId;
@@ -98,11 +100,11 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
     return message.replaceAll(RegExp(r'^Exception:\s*'), '').replaceAll(RegExp(r'^ApiException:\s*'), '');
   }
 
-  Future<void> _updateStatus(String newStatus, [Map<String, dynamic>? extraData]) async {
+  Future<void> _updateStatus(String newStatus, [Map<String, dynamic>? extraData, bool skipConfirm = false]) async {
       if (_isUpdatingStatus) return;
 
       // Destructive Confirmation Dialog for Cancelled or Disputed status
-      if (newStatus == 'Cancelled' || newStatus == 'Disputed') {
+      if (!skipConfirm && (newStatus == 'Cancelled' || newStatus == 'Disputed')) {
           final title = newStatus == 'Cancelled' ? 'Cancel Transaction?' : 'Dispute Transaction?';
           final message = newStatus == 'Cancelled' 
               ? 'Are you sure you want to cancel this transaction? This action is irreversible.'
@@ -660,40 +662,118 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
           final currentUserId = UserSession().userId?.toString();
           final cancelledById = _transaction['cancelled_by_id']?.toString();
           final buyerId = _transaction['buyer_id']?.toString();
+          final cancellationReason = _transaction['cancellation_reason']?.toString();
 
           String cancelText = 'This request has been cancelled.';
           if (cancelledById != null && currentUserId != null) {
               if (cancelledById == currentUserId) {
                   cancelText = 'You have cancelled/declined this request.';
               } else if (cancelledById == buyerId) {
-                  cancelText = 'The buyer has cancelled this request. No further action can be taken.';
+                  cancelText = 'The buyer has cancelled this request.';
               } else {
-                  cancelText = 'The seller has declined this request. No further action can be taken.';
+                  cancelText = 'The seller has declined this request.';
               }
           } else {
-              cancelText = 'This transaction has been cancelled. No further action can be taken.';
+              cancelText = 'This transaction has been cancelled.';
           }
 
-          return Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-                color: Colors.red.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.red.withValues(alpha: 0.2)),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.cancel_outlined, color: Colors.red),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    cancelText,
-                    style: GoogleFonts.outfit(color: Colors.red[800], fontWeight: FontWeight.w600),
+          return Column(
+            children: [
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                    color: Colors.red.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.red.withValues(alpha: 0.2)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.cancel_outlined, color: Colors.red),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            cancelText,
+                            style: GoogleFonts.outfit(color: Colors.red[800], fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (cancellationReason != null && cancellationReason.isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).cardColor,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Icon(Icons.info_outline, size: 16, color: Colors.redAccent),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Reason: $cancellationReason',
+                                style: GoogleFonts.outfit(color: Colors.red[900], fontSize: 13, fontWeight: FontWeight.w500),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              if (isBuying && _transaction['product_id'] != null) ...[
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton.icon(
+                  onPressed: () async {
+                      final navigator = Navigator.of(context);
+                      final messenger = ScaffoldMessenger.of(context);
+                      showDialog(
+                        context: context,
+                        barrierDismissible: false,
+                        builder: (ctx) => const Center(child: CircularProgressIndicator()),
+                      );
+                      try {
+                        final apiClient = ApiClient();
+                        final res = await apiClient.get('/products/${_transaction['product_id']}');
+                        if (mounted) {
+                          navigator.pop(); // close loader
+                          final product = Product.fromJson(res);
+                          navigator.push(MaterialPageRoute(
+                            builder: (_) => ProductDetailsPage(product: product)
+                          ));
+                        }
+                      } catch (e) {
+                        if (mounted) {
+                          navigator.pop(); // close loader
+                          messenger.showSnackBar(SnackBar(
+                            content: Text('Failed to load item: $e'),
+                            backgroundColor: Colors.red,
+                          ));
+                        }
+                      }
+                    },
+                    icon: const Icon(Icons.refresh, color: Colors.white),
+                    label: Text('Adjust Offer & Resubmit', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Theme.of(context).colorScheme.primary,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
                   ),
                 ),
               ],
-            ),
+            ],
           );
       }
 
@@ -885,7 +965,7 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
                                   child: SizedBox(
                                       height: 48,
                                       child: OutlinedButton(
-                                          onPressed: () => _updateStatus('Cancelled'),
+                                          onPressed: () => _showDeclineReasonModal(context, isDecline: true),
                                           style: OutlinedButton.styleFrom(
                                               foregroundColor: Colors.red,
                                               side: BorderSide(color: Colors.red.withValues(alpha: 0.5)),
@@ -917,6 +997,15 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
       }
 
       if (status == 'Scheduled') {
+          final String paymentMethod = _transaction['selected_payment_method']?.toString() ?? 'Cash';
+          final bool isCash = paymentMethod == 'Cash';
+          final String proofTitle = isCash ? "Upload Handover Proof (Item Photo)" : "Upload Payment Receipt";
+          final String proofHelper = isCash 
+              ? "Please take a photo of the received item at the meetup zone to confirm successful handover." 
+              : "Please upload a screenshot of your successful transfer.";
+          final String proofHint = isCash ? "Click to upload handover photo" : "Click to upload payment receipt";
+          final IconData proofIcon = isCash ? Icons.camera_alt_outlined : Icons.upload_file_outlined;
+
           if (isBuying) {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -930,12 +1019,16 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
                       border: Border.all(color: Colors.blue.withValues(alpha: 0.2)),
                     ),
                     child: Text(
-                      'Please upload payment proof to proceed to the next step.',
+                      isCash 
+                          ? 'Please take a photo of the received item at the meetup zone to confirm handover (Optional).'
+                          : 'Please upload payment receipt to proceed to the next step.',
                       style: GoogleFonts.outfit(color: Colors.blue[800]),
                     ),
                   ),
                   const SizedBox(height: 24),
-                  Text('Upload Payment Proof', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold)),
+                  Text(proofTitle, style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 4),
+                  Text(proofHelper, style: GoogleFonts.outfit(fontSize: 13, color: Colors.grey[600])),
                   const SizedBox(height: 12),
                   GestureDetector(
                     onTap: _isUploadingProof ? null : _pickAndUploadProof,
@@ -960,9 +1053,9 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
                               : Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    Icon(Icons.upload_file_outlined, color: Colors.grey[600], size: 32),
+                                    Icon(proofIcon, color: Colors.grey[600], size: 32),
                                     const SizedBox(height: 8),
-                                    Text('Click to upload payment proof', style: GoogleFonts.outfit(color: Colors.grey[600])),
+                                    Text(proofHint, style: GoogleFonts.outfit(color: Colors.grey[600])),
                                   ],
                                 ),
                     ),
@@ -973,23 +1066,27 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
                     height: 48,
                     child: ElevatedButton(
                       onPressed: () {
-                          if (_uploadedProofUrl == null) {
+                          if (!isCash && _uploadedProofUrl == null) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
-                                  content: const Text('Please upload payment proof image first!'),
+                                  content: const Text('Please upload a screenshot of your successful transfer first!'),
                                   backgroundColor: Theme.of(context).colorScheme.error,
                                   behavior: SnackBarBehavior.floating,
                                 ),
                               );
                               return;
                           }
-                          _updateStatus('To Confirm', {'payment_proof_url': _uploadedProofUrl});
+                          final extra = _uploadedProofUrl != null ? {'payment_proof_url': _uploadedProofUrl} : null;
+                          _updateStatus('To Confirm', extra);
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Theme.of(context).colorScheme.primary,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
                       ),
-                      child: Text('Submit Proof', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                      child: Text(
+                        isCash ? 'Confirm Handover & Proceed' : 'Submit Payment Receipt', 
+                        style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)
+                      ),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -1019,14 +1116,35 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(color: Colors.blue.withValues(alpha: 0.2)),
                           ),
-                          child: Text('Waiting for buyer to upload payment/meetup proof...', style: GoogleFonts.outfit(color: Colors.blue[800])),
+                          child: Text(
+                              isCash 
+                                  ? 'Cash Payment Selected: Meet up at the scheduled zone. Once cash is received, click "Confirm Cash Received & Complete".'
+                                  : 'Waiting for buyer to upload payment receipt...', 
+                              style: GoogleFonts.outfit(color: Colors.blue[800])
+                          ),
                       ),
                       const SizedBox(height: 16),
+                      if (isCash) ...[
+                          SizedBox(
+                              width: double.infinity,
+                              height: 48,
+                              child: ElevatedButton.icon(
+                                  onPressed: () => _updateStatus('Completed'),
+                                  icon: const Icon(Icons.payments_outlined, color: Colors.white),
+                                  style: ElevatedButton.styleFrom(
+                                      backgroundColor: Theme.of(context).colorScheme.primary,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  ),
+                                  label: Text('Confirm Cash Received & Complete', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                              ),
+                          ),
+                          const SizedBox(height: 12),
+                      ],
                       SizedBox(
                           width: double.infinity,
                           height: 48,
                           child: OutlinedButton(
-                              onPressed: () => _updateStatus('Cancelled'),
+                              onPressed: () => _showDeclineReasonModal(context, isDecline: false),
                               style: OutlinedButton.styleFrom(
                                   foregroundColor: Colors.red,
                                   side: BorderSide(color: Colors.red.withValues(alpha: 0.5)),
@@ -1041,6 +1159,9 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
       }
 
       if (status == 'To Confirm') {
+          final String paymentMethod = _transaction['selected_payment_method']?.toString() ?? 'Cash';
+          final bool isCash = paymentMethod == 'Cash';
+
           if (isBuying) {
               return Column(
                   children: [
@@ -1052,7 +1173,12 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(color: Colors.blue.withValues(alpha: 0.2)),
                           ),
-                          child: Text('Waiting for seller to verify your payment/meetup proof and complete the order...', style: GoogleFonts.outfit(color: Colors.blue[800])),
+                          child: Text(
+                              isCash 
+                                  ? 'Handover proof submitted. Waiting for seller to confirm cash receipt and complete...'
+                                  : 'Waiting for seller to verify your payment receipt and complete the order...', 
+                              style: GoogleFonts.outfit(color: Colors.blue[800])
+                          ),
                       ),
                       const SizedBox(height: 16),
                       SizedBox(
@@ -1082,11 +1208,16 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(color: Colors.amber.withValues(alpha: 0.2)),
                           ),
-                          child: Text('Buyer has submitted payment/meetup proof. Please verify and confirm completion.', style: GoogleFonts.outfit(color: Colors.amber[800])),
+                          child: Text(
+                              isCash 
+                                  ? 'Buyer has submitted handover proof. Please verify cash received and confirm completion.'
+                                  : 'Buyer has submitted payment receipt. Please verify transfer and confirm completion.', 
+                              style: GoogleFonts.outfit(color: Colors.amber[800])
+                          ),
                       ),
                       const SizedBox(height: 16),
                       if (_transaction['payment_proof_url'] != null) ...[
-                          Text('Uploaded Payment Proof:', style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.bold)),
+                          Text(isCash ? 'Uploaded Handover Photo (Item Photo):' : 'Uploaded Payment Receipt:', style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.bold)),
                           const SizedBox(height: 8),
                           ClipRRect(
                               borderRadius: BorderRadius.circular(12),
@@ -1116,7 +1247,7 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
                                               side: BorderSide(color: Colors.red.withValues(alpha: 0.5)),
                                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                           ),
-                                          child: Text('Report Issue / Dispute Payment', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 13)),
+                                          child: Text('Report Issue / Dispute', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 13)),
                                       ),
                                   ),
                               ),
@@ -1130,7 +1261,10 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
                                               backgroundColor: Theme.of(context).colorScheme.primary,
                                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                           ),
-                                          child: Text('Confirm & Complete', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
+                                          child: Text(
+                                              isCash ? 'Confirm Cash & Complete' : 'Confirm & Complete', 
+                                              style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)
+                                          ),
                                       ),
                                   ),
                               ),
@@ -1273,6 +1407,98 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
           ));
         }
       }
+    }
+  }
+
+  Future<void> _showDeclineReasonModal(BuildContext context, {bool isDecline = true}) async {
+    String selectedPreset = 'Price offered is too low';
+    final List<String> presets = [
+      'Price offered is too low',
+      'Meetup location or schedule is unsuitable',
+      'Item is no longer available',
+      'Other reason'
+    ];
+    final noteController = TextEditingController();
+
+    final String? finalReason = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setModalState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 24, right: 24, top: 24,
+                bottom: MediaQuery.of(ctx).viewInsets.bottom + 24
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    isDecline ? 'Decline Request Reason' : 'Cancel Order Reason',
+                    style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Please select or enter a reason to inform the other party:',
+                    style: GoogleFonts.outfit(fontSize: 13, color: Colors.grey[600]),
+                  ),
+                  const SizedBox(height: 12),
+                  ...presets.map((preset) => RadioListTile<String>(
+                    title: Text(preset, style: GoogleFonts.outfit(fontSize: 14)),
+                    value: preset,
+                    groupValue: selectedPreset,
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                    onChanged: (val) {
+                      if (val != null) setModalState(() => selectedPreset = val);
+                    },
+                  )),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: noteController,
+                    maxLines: 2,
+                    decoration: InputDecoration(
+                      hintText: 'Additional notes (optional)...',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    style: GoogleFonts.outfit(fontSize: 13),
+                  ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onPressed: () {
+                        String reason = selectedPreset;
+                        if (noteController.text.trim().isNotEmpty) {
+                          reason += " - ${noteController.text.trim()}";
+                        }
+                        Navigator.pop(ctx, reason);
+                      },
+                      child: Text(
+                        isDecline ? 'Confirm Decline' : 'Confirm Cancel',
+                        style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 16),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (finalReason != null && finalReason.isNotEmpty) {
+      _updateStatus('Cancelled', {'cancellation_reason': finalReason}, true);
     }
   }
 }

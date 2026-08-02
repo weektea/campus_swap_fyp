@@ -2,12 +2,26 @@ import React, { useState, useEffect } from 'react';
 import { Search, Eye, Calendar, Clock, User, ShieldAlert, Award } from 'lucide-react';
 import api from '../services/api';
 
+import PaginationControls from '../components/PaginationControls';
+
 const Transactions = () => {
     const [transactions, setTransactions] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [filterStatus, setFilterStatus] = useState('All');
     const [selectedTransaction, setSelectedTransaction] = useState(null);
+
+    // Pagination & Sort states
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize, setPageSize] = useState(10);
+    const [sortBy, setSortBy] = useState('newest');
+
+    const sortOptions = [
+        { label: 'Date: Newest First', value: 'newest' },
+        { label: 'Date: Oldest First', value: 'oldest' },
+        { label: 'Amount: High to Low', value: 'amount_desc' },
+        { label: 'Amount: Low to High', value: 'amount_asc' }
+    ];
 
     useEffect(() => {
         fetchTransactions();
@@ -35,12 +49,28 @@ const Transactions = () => {
         return matchSearch && matchStatus;
     });
 
+    const sortedTransactions = [...filtered].sort((a, b) => {
+        if (sortBy === 'newest') return new Date(b.createdAt) - new Date(a.createdAt);
+        if (sortBy === 'oldest') return new Date(a.createdAt) - new Date(b.createdAt);
+        if (sortBy === 'amount_desc') return (parseFloat(b.amount) || 0) - (parseFloat(a.amount) || 0);
+        if (sortBy === 'amount_asc') return (parseFloat(a.amount) || 0) - (parseFloat(b.amount) || 0);
+        return 0;
+    });
+
+    const totalPages = Math.ceil(sortedTransactions.length / pageSize) || 1;
+    const paginatedTransactions = sortedTransactions.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
     if (loading) return <div className="p-8 text-center text-gray-500">Loading transactions...</div>;
 
     return (
         <div>
             <div className="flex justify-between items-center mb-8">
-                <h1 style={{ fontSize: '1.5rem', margin: 0, fontWeight: 'bold', color: 'var(--primary)' }}>Transactions (Orders)</h1>
+                <div className="flex items-center gap-3">
+                    <h1 style={{ fontSize: '1.5rem', margin: 0, fontWeight: 'bold', color: 'var(--primary)' }}>Transactions (Orders)</h1>
+                    <span style={{ fontSize: '0.85rem', padding: '4px 12px', borderRadius: '12px', background: '#eff6ff', color: '#2563eb', fontWeight: 'bold', border: '1px solid #bfdbfe' }}>
+                        Showing {filtered.length} of {transactions.length} transactions
+                    </span>
+                </div>
                 <div className="flex gap-4">
                     <div style={{ display: 'flex', alignItems: 'center', background: 'white', border: '1px solid var(--border)', borderRadius: '8px', padding: '8px 16px', width: '300px' }}>
                         <Search size={18} color="var(--text-muted)" style={{ marginRight: '8px' }} />
@@ -61,6 +91,7 @@ const Transactions = () => {
                 <table>
                     <thead>
                         <tr>
+                            <th style={{ width: '50px', textAlign: 'center' }}>NO.</th>
                             <th>ORDER ID / DATE</th>
                             <th>PRODUCT</th>
                             <th>BUYER</th>
@@ -71,8 +102,9 @@ const Transactions = () => {
                         </tr>
                     </thead>
                     <tbody>
-                        {filtered.map(t => (
+                        {paginatedTransactions.map((t, index) => (
                             <tr key={t.id} onClick={() => setSelectedTransaction(t)} style={{ cursor: 'pointer' }}>
+                                <td style={{ textAlign: 'center', fontWeight: 'bold', color: 'var(--text-muted)' }}>{(currentPage - 1) * pageSize + index + 1}</td>
                                 <td>
                                     <div style={{ fontWeight: 'bold' }}>{t.id.substring(0,8)}...</div>
                                     <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{new Date(t.createdAt).toLocaleDateString()}</div>
@@ -106,10 +138,13 @@ const Transactions = () => {
                                 <td>
                                     <button 
                                         className="btn btn-outline" 
-                                        style={{ padding: '4px 8px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px', height: 'auto' }}
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            setSelectedTransaction(t);
+                                        onClick={(e) => { e.stopPropagation(); setSelectedTransaction(t); }}
+                                        style={{ 
+                                            padding: '4px 8px', 
+                                            fontSize: '0.75rem',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '4px'
                                         }}
                                     >
                                         <Eye size={12} />
@@ -118,10 +153,22 @@ const Transactions = () => {
                                 </td>
                             </tr>
                         ))}
-                        {filtered.length === 0 && <tr><td colSpan="7" style={{ textAlign: 'center', padding: '2rem' }}>No transactions found.</td></tr>}
+                        {paginatedTransactions.length === 0 && <tr><td colSpan="8" style={{ textAlign: 'center', padding: '2rem' }}>No transactions found.</td></tr>}
                     </tbody>
                 </table>
             </div>
+
+            <PaginationControls
+                currentPage={currentPage}
+                totalPages={totalPages}
+                pageSize={pageSize}
+                totalItems={sortedTransactions.length}
+                onPageChange={(page) => setCurrentPage(page)}
+                onPageSizeChange={(size) => { setPageSize(size); setCurrentPage(1); }}
+                sortBy={sortBy}
+                sortOptions={sortOptions}
+                onSortChange={(sort) => { setSortBy(sort); setCurrentPage(1); }}
+            />
 
             {/* Transaction Details Modal */}
             {selectedTransaction && (
@@ -242,12 +289,26 @@ const Transactions = () => {
                             </div>
 
                             {/* Rental Period (Visible only for Rental Transactions) */}
-                            {selectedTransaction.product?.type === 'Rent' && (
+                            {(selectedTransaction.product?.type === 'Rent' || selectedTransaction.rental_start_date) && (
                                 <div>
-                                    <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.9rem', borderBottom: '1px solid var(--border)', paddingBottom: '4px', color: 'var(--primary)', fontWeight: 'bold' }}>Rental Info</h4>
-                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', fontSize: '0.85rem' }}>
+                                    <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.9rem', borderBottom: '1px solid var(--border)', paddingBottom: '4px', color: 'var(--primary)', fontWeight: 'bold' }}>Rental & Deposit Escrow Info</h4>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', fontSize: '0.85rem' }}>
                                         <div><strong>Rental Type:</strong> {selectedTransaction.rental_type || 'Short-term'}</div>
-                                        <div><strong>Group Size:</strong> {selectedTransaction.group_size || 1}</div>
+                                        <div><strong>Deposit Amount:</strong> RM {selectedTransaction.deposit_amount || '0.00'}</div>
+                                        <div>
+                                            <strong>Deposit Status:</strong>
+                                            <div style={{ marginTop: '2px' }}>
+                                                <span style={{
+                                                    padding: '2px 8px', borderRadius: '8px', fontSize: '0.7rem', fontWeight: 'bold',
+                                                    background: selectedTransaction.deposit_status === 'Refunded' ? '#dcfce7' :
+                                                                selectedTransaction.deposit_status === 'Claimed_Forfeited' ? '#fee2e2' : '#e0f2fe',
+                                                    color: selectedTransaction.deposit_status === 'Refunded' ? '#16a34a' :
+                                                           selectedTransaction.deposit_status === 'Claimed_Forfeited' ? '#dc2626' : '#0369a1'
+                                                }}>
+                                                    {selectedTransaction.deposit_status || 'Held'}
+                                                </span>
+                                            </div>
+                                        </div>
                                         <div>
                                             <strong>Period:</strong> 
                                             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>

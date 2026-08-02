@@ -1,22 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import { Activity, Search, RefreshCw, ChevronLeft, ChevronRight, User, Clock } from 'lucide-react';
 import api from '../services/api';
+import PaginationControls from '../components/PaginationControls';
 
 const History = () => {
     const [logs, setLogs] = useState([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [page, setPage] = useState(1);
+    const [limit, setLimit] = useState(15);
     const [totalPages, setTotalPages] = useState(1);
     const [totalLogs, setTotalLogs] = useState(0);
 
-    const fetchLogs = async (currentPage, searchQuery) => {
+    const fetchLogs = async (currentPage, searchQuery, currentLimit = limit) => {
         setLoading(true);
         try {
-            const res = await api.get(`/admin/logs?page=${currentPage}&limit=15&search=${searchQuery}`);
+            const res = await api.get(`/admin/logs?page=${currentPage}&limit=${currentLimit}&search=${searchQuery}`);
             setLogs(res.data.logs || []);
-            setTotalPages(res.data.pagination.pages || 1);
-            setTotalLogs(res.data.pagination.total || 0);
+            setTotalPages(res.data.pagination?.pages || 1);
+            setTotalLogs(res.data.pagination?.total || 0);
         } catch (e) {
             console.error('Failed to fetch activity logs', e);
         } finally {
@@ -25,8 +27,8 @@ const History = () => {
     };
 
     useEffect(() => {
-        fetchLogs(page, search);
-    }, [page]);
+        fetchLogs(page, search, limit);
+    }, [page, limit]);
 
     const handleSearchSubmit = (e) => {
         e.preventDefault();
@@ -207,32 +209,15 @@ const History = () => {
                 )}
             </div>
 
-            {/* Pagination Panel */}
-            {totalPages > 1 && (
-                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '1rem' }}>
-                    <button
-                        className="btn btn-outline flex items-center gap-1"
-                        style={{ height: '38px', padding: '0 1rem' }}
-                        disabled={page === 1}
-                        onClick={() => setPage(prev => Math.max(prev - 1, 1))}
-                    >
-                        <ChevronLeft size={16} />
-                        <span>Prev</span>
-                    </button>
-                    <span style={{ fontSize: '0.875rem', fontWeight: '600', color: 'var(--text-main)' }}>
-                        Page {page} of {totalPages}
-                    </span>
-                    <button
-                        className="btn btn-outline flex items-center gap-1"
-                        style={{ height: '38px', padding: '0 1rem' }}
-                        disabled={page === totalPages}
-                        onClick={() => setPage(prev => Math.min(prev + 1, totalPages))}
-                    >
-                        <span>Next</span>
-                        <ChevronRight size={16} />
-                    </button>
-                </div>
-            )}
+            <PaginationControls
+                currentPage={page}
+                totalPages={totalPages}
+                pageSize={limit}
+                totalItems={totalLogs}
+                pageSizeOptions={[10, 15, 25, 50, 100]}
+                onPageChange={(p) => setPage(p)}
+                onPageSizeChange={(s) => { setLimit(s); setPage(1); }}
+            />
         </div>
     );
 };

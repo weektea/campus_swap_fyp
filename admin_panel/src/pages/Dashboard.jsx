@@ -133,6 +133,7 @@ const Dashboard = () => {
                 <table>
                     <thead>
                         <tr>
+                            <th style={{ width: '50px', textAlign: 'center' }}>NO.</th>
                             <th>ID</th>
                             <th>TYPE</th>
                             <th>TARGET</th>
@@ -142,8 +143,9 @@ const Dashboard = () => {
                         </tr>
                     </thead>
                     <tbody>
-                        {tasks.map(task => (
+                        {tasks.map((task, index) => (
                             <tr key={task.id}>
+                                <td style={{ textAlign: 'center', fontWeight: 'bold', color: 'var(--text-muted)' }}>{index + 1}</td>
                                 <td style={{ color: 'var(--text-muted)' }}>{task.id}</td>
                                 <td style={{ color: 'var(--text-muted)' }}>{task.type}</td>
                                 <td style={{ color: 'var(--text-muted)' }}>{task.target}</td>
@@ -179,7 +181,7 @@ const Dashboard = () => {
                         ))}
                         {tasks.length === 0 && (
                             <tr>
-                                <td colSpan="6" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>No recent tasks found.</td>
+                                <td colSpan="7" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>No recent tasks found.</td>
                             </tr>
                         )}
                     </tbody>
@@ -194,6 +196,7 @@ const Dashboard = () => {
                 <table>
                     <thead>
                         <tr>
+                            <th style={{ width: '50px', textAlign: 'center' }}>NO.</th>
                             <th>TITLE</th>
                             <th>PRICE</th>
                             <th>TYPE</th>
@@ -203,8 +206,9 @@ const Dashboard = () => {
                         </tr>
                     </thead>
                     <tbody>
-                        {(metrics?.popular_listings || []).map(item => (
+                        {(metrics?.popular_listings || []).map((item, index) => (
                             <tr key={item.id}>
+                                <td style={{ textAlign: 'center', fontWeight: 'bold', color: 'var(--primary)' }}>#{index + 1}</td>
                                 <td style={{ fontWeight: '500' }}>{item.title}</td>
                                 <td>RM {parseFloat(item.price).toFixed(2)}</td>
                                 <td>
@@ -226,7 +230,7 @@ const Dashboard = () => {
                         ))}
                         {(!metrics?.popular_listings || metrics.popular_listings.length === 0) && (
                             <tr>
-                                <td colSpan="6" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>No trending data recorded yet.</td>
+                                <td colSpan="7" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>No trending data recorded yet.</td>
                             </tr>
                         )}
                     </tbody>

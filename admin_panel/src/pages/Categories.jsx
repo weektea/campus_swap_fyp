@@ -563,10 +563,20 @@ const Categories = () => {
 
     const isAdmin = currentUser?.role === 'admin';
 
+    const totalSubcategories = categories.reduce((sum, c) => sum + (c.subcategories?.length || 0), 0);
+
     return (
         <div>
             <div className="flex justify-between items-center mb-8">
-                <h1 style={{ fontSize: '1.5rem', margin: 0 }}>Categories & Safe Zones</h1>
+                <div className="flex items-center gap-3">
+                    <h1 style={{ fontSize: '1.5rem', margin: 0 }}>Categories & Safe Zones</h1>
+                    <span style={{ fontSize: '0.85rem', padding: '4px 12px', borderRadius: '12px', background: '#eff6ff', color: '#2563eb', fontWeight: 'bold', border: '1px solid #bfdbfe' }}>
+                        Total Categories: {categories.length} ({totalSubcategories} Subcategories)
+                    </span>
+                    <span style={{ fontSize: '0.85rem', padding: '4px 12px', borderRadius: '12px', background: '#ecfdf5', color: '#059669', fontWeight: 'bold', border: '1px solid #a7f3d0' }}>
+                        Total Meetup Zones: {zones.length}
+                    </span>
+                </div>
             </div>
 
             <div style={{ display: 'flex', gap: '2rem' }}>
@@ -585,16 +595,18 @@ const Categories = () => {
                         <table style={{ margin: 0 }}>
                             <thead>
                                 <tr>
+                                    <th style={{ width: '50px', textAlign: 'center' }}>NO.</th>
                                     <th style={{ width: '40%' }}>NAME</th>
                                     <th>CARBON OFFSET (Fallback)</th>
                                     {isAdmin && <th style={{ textAlign: 'right' }}>ACTIONS</th>}
                                 </tr>
                             </thead>
                             <tbody>
-                                {categories.map(cat => (
+                                {categories.map((cat, index) => (
                                     <React.Fragment key={cat.id}>
                                         {/* Main Category Row */}
                                         <tr style={{ background: '#f9fafb', cursor: 'pointer' }} onClick={() => toggleExpand(cat.id)}>
+                                            <td style={{ textAlign: 'center', fontWeight: 'bold', color: 'var(--text-muted)' }}>{index + 1}</td>
                                             <td style={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                 {expandedCats[cat.id] ? <ChevronDown size={18} color="#6b7280"/> : <ChevronRight size={18} color="#6b7280"/>}
                                                 {cat.name}
@@ -627,8 +639,9 @@ const Categories = () => {
                                             )}
                                         </tr>
                                         {/* SubCategories Rows */}
-                                        {expandedCats[cat.id] && cat.subcategories?.map(sub => (
+                                        {expandedCats[cat.id] && cat.subcategories?.map((sub, subIdx) => (
                                             <tr key={sub.id}>
+                                                <td style={{ textAlign: 'center', fontSize: '0.8rem', color: 'var(--text-muted)' }}>{index + 1}.{subIdx + 1}</td>
                                                 <td style={{ paddingLeft: '2.5rem' }}>
                                                     <div style={{ position: 'relative' }}>
                                                         <div style={{ position: 'absolute', left: '-15px', top: '50%', width: '10px', height: '1px', background: '#d1d5db' }}></div>
@@ -657,7 +670,7 @@ const Categories = () => {
                                         ))}
                                         {expandedCats[cat.id] && (!cat.subcategories || cat.subcategories.length === 0) && (
                                             <tr>
-                                                <td colSpan="3" style={{ paddingLeft: '2.5rem', color: '#9ca3af', fontStyle: 'italic' }}>
+                                                <td colSpan="4" style={{ paddingLeft: '2.5rem', color: '#9ca3af', fontStyle: 'italic' }}>
                                                     No subcategories yet.
                                                 </td>
                                             </tr>
@@ -699,17 +712,19 @@ const Categories = () => {
                             <table style={{ margin: 0 }}>
                                 <thead>
                                     <tr>
+                                        <th style={{ width: '50px', textAlign: 'center' }}>NO.</th>
                                         <th>LOCATION DETAILS</th>
                                         {isAdmin && <th style={{ textAlign: 'right' }}>ACTIONS</th>}
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {zones.map(zone => (
+                                    {zones.map((zone, index) => (
                                         <tr 
                                             key={zone.id}
                                             style={{ cursor: 'pointer' }}
                                             onClick={() => handleFocusZone(zone)}
                                         >
+                                            <td style={{ textAlign: 'center', fontWeight: 'bold', color: 'var(--text-muted)' }}>{index + 1}</td>
                                             <td>
                                                 <div style={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px' }}>
                                                     <MapPin size={14} color="var(--primary)"/> {zone.name}
@@ -742,7 +757,7 @@ const Categories = () => {
                                             )}
                                         </tr>
                                     ))}
-                                    {zones.length === 0 && <tr><td colSpan="2" style={{ textAlign: 'center', padding: '1rem' }}>No zones configured.</td></tr>}
+                                    {zones.length === 0 && <tr><td colSpan="3" style={{ textAlign: 'center', padding: '1rem' }}>No zones configured.</td></tr>}
                                 </tbody>
                             </table>
                         </div>

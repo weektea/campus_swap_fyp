@@ -114,16 +114,16 @@ class _MyTransactionsPageState extends State<MyTransactionsPage> with SingleTick
                 child: Row(
                     children: [
                         Text(
-                          "Filter by:",
+                          "Filter:",
                           style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold),
                         ),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: 8),
                         Expanded(
                             child: DropdownButtonFormField<String>(
                                 value: _filterStatus,
                                 isDense: true,
                                 decoration: InputDecoration(
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                                 ),
                                 items: _statusOptions.map((s) => DropdownMenuItem(value: s, child: Text(s, style: theme.textTheme.bodyMedium))).toList(),
@@ -131,7 +131,23 @@ class _MyTransactionsPageState extends State<MyTransactionsPage> with SingleTick
                                     if (val != null) setState(() => _filterStatus = val);
                                 },
                             ),
-                        )
+                        ),
+                        const SizedBox(width: 10),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.primary.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: theme.colorScheme.primary.withValues(alpha: 0.3)),
+                          ),
+                          child: Text(
+                            'Total: ${_tabController.index == 0 ? filteredBuying.length : filteredSelling.length}',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: theme.colorScheme.primary,
+                            ),
+                          ),
+                        ),
                     ],
                 ),
             ),

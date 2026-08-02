@@ -114,6 +114,10 @@ const Transaction = sequelize.define('Transaction', {
         type: DataTypes.UUID,
         allowNull: true,
     },
+    cancellation_reason: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+    },
 }, {
     timestamps: true,
 });

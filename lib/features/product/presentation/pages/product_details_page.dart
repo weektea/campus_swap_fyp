@@ -1076,7 +1076,12 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                                     )
                                 )).toList(),
                                 onChanged: (val) {
-                                    if (val != null) setModalState(() => selectedLocation = val);
+                                    if (val != null) {
+                                        setModalState(() {
+                                            selectedLocation = val;
+                                            _selectedLocation = val;
+                                        });
+                                    }
                                 }
                             ),
                         ),
@@ -1118,6 +1123,47 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                             ),
                         ),
                     ),
+                    const SizedBox(height: 16),
+
+                    Text('Offer Summary:', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: widget.product.imageUrl.isNotEmpty 
+                            ? CachedNetworkImage(imageUrl: widget.product.imageUrl, width: 60, height: 60, fit: BoxFit.cover)
+                            : Container(width: 60, height: 60, color: theme.colorScheme.surfaceContainer),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(widget.product.title, style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
+                              Text(
+                                'Proposed Offer: RM ${(double.tryParse(offerPriceController.text) ?? widget.product.price).toStringAsFixed(2)}',
+                                style: theme.textTheme.bodyMedium?.copyWith(color: Colors.orange[800], fontWeight: FontWeight.bold)
+                              ),
+                              Row(
+                                children: [
+                                  Icon(Icons.location_on, size: 12, color: theme.colorScheme.primary),
+                                  const SizedBox(width: 4),
+                                  Expanded(
+                                    child: Text(
+                                      'Meetup: ${selectedLocation ?? _selectedLocation}',
+                                      style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        )
+                      ],
+                    ),
                     const SizedBox(height: 24),
                     SizedBox(
                       width: double.infinity,
@@ -1143,6 +1189,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                             context,
                             enteredPrice,
                             paymentMethod: selectedPaymentMethod,
+                            meetupLocation: selectedLocation,
                           );
                         },
                         style: ElevatedButton.styleFrom(
@@ -1383,6 +1430,20 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                                 style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.primary, fontWeight: FontWeight.bold)
                             ),
                           ],
+                          Row(
+                            children: [
+                              Icon(Icons.location_on, size: 12, color: theme.colorScheme.primary),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  'Meetup: $_selectedLocation',
+                                  style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
                         ],
                       ),
                     )
@@ -1399,6 +1460,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                         rentStartDate: _rentStartDate,
                         rentEndDate: _rentEndDate,
                         paymentMethod: selectedPaymentMethod,
+                        meetupLocation: _selectedLocation,
                       ); 
                     },
                     style: ElevatedButton.styleFrom(
@@ -1421,7 +1483,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
   );
 }
 
-  void _buyNow(BuildContext context, double finalPrice, {DateTime? rentStartDate, DateTime? rentEndDate, String? paymentMethod}) async {
+  void _buyNow(BuildContext context, double finalPrice, {DateTime? rentStartDate, DateTime? rentEndDate, String? paymentMethod, String? meetupLocation}) async {
       final theme = Theme.of(context);
       setState(() => _isBuying = true);
       try {
@@ -1432,7 +1494,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
             'seller_id': widget.product.sellerId, 
             'product_id': widget.product.id,
             'amount': finalPrice, // Use dynamically calculated price
-            'meetup_location': _selectedLocation, // Use selected location
+            'meetup_location': meetupLocation ?? _selectedLocation, // Use selected location
             'selected_payment_method': paymentMethod ?? 'Cash'
         };
 

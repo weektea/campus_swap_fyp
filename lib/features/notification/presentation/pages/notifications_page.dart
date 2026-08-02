@@ -144,7 +144,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
 
     return Scaffold(
         appBar: AppBar(
-            title: Text('Notifications', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+            title: Text(_notifications.isNotEmpty ? 'Notifications (${_notifications.length})' : 'Notifications', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
             actions: [
                 if (hasReadNotifications)
                     IconButton(
@@ -350,12 +350,13 @@ class _NotificationsPageState extends State<NotificationsPage> {
                                             Navigator.push(context, MaterialPageRoute(
                                                 builder: (_) => const HelpCenterPage()
                                             ));
-                                        } else if (note['type'] == 'Transaction' || note['type'] == 'System' || note['type'] == 'Promotion') {
-                                             if (note['related_id'] != null && !title.contains('Cancelled')) {
-                                                 Navigator.push(context, MaterialPageRoute(
-                                                     builder: (_) => TransactionDetailPage(transactionId: note['related_id'])
-                                                 ));
-                                             } else {
+                                         } else if (note['type'] == 'Transaction') {
+                                              if (note['related_id'] != null) {
+                                                  Navigator.push(context, MaterialPageRoute(
+                                                      builder: (_) => TransactionDetailPage(transactionId: note['related_id'].toString())
+                                                  ));
+                                              }
+                                         } else if (note['type'] == 'System' || note['type'] == 'Promotion') {
                                                  // Tapping on a broadcast notification opens a simple dialog showing the full announcement content.
                                                  showDialog(
                                                      context: context,
@@ -394,7 +395,6 @@ class _NotificationsPageState extends State<NotificationsPage> {
                                                          ],
                                                      ),
                                                  );
-                                             }
                                          }
                                     },
                                 ),

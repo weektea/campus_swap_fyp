@@ -40,3 +40,31 @@ export const getCategories = async (req, res) => {
         res.status(500).json({ error: 'Failed to fetch categories' });
     }
 };
+
+/**
+ * Retrieves a flat array of all active subcategories in the database.
+ */
+export const getSubcategories = async (req, res) => {
+    try {
+        const subcategories = await SubCategory.findAll({
+            attributes: ['id', 'name', 'category_id', 'carbon_conversion_factor'],
+            include: [{
+                model: Category,
+                as: 'categoryModel',
+                attributes: ['name']
+            }],
+            order: [['name', 'ASC']]
+        });
+        const formatted = subcategories.map(sub => ({
+            id: sub.id,
+            name: sub.name,
+            category_id: sub.category_id,
+            category_name: sub.categoryModel ? sub.categoryModel.name : '',
+            carbon_conversion_factor: sub.carbon_conversion_factor
+        }));
+        res.json(formatted);
+    } catch (error) {
+        console.error('Get Subcategories Error:', error);
+        res.status(500).json({ error: 'Failed to fetch subcategories' });
+    }
+};

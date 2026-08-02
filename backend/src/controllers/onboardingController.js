@@ -1,4 +1,4 @@
-import { User, Category } from '../models/index.js';
+import { User, Category, SubCategory } from '../models/index.js';
 import axios from 'axios';
 
 const ML_SERVICE_URL = process.env.ML_SERVICE_URL || 'http://localhost:5000';
@@ -6,14 +6,48 @@ const ML_SERVICE_URL = process.env.ML_SERVICE_URL || 'http://localhost:5000';
 // GET /api/onboarding/options
 export const getOnboardingOptions = async (req, res) => {
     try {
-        // Fetch active marketplace categories dynamically from DB
-        const categoriesDB = await Category.findAll({
-            attributes: ['id', 'name', 'icon_url'],
+        // Fetch active sub-categories dynamically from DB with parent Category info
+        const subcategoriesDB = await SubCategory.findAll({
+            attributes: ['id', 'name', 'category_id'],
+            include: [{
+                model: Category,
+                as: 'categoryModel',
+                attributes: ['name']
+            }],
             order: [['name', 'ASC']]
         });
 
-        // Helper emoji mapper for visual icons
-        const emojiMap = {
+        // Subcategory emoji mapper
+        const subEmojiMap = {
+            'Audio': '🎧',
+            'Laptops': '💻',
+            'PC Accessories': '⌨️',
+            'Smartphones': '📱',
+            'Tablets': '📲',
+            'Bags & Luggage': '🎒',
+            'Clothing': '👕',
+            'Fashion Accessories': '🕶️',
+            'Shoes': '👟',
+            'Appliances': '🔌',
+            'Chairs': '🪑',
+            'Sofas': '🛋️',
+            'Storage': '📦',
+            'Tables & Desks': '🖥️',
+            'Books': '📚',
+            'Calculators': '🧮',
+            'Notes & Past Papers': '📝',
+            'Apparel': '🎽',
+            'Bicycles': '🚲',
+            'Equipment': '⚽',
+            'Art Supplies': '🎨',
+            'Paper': '📄',
+            'Writing': '✏️',
+            'Cosmetics & Beauty': '💄',
+            'Drinkware': '🥤',
+            'Miscellaneous': '🏷️'
+        };
+
+        const categoryEmojiMap = {
             'Electronics & Gadgets': '📱',
             'Books & Study Materials': '📚',
             'Fashion & Accessories': '👕',
@@ -23,12 +57,16 @@ export const getOnboardingOptions = async (req, res) => {
             'Others': '📦'
         };
 
-        const categories = categoriesDB.map(cat => ({
-            id: cat.id,
-            name: cat.name,
-            icon: emojiMap[cat.name] || '🏷️',
-            icon_url: cat.icon_url
-        }));
+        const subcategories = subcategoriesDB.map(sub => {
+            const catName = sub.categoryModel ? sub.categoryModel.name : '';
+            return {
+                id: sub.id,
+                name: sub.name,
+                category_id: sub.category_id,
+                category_name: catName,
+                icon: subEmojiMap[sub.name] || categoryEmojiMap[catName] || '🏷️'
+            };
+        });
 
         const intents = [
             {
@@ -59,7 +97,8 @@ export const getOnboardingOptions = async (req, res) => {
 
         res.json({
             intents,
-            categories
+            subcategories,
+            categories: subcategories // backward compatibility
         });
     } catch (error) {
         console.error('Get Onboarding Options Error:', error);

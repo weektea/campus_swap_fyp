@@ -50,9 +50,14 @@ class EReceiptModal extends StatelessWidget {
     final buyer = transaction['buyer'] ?? {};
     final seller = transaction['seller'] ?? {};
 
-    final double itemSubtotal = double.tryParse(transaction['item_price']?.toString() ?? transaction['amount']?.toString() ?? '0.0') ?? 0.0;
-    final double platformFee = double.tryParse(transaction['platform_fee']?.toString() ?? '') ?? (itemSubtotal * 0.02);
-    final double totalPaid = itemSubtotal;
+    final bool isRent = product['type'] == 'Rent' || transaction['rental_start_date'] != null;
+    final double totalPaid = double.tryParse(transaction['amount']?.toString() ?? transaction['total_payment']?.toString() ?? '0.0') ?? 0.0;
+    final double depositAmount = double.tryParse(transaction['deposit_amount']?.toString() ?? '0.0') ?? 0.0;
+    final double rentalFee = isRent 
+        ? (double.tryParse(transaction['rental_fee']?.toString() ?? '') ?? (totalPaid > depositAmount ? totalPaid - depositAmount : totalPaid))
+        : totalPaid;
+    final double platformFee = double.tryParse(transaction['platform_fee']?.toString() ?? '') ?? (rentalFee * 0.02);
+    final double ownerNetEarnings = rentalFee - platformFee;
     final bool isBuying = transaction['buyer_id']?.toString() == UserSession().userId?.toString();
 
     final String buyerName = buyer['full_name'] ?? buyer['username'] ?? 'Campus Buyer';
@@ -331,37 +336,12 @@ class EReceiptModal extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    _buildRowItem("Item Price", "RM ${itemSubtotal.toStringAsFixed(2)}"),
-                    const SizedBox(height: 8),
-                    if (isBuying) ...[
-                      _buildRowItem("Payment Method", paymentMethod, isBadge: true),
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 12.0),
-                        child: Divider(height: 1, thickness: 1),
-                      ),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            "Total Paid",
-                            style: GoogleFonts.outfit(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w900,
-                              color: const Color(0xFF0F172A),
-                            ),
-                          ),
-                          Text(
-                            "RM ${itemSubtotal.toStringAsFixed(2)}",
-                            style: GoogleFonts.outfit(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w900,
-                              color: const Color(0xFF005A43),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ] else ...[
-                      _buildRowItem("Platform Service Fee (2%)", "- RM ${platformFee.toStringAsFixed(2)}", isSecondary: true),
+                    if (isRent) ...[
+                      _buildRowItem("Rental Fee", "RM ${rentalFee.toStringAsFixed(2)}"),
+                      const SizedBox(height: 8),
+                      _buildRowItem("Deposit (Refundable)", "RM ${depositAmount.toStringAsFixed(2)}", isSecondary: true),
+                      const SizedBox(height: 8),
+                      _buildRowItem("Platform Fee (2% of Rental Fee)", "- RM ${platformFee.toStringAsFixed(2)}", isSecondary: true),
                       const SizedBox(height: 8),
                       _buildRowItem("Payment Method", paymentMethod, isBadge: true),
                       const Padding(
@@ -372,7 +352,42 @@ class EReceiptModal extends StatelessWidget {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
-                            "Net Earnings",
+                            isBuying ? "Total Upfront Paid (Cash/TNG)" : "Owner Net Earnings",
+                            style: GoogleFonts.outfit(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w900,
+                              color: const Color(0xFF0F172A),
+                            ),
+                          ),
+                          Text(
+                            isBuying
+                                ? "RM ${totalPaid.toStringAsFixed(2)}"
+                                : "RM ${ownerNetEarnings.toStringAsFixed(2)}",
+                            style: GoogleFonts.outfit(
+                              fontSize: 19,
+                              fontWeight: FontWeight.w900,
+                              color: const Color(0xFF005A43),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ] else ...[
+                      _buildRowItem("Item Price", "RM ${rentalFee.toStringAsFixed(2)}"),
+                      const SizedBox(height: 8),
+                      if (!isBuying) ...[
+                        _buildRowItem("Platform Fee (2%)", "- RM ${platformFee.toStringAsFixed(2)}", isSecondary: true),
+                        const SizedBox(height: 8),
+                      ],
+                      _buildRowItem("Payment Method", paymentMethod, isBadge: true),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 12.0),
+                        child: Divider(height: 1, thickness: 1),
+                      ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            isBuying ? "Total Paid" : "Net Earnings",
                             style: GoogleFonts.outfit(
                               fontSize: 16,
                               fontWeight: FontWeight.w900,
@@ -380,7 +395,9 @@ class EReceiptModal extends StatelessWidget {
                             ),
                           ),
                           Text(
-                            "RM ${(itemSubtotal - platformFee).toStringAsFixed(2)}",
+                            isBuying
+                                ? "RM ${totalPaid.toStringAsFixed(2)}"
+                                : "RM ${ownerNetEarnings.toStringAsFixed(2)}",
                             style: GoogleFonts.outfit(
                               fontSize: 20,
                               fontWeight: FontWeight.w900,

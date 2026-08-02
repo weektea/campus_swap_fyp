@@ -29,7 +29,7 @@ class SocketService {
 
     debugPrint('SocketService: Connecting to $socketUrl');
     socket = socket_io.io(socketUrl, socket_io.OptionBuilder()
-      .setTransports(['websocket'])
+      .setTransports(<String>['websocket'])
       .disableAutoConnect()
       .setAuth({
         'token': session.token ?? '',

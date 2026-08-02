@@ -45,14 +45,37 @@ class _OnboardingPageState extends State<OnboardingPage> {
     },
   ];
 
-  final List<Map<String, String>> _categories = [
-    {'name': 'Electronics & Gadgets', 'icon': '📱'},
-    {'name': 'Books & Study Materials', 'icon': '📚'},
-    {'name': 'Fashion & Accessories', 'icon': '👕'},
-    {'name': 'Furniture & Appliances', 'icon': '🛋️'},
-    {'name': 'Sports', 'icon': '🏀'},
-    {'name': 'Stationery', 'icon': '✏️'},
-    {'name': 'Others', 'icon': '📦'},
+  // Flat sub-categories list fetched dynamically from backend DB
+  final List<Map<String, String>> _subcategories = [];
+
+  // Fallback sub-categories if network/offline
+  final List<Map<String, String>> _defaultSubcategories = [
+    {'name': 'Audio', 'icon': '🎧'},
+    {'name': 'Laptops', 'icon': '💻'},
+    {'name': 'PC Accessories', 'icon': '⌨️'},
+    {'name': 'Smartphones', 'icon': '📱'},
+    {'name': 'Tablets', 'icon': '📲'},
+    {'name': 'Bags & Luggage', 'icon': '🎒'},
+    {'name': 'Clothing', 'icon': '👕'},
+    {'name': 'Fashion Accessories', 'icon': '🕶️'},
+    {'name': 'Shoes', 'icon': '👟'},
+    {'name': 'Appliances', 'icon': '🔌'},
+    {'name': 'Chairs', 'icon': '🪑'},
+    {'name': 'Sofas', 'icon': '🛋️'},
+    {'name': 'Storage', 'icon': '📦'},
+    {'name': 'Tables & Desks', 'icon': '🖥️'},
+    {'name': 'Books', 'icon': '📚'},
+    {'name': 'Calculators', 'icon': '🧮'},
+    {'name': 'Notes & Past Papers', 'icon': '📝'},
+    {'name': 'Apparel', 'icon': '🎽'},
+    {'name': 'Bicycles', 'icon': '🚲'},
+    {'name': 'Equipment', 'icon': '⚽'},
+    {'name': 'Art Supplies', 'icon': '🎨'},
+    {'name': 'Paper', 'icon': '📄'},
+    {'name': 'Writing', 'icon': '✏️'},
+    {'name': 'Cosmetics & Beauty', 'icon': '💄'},
+    {'name': 'Drinkware', 'icon': '🥤'},
+    {'name': 'Miscellaneous', 'icon': '🏷️'},
   ];
 
   @override
@@ -77,13 +100,15 @@ class _OnboardingPageState extends State<OnboardingPage> {
             });
           }
         }
-        if (response['categories'] != null) {
-          final List dynamicCats = response['categories'];
-          _categories.clear();
-          for (var item in dynamicCats) {
-            _categories.add({
+        final List? dynamicSubs = response['subcategories'] ?? response['categories'];
+        if (dynamicSubs != null && dynamicSubs.isNotEmpty) {
+          _subcategories.clear();
+          for (var item in dynamicSubs) {
+            _subcategories.add({
+              'id': item['id']?.toString() ?? '',
               'name': item['name'].toString(),
               'icon': item['icon']?.toString() ?? '🏷️',
+              'category_name': item['category_name']?.toString() ?? '',
             });
           }
         }
@@ -92,6 +117,9 @@ class _OnboardingPageState extends State<OnboardingPage> {
       debugPrint("Using default onboarding options fallback: $e");
     } finally {
       if (mounted) {
+        if (_subcategories.isEmpty) {
+          _subcategories.addAll(_defaultSubcategories);
+        }
         setState(() {
           _isLoadingOptions = false;
         });
@@ -99,8 +127,47 @@ class _OnboardingPageState extends State<OnboardingPage> {
     }
   }
 
+  /// Edge Case 1: Skip Action with Backend Sync
+  Future<void> _skipOnboarding() async {
+    if (_isSubmitting) return;
+
+    setState(() {
+      _isSubmitting = true;
+    });
+
+    try {
+      // Fire API call to mark user as onboarded on backend with empty preferences
+      await ApiClient().post('/onboarding/preferences', {
+        'primary_intent': _selectedIntent,
+        'preference_tags': [],
+      });
+    } catch (e) {
+      debugPrint("Skip onboarding backend sync error: $e");
+    } finally {
+      if (mounted) {
+        // Sync local session & persist to storage
+        final session = UserSession();
+        session.isOnboarded = true;
+        session.primaryIntent = _selectedIntent;
+        session.preferenceTags = [];
+        await session.saveToStorage();
+
+        if (mounted) {
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => const HomePage()),
+            (route) => false,
+          );
+        }
+      }
+    }
+  }
+
+  /// Edge Case 2 & 3: Save Action with Local Session Sync & Zero-Selection Handling
   Future<void> _submitOnboarding() async {
-    if (_selectedTags.length < 3) return;
+    // If 0 tags selected, treat as Skip action
+    if (_selectedTags.isEmpty) {
+      return _skipOnboarding();
+    }
 
     setState(() {
       _isSubmitting = true;
@@ -113,6 +180,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
       });
 
       if (mounted) {
+        // Edge Case 2: Set session.isOnboarded = true locally & persist to storage before routing
         final session = UserSession();
         session.isOnboarded = true;
         session.primaryIntent = _selectedIntent;
@@ -123,11 +191,14 @@ class _OnboardingPageState extends State<OnboardingPage> {
           session.primaryIntent = u['primary_intent'] ?? _selectedIntent;
           session.preferenceTags = List<String>.from(u['preference_tags'] ?? _selectedTags);
         }
+        await session.saveToStorage();
 
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const HomePage()),
-          (route) => false,
-        );
+        if (mounted) {
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => const HomePage()),
+            (route) => false,
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -180,6 +251,22 @@ class _OnboardingPageState extends State<OnboardingPage> {
             ),
           ],
         ),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: TextButton(
+              onPressed: _isSubmitting ? null : _skipOnboarding,
+              child: Text(
+                "Skip",
+                style: GoogleFonts.outfit(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? Colors.grey.shade400 : const Color(0xFF64748B),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
       body: SafeArea(
         child: _isLoadingOptions
@@ -235,23 +322,23 @@ class _OnboardingPageState extends State<OnboardingPage> {
                               ),
                             )
                           : ElevatedButton(
-                              onPressed: (_selectedTags.length >= 3 && !_isSubmitting) ? _submitOnboarding : null,
+                              onPressed: _isSubmitting ? null : _submitOnboarding,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: const Color(0xFF005A43),
                                 disabledBackgroundColor: isDark ? Colors.grey.shade800 : Colors.grey.shade300,
                                 foregroundColor: Colors.white,
                                 minimumSize: const Size(double.infinity, 52),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                                elevation: _selectedTags.length >= 3 ? 2 : 0,
+                                elevation: 2,
                               ),
                               child: _isSubmitting
                                   ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
                                   : Text(
-                                      _selectedTags.length >= 3 ? "Complete & Start Swapping" : "Select at least 3 categories",
+                                      _selectedTags.isNotEmpty ? "Complete & Start Swapping" : "Skip & Continue",
                                       style: GoogleFonts.outfit(
                                         fontSize: 16,
                                         fontWeight: FontWeight.bold,
-                                        color: _selectedTags.length >= 3 ? Colors.white : Colors.grey.shade500,
+                                        color: Colors.white,
                                       ),
                                     ),
                             ),
@@ -360,7 +447,6 @@ class _OnboardingPageState extends State<OnboardingPage> {
 
   Widget _buildStep2Preferences(bool isDark) {
     final count = _selectedTags.length;
-    final isSatisfied = count >= 3;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -396,35 +482,35 @@ class _OnboardingPageState extends State<OnboardingPage> {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           decoration: BoxDecoration(
-            color: isSatisfied
+            color: count > 0
                 ? (isDark ? const Color(0xFF14532D).withValues(alpha: 0.3) : const Color(0xFFDCFCE7))
-                : (isDark ? const Color(0xFF713F12).withValues(alpha: 0.3) : const Color(0xFFFEF9C3)),
+                : (isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9)),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: isSatisfied
+              color: count > 0
                   ? (isDark ? const Color(0xFF166534) : const Color(0xFFBBF7D0))
-                  : (isDark ? const Color(0xFF854D0E) : const Color(0xFFFEF08A)),
+                  : (isDark ? Colors.grey.shade800 : Colors.grey.shade300),
             ),
           ),
           child: Row(
             children: [
               Icon(
-                isSatisfied ? Icons.check_circle_rounded : Icons.info_outline_rounded,
-                color: isSatisfied ? const Color(0xFF15803D) : const Color(0xFFA16207),
+                count > 0 ? Icons.check_circle_rounded : Icons.info_outline_rounded,
+                color: count > 0 ? const Color(0xFF15803D) : const Color(0xFF64748B),
                 size: 20,
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  isSatisfied
-                      ? "Great job! Selected $count categories (Minimum 3 met)."
-                      : "Selected $count / 3 categories (Please choose at least ${3 - count} more).",
+                  count > 0
+                      ? "Great job! Selected $count sub-categories."
+                      : "Tap any sub-categories below to personalize your feed (or tap Skip).",
                   style: GoogleFonts.outfit(
                     fontSize: 13,
                     fontWeight: FontWeight.bold,
-                    color: isSatisfied
+                    color: count > 0
                         ? (isDark ? const Color(0xFF86EFAC) : const Color(0xFF15803D))
-                        : (isDark ? const Color(0xFFFDE047) : const Color(0xFFA16207)),
+                        : (isDark ? Colors.grey.shade300 : const Color(0xFF475569)),
                   ),
                 ),
               ),
@@ -433,21 +519,21 @@ class _OnboardingPageState extends State<OnboardingPage> {
         ),
         const SizedBox(height: 24),
 
-        // ChoiceChips Grid
+        // Giant Fluid Tag Cloud (No Parent Category Headers)
         Wrap(
-          spacing: 10,
-          runSpacing: 12,
-          children: _categories.map((cat) {
-            final name = cat['name']!;
-            final icon = cat['icon']!;
+          spacing: 8,
+          runSpacing: 10,
+          children: _subcategories.map((subCat) {
+            final name = subCat['name']!;
+            final icon = subCat['icon'] ?? '🏷️';
             final isSelected = _selectedTags.contains(name);
 
             return FilterChip(
-              avatar: Text(icon, style: const TextStyle(fontSize: 16)),
+              avatar: Text(icon, style: const TextStyle(fontSize: 15)),
               label: Text(
                 name,
                 style: GoogleFonts.outfit(
-                  fontSize: 14,
+                  fontSize: 13,
                   fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
                   color: isSelected
                       ? Colors.white
@@ -475,7 +561,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
                     : (isDark ? Colors.grey.shade800 : Colors.grey.shade300),
                 width: isSelected ? 1.5 : 1,
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
               elevation: isSelected ? 2 : 0,
             );

@@ -533,9 +533,9 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
                                      return Container(
                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                                        decoration: BoxDecoration(
-                                         color: isDark ? Colors.orange.shade900.withOpacity(0.2) : Colors.orange.shade50,
+                                         color: isDark ? Colors.orange.shade900.withValues(alpha: 0.2) : Colors.orange.shade50,
                                          borderRadius: BorderRadius.circular(16),
-                                         border: Border.all(color: isDark ? Colors.orange.shade800.withOpacity(0.4) : Colors.orange.shade200),
+                                         border: Border.all(color: isDark ? Colors.orange.shade800.withValues(alpha: 0.4) : Colors.orange.shade200),
                                        ),
                                        child: Row(
                                          mainAxisSize: MainAxisSize.min,
@@ -678,7 +678,7 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
                         
                         const Divider(),
                         const SizedBox(height: 16),
-                        Text("Listings", style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.bold)),
+                        Text("Listings (${_listings.length})", style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 16),
                         
                         _listings.isEmpty 

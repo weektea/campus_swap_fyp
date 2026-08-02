@@ -19,6 +19,7 @@ export const getListings = async (req, res) => {
                 attributes: ['username', 'full_name', 'email', 'reputation_score', 'is_active', 'is_verified'] 
             }] 
         });
+        res.set('X-Total-Count', products.length);
         res.json(products);
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -48,6 +49,7 @@ export const suspendListing = async (req, res) => {
 export const getReports = async (req, res) => {
     try {
         const reports = await Report.findAll({ include: ['reporter', 'product', 'handler', 'reported_user'] });
+        res.set('X-Total-Count', reports.length);
         res.json(reports);
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -71,6 +73,7 @@ export const getDisputes = async (req, res) => {
                 'handler'
             ]
         });
+        res.set('X-Total-Count', disputes.length);
         res.json(disputes);
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -264,6 +267,7 @@ export const getChatTranscript = async (req, res) => {
 export const getTickets = async (req, res) => {
     try {
         const tickets = await SupportTicket.findAll({ include: ['student', 'handler'] });
+        res.set('X-Total-Count', tickets.length);
         res.json(tickets);
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -718,6 +722,7 @@ export const getAllListings = async (req, res) => {
             include: [{ model: User, as: 'seller', attributes: ['id', 'email', 'username', 'full_name'] }],
             order: [['createdAt', 'DESC']]
         });
+        res.set('X-Total-Count', listings.length);
         res.json(listings);
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -816,6 +821,7 @@ export const getAllUsers = async (req, res) => {
             return user;
         });
 
+        res.set('X-Total-Count', updatedUsers.length);
         res.json(updatedUsers);
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -835,6 +841,7 @@ export const getArchivedUsers = async (req, res) => {
                 ]
             }
         });
+        res.set('X-Total-Count', users.length);
         res.json(users);
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -1116,6 +1123,7 @@ export const getAllTransactions = async (req, res) => {
             ],
             order: [['createdAt', 'DESC']]
         });
+        res.set('X-Total-Count', transactions.length);
         res.json(transactions);
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -1131,6 +1139,7 @@ export const getAllReviews = async (req, res) => {
             ],
             order: [['createdAt', 'DESC']]
         });
+        res.set('X-Total-Count', reviews.length);
         res.json(reviews);
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -1154,6 +1163,7 @@ export const getAllCategories = async (req, res) => {
         const categories = await Category.findAll({
             include: [{ model: SubCategory, as: 'subcategories' }]
         });
+        res.set('X-Total-Count', categories.length);
         res.json(categories);
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -1488,6 +1498,7 @@ export const getBroadcastRequests = async (req, res) => {
             ],
             order: [['createdAt', 'DESC']]
         });
+        res.set('X-Total-Count', requests.length);
         res.json(requests);
     } catch (error) {
         console.error('Error fetching broadcast requests:', error);

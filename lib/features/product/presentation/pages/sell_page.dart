@@ -64,6 +64,9 @@ class _SellPageState extends State<SellPage> {
     super.initState();
     _categoriesMap = Map.from(_fallbackCategoriesMap);
     _loadCategories();
+    _descController.addListener(() {
+      if (mounted) setState(() {});
+    });
   }
 
   Future<void> _loadCategories() async {
@@ -969,11 +972,26 @@ class _SellPageState extends State<SellPage> {
               decoration: InputDecoration(
                 labelText: 'Description',
                 alignLabelWithHint: true,
-                suffixIcon: IconButton(
-                  icon: const Icon(Icons.auto_fix_high),
-                  tooltip: 'Generate Description',
-                  onPressed: _generateDescription,
-                )
+                suffixIcon: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (_descController.text.isNotEmpty)
+                      IconButton(
+                        icon: const Icon(Icons.clear_rounded),
+                        tooltip: 'Clear Description',
+                        onPressed: () {
+                          setState(() {
+                            _descController.clear();
+                          });
+                        },
+                      ),
+                    IconButton(
+                      icon: const Icon(Icons.auto_fix_high),
+                      tooltip: 'Generate Description',
+                      onPressed: _generateDescription,
+                    ),
+                  ],
+                ),
               ),
               style: theme.textTheme.bodyMedium,
             ),

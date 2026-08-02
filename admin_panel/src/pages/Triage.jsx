@@ -128,7 +128,7 @@ const Triage = () => {
         <div className="flex gap-6 h-full" style={{ minHeight: '80vh' }}>
             {/* Sidebar List */}
             <div className="card flex flex-col gap-2" style={{ width: '300px', padding: '1rem', overflowY: 'auto' }}>
-                <h3 style={{ margin: '0 0 1rem 0' }}>Actionable Tasks ({tasks.length})</h3>
+                <h3 style={{ margin: '0 0 1rem 0', color: '#2563eb', fontWeight: 'bold' }}>Actionable Tasks Found: {tasks.length}</h3>
                 {tasks.map(task => (
                     <div 
                         key={task.id}

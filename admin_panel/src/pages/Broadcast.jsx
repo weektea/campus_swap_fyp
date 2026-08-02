@@ -369,9 +369,14 @@ const Broadcast = () => {
             <div className="card" style={{ padding: '2rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
                     <div>
-                        <h2 style={{ fontSize: '1.2rem', margin: 0, fontWeight: 'bold', color: 'var(--primary)' }}>
-                            Broadcast Requests & Approval Queue
-                        </h2>
+                        <div className="flex items-center gap-3">
+                            <h2 style={{ fontSize: '1.2rem', margin: 0, fontWeight: 'bold', color: 'var(--primary)' }}>
+                                Broadcast Requests & Approval Queue
+                            </h2>
+                            <span style={{ fontSize: '0.8rem', padding: '3px 10px', borderRadius: '12px', background: '#eff6ff', color: '#2563eb', fontWeight: 'bold', border: '1px solid #bfdbfe' }}>
+                                Total Requests Found: {requests.length}
+                            </span>
+                        </div>
                         <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
                             {isAdmin 
                                 ? 'Review, approve, or reject broadcast announcement requests submitted by Moderators.' 

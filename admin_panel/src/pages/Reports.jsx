@@ -142,6 +142,9 @@ const Reports = () => {
         <div className="flex gap-6 h-full" style={{ minHeight: '80vh' }}>
             {/* Sidebar List */}
             <div className="card flex flex-col gap-2" style={{ width: '300px', padding: '1rem', overflowY: 'auto' }}>
+                <div style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#2563eb', background: '#eff6ff', border: '1px solid #bfdbfe', padding: '6px 10px', borderRadius: '6px', textAlign: 'center', marginBottom: '8px' }}>
+                    Total Reports Found: {allReports.length} ({displayedReports.length} in view)
+                </div>
                 {/* Tab Switcher */}
                 <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: '12px' }}>
                     <button
