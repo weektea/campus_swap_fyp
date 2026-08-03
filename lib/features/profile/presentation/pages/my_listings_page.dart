@@ -306,41 +306,42 @@ class _MyListingsPageState extends State<MyListingsPage> with SingleTickerProvid
                                           style: GoogleFonts.outfit(color: const Color(0xFF475569), fontSize: 14)
                                       ),
                                       const SizedBox(height: 8),
-                                      Row(
-                                      children: [
-                                        Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                            decoration: BoxDecoration(
-                                                color: (product.status == 'Suspended' || product.status == 'Removed')
-                                                    ? Colors.red.withValues(alpha: 0.1)
-                                                    : Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
-                                                borderRadius: BorderRadius.circular(12)
-                                            ),
-                                            child: Text(
-                                                product.status == 'Suspended' 
-                                                    ? 'Suspended (Policy Violation)' 
-                                                    : (product.status == 'Removed' ? 'Removed by Admin' : product.status),
-                                                style: GoogleFonts.outfit(
-                                                    color: (product.status == 'Suspended' || product.status == 'Removed') ? Colors.red : Theme.of(context).colorScheme.primary, 
-                                                    fontSize: 10, 
-                                                    fontWeight: FontWeight.bold
-                                                )
-                                            )
-                                        ),
-                                      const SizedBox(width: 8),
-                                      Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                          decoration: BoxDecoration(
-                                              color: isRent ? Colors.orange.withValues(alpha: 0.1) : Colors.blue.withValues(alpha: 0.1),
-                                              borderRadius: BorderRadius.circular(12)
-                                          ),
-                                          child: Text(
-                                              isRent ? 'For Rent' : 'For Sale',
-                                              style: GoogleFonts.outfit(color: isRent ? Colors.orange : Colors.blue, fontSize: 10, fontWeight: FontWeight.bold)
-                                          )
-                                      ),
-                                      ],
-                                      )
+                                       Wrap(
+                                         spacing: 6,
+                                         runSpacing: 4,
+                                         children: [
+                                           Container(
+                                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                               decoration: BoxDecoration(
+                                                   color: (product.status == 'Suspended' || product.status == 'Removed')
+                                                       ? Colors.red.withValues(alpha: 0.1)
+                                                       : Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                                                   borderRadius: BorderRadius.circular(12)
+                                               ),
+                                               child: Text(
+                                                   product.status == 'Suspended' 
+                                                       ? 'Suspended (Policy Violation)' 
+                                                       : (product.status == 'Removed' ? 'Removed by Admin' : product.status),
+                                                   style: GoogleFonts.outfit(
+                                                       color: (product.status == 'Suspended' || product.status == 'Removed') ? Colors.red : Theme.of(context).colorScheme.primary, 
+                                                       fontSize: 10, 
+                                                       fontWeight: FontWeight.bold
+                                                   )
+                                               )
+                                           ),
+                                           Container(
+                                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                               decoration: BoxDecoration(
+                                                   color: isRent ? Colors.orange.withValues(alpha: 0.1) : Colors.blue.withValues(alpha: 0.1),
+                                                   borderRadius: BorderRadius.circular(12)
+                                               ),
+                                               child: Text(
+                                                   isRent ? 'For Rent' : 'For Sale',
+                                                   style: GoogleFonts.outfit(color: isRent ? Colors.orange : Colors.blue, fontSize: 10, fontWeight: FontWeight.bold)
+                                               )
+                                           ),
+                                         ],
+                                       )
                                   ]
                               )
                           ),

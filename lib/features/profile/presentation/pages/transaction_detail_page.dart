@@ -166,9 +166,72 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
       }
   }
 
-  Future<void> _pickAndUploadProof() async {
+  void _showPhotoSourcePicker(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Upload Handover / Payment Proof',
+              style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Select photo source:',
+              style: GoogleFonts.outfit(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant),
+            ),
+            const SizedBox(height: 16),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.camera_alt_rounded, color: Theme.of(context).colorScheme.primary),
+              ),
+              title: Text('Take Photo with Camera', style: GoogleFonts.outfit(fontWeight: FontWeight.w600)),
+              subtitle: Text('Capture item or receipt photo directly using camera', style: GoogleFonts.outfit(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+              onTap: () {
+                Navigator.pop(ctx);
+                _pickAndUploadProof(ImageSource.camera);
+              },
+            ),
+            const Divider(height: 1),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.photo_library_rounded, color: Theme.of(context).colorScheme.primary),
+              ),
+              title: Text('Choose from Gallery', style: GoogleFonts.outfit(fontWeight: FontWeight.w600)),
+              subtitle: Text('Select existing photo from your device album', style: GoogleFonts.outfit(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+              onTap: () {
+                Navigator.pop(ctx);
+                _pickAndUploadProof(ImageSource.gallery);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickAndUploadProof(ImageSource source) async {
       final picker = ImagePicker();
-      final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+      final XFile? image = await picker.pickImage(source: source);
       if (image == null) return;
 
       setState(() => _isUploadingProof = true);
@@ -182,7 +245,7 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
               if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: const Text('Payment proof uploaded successfully!'),
+                      content: const Text('Proof photo uploaded successfully!'),
                       backgroundColor: Theme.of(context).colorScheme.primary,
                       behavior: SnackBarBehavior.floating,
                     ),
@@ -519,6 +582,52 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
                     ]
                 )
              ),
+            
+            // Permanent Handover / Payment Proof Record Card (Preserved for future reference or dispute evidence)
+            if (_transaction['payment_proof_url'] != null) ...[
+              const SizedBox(height: 24),
+              Text('Handover & Payment Proof Record', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Theme.of(context).brightness == Brightness.dark ? Theme.of(context).colorScheme.outlineVariant : Colors.grey.shade200),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.verified_outlined, size: 16, color: Colors.teal),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Permanent Order Evidence Record',
+                          style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.teal),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: Image.network(
+                        '${ApiClient.baseUrl.replaceAll('/api', '')}${_transaction['payment_proof_url']}',
+                        width: double.infinity,
+                        height: 220,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) => Container(
+                          height: 100,
+                          color: Colors.grey[200],
+                          child: const Center(child: Icon(Icons.broken_image, color: Colors.grey)),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 24),
 
             // Party Info & Chat
@@ -557,23 +666,87 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
             const SizedBox(height: 12),
             _buildActionPanel(status, isBuying),
             const SizedBox(height: 24),
-            if (status != 'Cancelled' && status != 'Disputed')
-              Center(
-                child: TextButton.icon(
-                  onPressed: () async {
-                    final result = await Navigator.push(context, MaterialPageRoute(
-                      builder: (_) => OpenDisputePage(
-                        transaction: _transaction
-                      )
-                    ));
-                    if (result == true) {
-                      _fetchTransactionDetails(); // refresh if dispute opened
+            
+            // Dispute Channel & 7-Day Window Enforcement
+            () {
+              if (status == 'Cancelled' || status == 'Disputed') {
+                return const SizedBox.shrink();
+              }
+
+              bool isDisputeWindowExpired = false;
+              int daysRemaining = 7;
+              if (status == 'Completed') {
+                final completedDateStr = _transaction['completed_at'] ?? _transaction['updatedAt'];
+                if (completedDateStr != null) {
+                  final completedDate = DateTime.tryParse(completedDateStr.toString())?.toLocal();
+                  if (completedDate != null) {
+                    final daysPassed = DateTime.now().difference(completedDate).inDays;
+                    if (daysPassed >= 7) {
+                      isDisputeWindowExpired = true;
+                      daysRemaining = 0;
+                    } else {
+                      daysRemaining = 7 - daysPassed;
                     }
-                  },
-                  icon: const Icon(Icons.warning_amber_rounded, color: Colors.red),
-                  label: Text('Report Issue / Open Dispute', style: GoogleFonts.outfit(color: Colors.red, fontWeight: FontWeight.bold)),
-                ),
-              ),
+                  }
+                }
+              }
+
+              if (isDisputeWindowExpired) {
+                return Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.lock_clock_outlined, size: 18, color: Colors.grey),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Dispute channel closed (Passed 7-day post-completion limit)',
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.outfit(color: Colors.grey[600], fontSize: 13, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }
+
+              return Column(
+                children: [
+                  Center(
+                    child: TextButton.icon(
+                      onPressed: () async {
+                        final result = await Navigator.push(context, MaterialPageRoute(
+                          builder: (_) => OpenDisputePage(
+                            transaction: _transaction
+                          )
+                        ));
+                        if (result == true) {
+                          _fetchTransactionDetails(); // refresh if dispute opened
+                        }
+                      },
+                      icon: const Icon(Icons.warning_amber_rounded, color: Colors.red),
+                      label: Text('Report Issue / Open Dispute', style: GoogleFonts.outfit(color: Colors.red, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                  if (status == 'Completed')
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        'Note: Dispute channel for completed orders closes 7 days post-completion ($daysRemaining day${daysRemaining == 1 ? '' : 's'} remaining)',
+                        style: GoogleFonts.outfit(color: Colors.amber[900], fontSize: 11.5, fontWeight: FontWeight.w500),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                ],
+              );
+            }(),
             
             if (status == 'Completed') ...[
               const SizedBox(height: 24),
@@ -1031,7 +1204,7 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
                   Text(proofHelper, style: GoogleFonts.outfit(fontSize: 13, color: Colors.grey[600])),
                   const SizedBox(height: 12),
                   GestureDetector(
-                    onTap: _isUploadingProof ? null : _pickAndUploadProof,
+                    onTap: _isUploadingProof ? null : () => _showPhotoSourcePicker(context),
                     child: Container(
                       width: double.infinity,
                       height: 150,

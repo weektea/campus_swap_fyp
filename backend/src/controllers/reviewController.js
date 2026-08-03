@@ -1,5 +1,52 @@
 import { Review, Transaction, User, Product } from '../models/index.js';
 
+export const updateReputation = async (userId) => {
+    const reviews = await Review.findAll({
+        include: [{
+            model: Transaction,
+            as: 'transaction',
+            where: { review_status: 'PUBLISHED' }
+        }],
+        where: { reviewee_id: userId }
+    });
+
+    if (reviews.length > 0) {
+        const totalRating = reviews.reduce((sum, r) => sum + r.rating, 0);
+        const calculatedScore = totalRating / reviews.length;
+        
+        const user = await User.findByPk(userId);
+        if (user) {
+            user.reputation_score = parseFloat(calculatedScore.toFixed(1));
+            user.total_reviews = reviews.length;
+            await user.save();
+        }
+        return calculatedScore;
+    }
+    return null;
+};
+
+export const autoPublishExpiredReviews = async () => {
+    try {
+        const { Op } = await import('sequelize');
+        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+        const expiredTransactions = await Transaction.findAll({
+            where: {
+                review_status: ['BUYER_REVIEWED', 'SELLER_REVIEWED'],
+                updatedAt: { [Op.lte]: sevenDaysAgo }
+            }
+        });
+
+        for (const tx of expiredTransactions) {
+            tx.review_status = 'PUBLISHED';
+            await tx.save();
+            await updateReputation(tx.buyer_id);
+            await updateReputation(tx.seller_id);
+        }
+    } catch (e) {
+        console.error('Failed to auto-publish expired reviews:', e);
+    }
+};
+
 export const createReview = async (req, res) => {
     try {
         const reviewer_id = req.user.id;
@@ -51,7 +98,7 @@ export const createReview = async (req, res) => {
         // Sync to Transaction (Denormalization) and Advance State Machine
         if (transaction.buyer_id === reviewer_id) {
             transaction.rating_from_buyer = rating;
-            transaction.buyer_comment = comment; // Save comment to transaction table as well if needed, although review table holds it.
+            transaction.buyer_comment = comment;
 
             if (transaction.review_status === 'PENDING_REVIEWS') {
                 transaction.review_status = 'BUYER_REVIEWED';
@@ -74,32 +121,6 @@ export const createReview = async (req, res) => {
 
         // ONLY Update Reputation Score if the review state is PUBLISHED
         if (transaction.review_status === 'PUBLISHED') {
-            const updateReputation = async (userId) => {
-                const reviews = await Review.findAll({
-                    include: [{
-                        model: Transaction,
-                        as: 'transaction',
-                        where: { review_status: 'PUBLISHED' }
-                    }],
-                    where: { reviewee_id: userId }
-                });
-
-                if (reviews.length > 0) {
-                    const totalRating = reviews.reduce((sum, r) => sum + r.rating, 0);
-                    const calculatedScore = totalRating / reviews.length;
-                    
-                    const user = await User.findByPk(userId);
-                    if (user) {
-                        user.reputation_score = parseFloat(calculatedScore.toFixed(1));
-                        user.total_reviews = reviews.length;
-                        await user.save();
-                    }
-                    return calculatedScore;
-                }
-                return null;
-            };
-
-            // Recalculate for both buyer and seller since both are now published
             await updateReputation(transaction.buyer_id);
             newScore = await updateReputation(transaction.seller_id);
         }
@@ -113,6 +134,8 @@ export const createReview = async (req, res) => {
 
 export const getUserReviews = async (req, res) => {
     try {
+        await autoPublishExpiredReviews();
+
         const { user_id } = req.params;
         const reviews = await Review.findAll({
             where: { reviewee_id: user_id },

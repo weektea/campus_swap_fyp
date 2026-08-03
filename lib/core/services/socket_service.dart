@@ -21,6 +21,11 @@ class SocketService {
       return;
     }
 
+    if (socket != null && socket!.connected) {
+      debugPrint('SocketService: Already connected.');
+      return;
+    }
+
     // Disconnect existing socket first
     disconnect();
 
@@ -29,7 +34,10 @@ class SocketService {
 
     debugPrint('SocketService: Connecting to $socketUrl');
     socket = socket_io.io(socketUrl, socket_io.OptionBuilder()
-      .setTransports(<String>['websocket'])
+      .setTransports(<String>['websocket', 'polling'])
+      .enableReconnection()
+      .setReconnectionAttempts(10)
+      .setReconnectionDelay(1000)
       .disableAutoConnect()
       .setAuth({
         'token': session.token ?? '',
@@ -45,47 +53,6 @@ class SocketService {
 
     socket?.onConnect((_) {
       debugPrint('SocketService: Connected successfully');
-      
-      // Real-time Chat message instant system pop-up notification
-      socket?.on('receive_new_message', (data) {
-        if (data != null) {
-          final currentUserId = session.userId;
-          final senderId = data['sender_id']?.toString() ?? data['sender']?['id']?.toString() ?? '';
-          final receiverId = data['receiver_id']?.toString();
-
-          // 1. Do NOT pop up a toast notification for messages sent by the user themselves
-          if (senderId.isNotEmpty && senderId == currentUserId) {
-            return;
-          }
-
-          // 2. Privacy & Isolation check: If message targets a specific receiver, ignore if it doesn't match current user
-          if (receiverId != null && receiverId.isNotEmpty && receiverId != currentUserId) {
-            return;
-          }
-
-          final senderName = data['sender']?['full_name'] ?? data['sender']?['username'] ?? 'Chat Partner';
-          final content = data['content']?.toString() ?? 'New message received';
-          final avatar = data['sender']?['profile_image_url']?.toString() ?? '';
-          NotificationService().showPopUpNotification(
-            title: 'Message from $senderName',
-            message: content,
-            payload: 'CHAT|$senderId|$senderName|$avatar',
-          );
-        }
-      });
-
-      // Real-time System notification instant pop-up (0ms latency for order updates)
-      socket?.on('new_notification', (data) {
-        if (data != null) {
-          final noteId = data['id']?.toString();
-          NotificationService().showPopUpNotification(
-            title: data['title'] ?? 'Campus Swap',
-            message: data['message'] ?? '',
-            payload: noteId,
-            notificationId: noteId,
-          );
-        }
-      });
     });
 
     socket?.onDisconnect((_) {
@@ -94,6 +61,49 @@ class SocketService {
 
     socket?.onConnectError((err) {
       debugPrint('SocketService: Connection error: $err');
+    });
+
+    // Real-time Chat message instant system pop-up notification
+    socket?.off('receive_new_message');
+    socket?.on('receive_new_message', (data) {
+      if (data != null) {
+        final currentUserId = UserSession().userId;
+        final senderId = data['sender_id']?.toString() ?? data['sender']?['id']?.toString() ?? '';
+        final receiverId = data['receiver_id']?.toString();
+
+        // 1. Do NOT pop up a toast notification for messages sent by the user themselves
+        if (senderId.isNotEmpty && senderId == currentUserId) {
+          return;
+        }
+
+        // 2. Privacy & Isolation check: If message targets a specific receiver, ignore if it doesn't match current user
+        if (receiverId != null && receiverId.isNotEmpty && receiverId != currentUserId) {
+          return;
+        }
+
+        final senderName = data['sender']?['full_name'] ?? data['sender']?['username'] ?? 'Chat Partner';
+        final content = data['content']?.toString() ?? 'New message received';
+        final avatar = data['sender']?['profile_image_url']?.toString() ?? '';
+        NotificationService().showPopUpNotification(
+          title: 'Message from $senderName',
+          message: content,
+          payload: 'CHAT|$senderId|$senderName|$avatar',
+        );
+      }
+    });
+
+    // Real-time System notification instant pop-up (0ms latency for order updates)
+    socket?.off('new_notification');
+    socket?.on('new_notification', (data) {
+      if (data != null) {
+        final noteId = data['id']?.toString();
+        NotificationService().showPopUpNotification(
+          title: data['title'] ?? 'Campus Swap',
+          message: data['message'] ?? '',
+          payload: noteId,
+          notificationId: noteId,
+        );
+      }
     });
   }
 

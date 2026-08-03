@@ -193,6 +193,36 @@ class _OpenDisputePageState extends State<OpenDisputePage> {
                 ],
               ),
             ),
+            const SizedBox(height: 12),
+            
+            // Dispute Policy Notice Banner (7-Day Channel Limit)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.amber.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.timer_outlined, color: Colors.amber, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Important Notice: The dispute channel for this order will automatically close 7 days after completion. Please submit your claim and evidence before the deadline.',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: isDark ? Colors.amber[200] : Colors.amber[900],
+                        fontWeight: FontWeight.w500,
+                        height: 1.3,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
             const SizedBox(height: 24),
             
             // Reason Dropdown

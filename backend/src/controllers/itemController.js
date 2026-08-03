@@ -20,10 +20,13 @@ export const getNewestItems = async (req, res) => {
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
         if (exclude_reported_by && uuidRegex.test(exclude_reported_by)) {
             const reportedItems = await Report.findAll({
-                where: { reporter_id: exclude_reported_by },
+                where: {
+                    reporter_id: exclude_reported_by,
+                    product_id: { [Op.ne]: null }
+                },
                 attributes: ['product_id']
             });
-            const reportedIds = reportedItems.map(r => r.product_id);
+            const reportedIds = reportedItems.map(r => r.product_id).filter(Boolean);
             if (reportedIds.length > 0) {
                 whereClause.id = { [Op.notIn]: reportedIds };
             }
@@ -35,7 +38,7 @@ export const getNewestItems = async (req, res) => {
                 {
                     model: User,
                     as: 'seller',
-                    attributes: ['username', 'full_name', 'email', 'reputation_score', 'total_reviews', 'profile_image_url'],
+                    attributes: ['id', 'username', 'full_name', 'email', 'reputation_score', 'total_reviews', 'profile_image_url', 'is_active', 'is_verified'],
                     required: false
                 },
                 {

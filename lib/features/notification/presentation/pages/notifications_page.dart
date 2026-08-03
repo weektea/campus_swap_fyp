@@ -346,7 +346,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
                                                      )
                                                  ));
                                              }
-                                         } else if (title.contains('Report')) {
+                                         } else if (title.contains('Report') || title.contains('Suspended') || title.contains('Warning')) {
                                             Navigator.push(context, MaterialPageRoute(
                                                 builder: (_) => const HelpCenterPage()
                                             ));

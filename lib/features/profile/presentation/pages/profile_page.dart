@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:campus_swap/core/api/api_client.dart';
 import 'package:campus_swap/core/session/user_session.dart';
@@ -33,6 +34,8 @@ class _ProfilePageState extends State<ProfilePage> {
   bool _isUploading = false;
   double _reputationScore = 5.0;
   int _totalReviews = 0;
+  double _outstandingFees = 0.0;
+  bool _dismissedOutstandingCard = false;
 
   @override
   void initState() {
@@ -78,6 +81,9 @@ class _ProfilePageState extends State<ProfilePage> {
                   }
                   if (userData['total_reviews'] != null) {
                       _totalReviews = int.tryParse(userData['total_reviews'].toString()) ?? 0;
+                  }
+                  if (userData['total_outstanding_fees'] != null) {
+                      _outstandingFees = double.tryParse(userData['total_outstanding_fees'].toString()) ?? 0.0;
                   }
               });
           }
@@ -149,6 +155,7 @@ class _ProfilePageState extends State<ProfilePage> {
   Widget build(BuildContext context) {
     final session = UserSession();
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
       appBar: AppBar(
@@ -164,6 +171,80 @@ class _ProfilePageState extends State<ProfilePage> {
         padding: const EdgeInsets.all(24),
         child: Column(
           children: [
+            if (_outstandingFees > 0.0 && !_dismissedOutstandingCard) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.amber.shade900.withValues(alpha: 0.3) : Colors.amber.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: isDark ? Colors.amber.shade700 : Colors.amber.shade400, width: 1.2),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.warning_amber_rounded, color: isDark ? Colors.amber.shade300 : Colors.amber.shade900, size: 22),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'Outstanding Platform Fees: RM ${_outstandingFees.toStringAsFixed(2)}',
+                              style: GoogleFonts.outfit(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                                color: isDark ? Colors.amber.shade200 : Colors.amber.shade900,
+                              ),
+                            ),
+                          ),
+                          GestureDetector(
+                            onTap: () {
+                              showDialog(
+                                context: context,
+                                builder: (ctx) => AlertDialog(
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                  title: Row(
+                                    children: [
+                                      Icon(Icons.info_outline, color: Theme.of(context).colorScheme.primary),
+                                      const SizedBox(width: 8),
+                                      Text('Platform Fees Info', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 16)),
+                                    ],
+                                  ),
+                                  content: Text(
+                                    'This balance represents platform service fees from your completed sales. Automated settlement features will be introduced in the next phase.',
+                                    style: GoogleFonts.outfit(fontSize: 14, color: isDark ? Colors.grey.shade300 : Colors.grey.shade700),
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(ctx),
+                                      child: Text('Understood', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 6.0),
+                              child: Icon(Icons.info_outline, size: 18, color: isDark ? Colors.amber.shade300 : Colors.amber.shade900),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _dismissedOutstandingCard = true;
+                        });
+                      },
+                      child: Icon(Icons.close, size: 18, color: isDark ? Colors.amber.shade300 : Colors.amber.shade900),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 10),
             
             // Row 1: The CircleAvatar
@@ -238,7 +319,9 @@ class _ProfilePageState extends State<ProfilePage> {
                       Icon(Icons.star_rounded, size: 20, color: theme.colorScheme.secondary),
                       const SizedBox(width: 4),
                       Text(
-                        _totalReviews == 0 ? 'No Rating Yet' : '${_reputationScore.toStringAsFixed(1)} ($_totalReviews)',
+                        _reputationScore < 5.0 
+                          ? '${_reputationScore.toStringAsFixed(1)} / 5.0'
+                          : (_totalReviews == 0 ? '5.0 (New)' : '${_reputationScore.toStringAsFixed(1)} ($_totalReviews)'),
                         style: theme.textTheme.bodyMedium?.copyWith(
                           fontWeight: FontWeight.bold,
                           color: theme.colorScheme.onSurface,

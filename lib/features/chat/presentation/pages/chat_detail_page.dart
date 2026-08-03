@@ -34,9 +34,24 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   List<SafeZone> _allZones = [];
   String? _loadedAvatarUrl;
 
+  void _handleSocketMessage(dynamic data) {
+    if (mounted && data != null && widget.otherUserId != null) {
+      final senderId = data['sender_id']?.toString();
+      final receiverId = data['receiver_id']?.toString();
+      if (senderId == widget.otherUserId.toString() || receiverId == widget.otherUserId.toString()) {
+        setState(() {
+          final id = data['id'];
+          if (id == null || !_messages.any((m) => m['id'] == id)) {
+            _messages.add(data);
+          }
+        });
+      }
+    }
+  }
+
   @override
   void dispose() {
-    SocketService().socket?.off('receive_new_message');
+    SocketService().socket?.off('receive_new_message', _handleSocketMessage);
     _timer?.cancel();
     _controller.dispose();
     super.dispose();
@@ -57,20 +72,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     }
 
     // Connect WebSocket listener for real-time messages
-    SocketService().socket?.on('receive_new_message', (data) {
-      if (mounted && data != null && widget.otherUserId != null) {
-        final senderId = data['sender_id']?.toString();
-        final receiverId = data['receiver_id']?.toString();
-        if (senderId == widget.otherUserId.toString() || receiverId == widget.otherUserId.toString()) {
-          setState(() {
-            final id = data['id'];
-            if (id == null || !_messages.any((m) => m['id'] == id)) {
-              _messages.add(data);
-            }
-          });
-        }
-      }
-    });
+    SocketService().socket?.on('receive_new_message', _handleSocketMessage);
   }
 
   Future<void> _fetchZones() async {

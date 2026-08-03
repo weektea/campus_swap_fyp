@@ -1,4 +1,5 @@
 import { SavedItem, Product, User, Report } from '../models/index.js';
+import { Op } from 'sequelize';
 
 /**
  * Toggles the saved status of a product for the authenticated user (saves or unsaves).
@@ -55,10 +56,13 @@ export const getSavedItems = async (req, res) => {
 
         // Get reported items to exclude
         const reportedItems = await Report.findAll({
-            where: { reporter_id: user_id },
+            where: {
+                reporter_id: user_id,
+                product_id: { [Op.ne]: null }
+            },
             attributes: ['product_id']
         });
-        const reportedIds = reportedItems.map(r => r.product_id);
+        const reportedIds = reportedItems.map(r => r.product_id).filter(Boolean);
 
         const savedItems = await SavedItem.findAll({
             where: { user_id },

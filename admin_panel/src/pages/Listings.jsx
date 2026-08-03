@@ -351,17 +351,22 @@ const Listings = () => {
                             <div>
                                 <span style={{ fontWeight: 'bold', fontSize: '0.75rem', color: '#64748b', display: 'block', textTransform: 'uppercase', marginBottom: '8px' }}>Student Profile</span>
                                 <div style={{ fontSize: '0.9rem', display: 'flex', flexDirection: 'column', gap: '6px', padding: '12px', background: '#f8fafc', borderRadius: '8px', border: '1px solid var(--border)' }}>
-                                    <div><strong>Name:</strong> {selectedListing.seller?.full_name || 'N/A'}</div>
+                                    <div><strong>Name:</strong> {selectedListing.seller?.full_name || selectedListing.seller?.username || 'N/A'}</div>
                                     <div><strong>Email:</strong> {selectedListing.seller?.email || 'N/A'}</div>
-                                    <div><strong>Reputation:</strong> ⭐ {selectedListing.seller?.reputation_score !== undefined ? Number(selectedListing.seller.reputation_score).toFixed(1) : '5.0'}/5.0</div>
                                     <div>
-                                        <strong>Status:</strong> <span style={{ fontWeight: 'bold', color: selectedListing.seller?.is_active ? '#16a34a' : '#dc2626' }}>
-                                            {selectedListing.seller?.is_active ? 'Active' : 'Banned / Suspended'}
+                                        <strong>Reputation:</strong> ⭐ {selectedListing.seller?.reputation_score !== undefined && selectedListing.seller?.reputation_score !== null ? Number(selectedListing.seller.reputation_score).toFixed(1) : '5.0'} / 5.0
+                                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginLeft: '6px' }}>
+                                            ({selectedListing.seller?.total_reviews || 0} review{selectedListing.seller?.total_reviews === 1 ? '' : 's'})
+                                        </span>
+                                    </div>
+                                    <div>
+                                        <strong>Status:</strong> <span style={{ fontWeight: 'bold', color: (selectedListing.seller?.is_active !== false && selectedListing.seller?.status !== 'suspended') ? '#16a34a' : '#dc2626' }}>
+                                            {(selectedListing.seller?.is_active !== false && selectedListing.seller?.status !== 'suspended') ? 'Active' : 'Banned / Suspended'}
                                         </span>
                                     </div>
                                     <div>
                                         <strong>Verified:</strong> <span style={{ fontWeight: 'bold', color: selectedListing.seller?.is_verified ? '#16a34a' : '#d97706' }}>
-                                            {selectedListing.seller?.is_verified ? 'Yes' : 'No'}
+                                            {selectedListing.seller?.is_verified ? 'Yes (TAR UMT Student)' : 'No'}
                                         </span>
                                     </div>
                                 </div>

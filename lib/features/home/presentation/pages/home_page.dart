@@ -1189,89 +1189,87 @@ class HomePageState extends State<HomePage> {
                   child: Center(child: CircularProgressIndicator()),
                 )
               else if (_gridProducts.isEmpty) ...[
-                SliverFillRemaining(
-                  child: Center(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 32.0),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.search_off_rounded,
-                            size: 64,
-                            color: Colors.grey[400],
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 32.0, vertical: 36.0),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.search_off_rounded,
+                          size: 56,
+                          color: Colors.grey[400],
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          (_searchController.text.isNotEmpty ||
+                                  _selectedCategoryIndex != 0 ||
+                                  _selectedSubCategoryId != null ||
+                                  _minPrice != null ||
+                                  _maxPrice != null ||
+                                  _selectedCondition != null ||
+                                  _selectedListingType != 'All')
+                              ? 'No items match your criteria'
+                              : 'No items found',
+                          style: GoogleFonts.outfit(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.grey[800],
                           ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          (_searchController.text.isNotEmpty ||
+                                  _selectedCategoryIndex != 0 ||
+                                  _selectedSubCategoryId != null ||
+                                  _minPrice != null ||
+                                  _maxPrice != null ||
+                                  _selectedCondition != null ||
+                                  _selectedListingType != 'All')
+                              ? 'Try adjusting your search query, price range, or category filter.'
+                              : 'Be the first to list an item for sale or rent!',
+                          style: GoogleFonts.outfit(
+                            fontSize: 14,
+                            color: Colors.grey[600],
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        if (_searchController.text.isNotEmpty ||
+                            _selectedCategoryIndex != 0 ||
+                            _selectedSubCategoryId != null ||
+                            _minPrice != null ||
+                            _maxPrice != null ||
+                            _selectedCondition != null ||
+                            _selectedListingType != 'All') ...[
                           const SizedBox(height: 16),
-                          Text(
-                            (_searchController.text.isNotEmpty ||
-                                    _selectedCategoryIndex != 0 ||
-                                    _selectedSubCategoryId != null ||
-                                    _minPrice != null ||
-                                    _maxPrice != null ||
-                                    _selectedCondition != null ||
-                                    _selectedListingType != 'All')
-                                ? 'No items match your criteria'
-                                : 'No items found',
-                            style: GoogleFonts.outfit(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.grey[800],
+                          ElevatedButton.icon(
+                            onPressed: () {
+                              setState(() {
+                                _searchController.clear();
+                                _selectedCategoryIndex = 0;
+                                _selectedSubCategoryId = null;
+                                _minPrice = null;
+                                _maxPrice = null;
+                                _selectedCondition = null;
+                                _selectedListingType = 'All';
+                              });
+                              _fetchProducts();
+                            },
+                            icon: const Icon(Icons.clear_all_rounded, color: Colors.white),
+                            label: Text(
+                              'Clear Filters',
+                              style: GoogleFonts.outfit(fontWeight: FontWeight.bold),
                             ),
-                            textAlign: TextAlign.center,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Theme.of(context).colorScheme.primary,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
                           ),
-                          const SizedBox(height: 8),
-                          Text(
-                            (_searchController.text.isNotEmpty ||
-                                    _selectedCategoryIndex != 0 ||
-                                    _selectedSubCategoryId != null ||
-                                    _minPrice != null ||
-                                    _maxPrice != null ||
-                                    _selectedCondition != null ||
-                                    _selectedListingType != 'All')
-                                ? 'Try adjusting your search query, price range, or category filter.'
-                                : 'Be the first to list an item for sale or rent!',
-                            style: GoogleFonts.outfit(
-                              fontSize: 14,
-                              color: Colors.grey[600],
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                          if (_searchController.text.isNotEmpty ||
-                              _selectedCategoryIndex != 0 ||
-                              _selectedSubCategoryId != null ||
-                              _minPrice != null ||
-                              _maxPrice != null ||
-                              _selectedCondition != null ||
-                              _selectedListingType != 'All') ...[
-                            const SizedBox(height: 24),
-                            ElevatedButton.icon(
-                              onPressed: () {
-                                setState(() {
-                                  _searchController.clear();
-                                  _selectedCategoryIndex = 0;
-                                  _selectedSubCategoryId = null;
-                                  _minPrice = null;
-                                  _maxPrice = null;
-                                  _selectedCondition = null;
-                                  _selectedListingType = 'All';
-                                });
-                                _fetchProducts();
-                              },
-                              icon: const Icon(Icons.clear_all_rounded, color: Colors.white),
-                              label: Text(
-                                'Clear Filters',
-                                style: GoogleFonts.outfit(fontWeight: FontWeight.bold),
-                              ),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Theme.of(context).colorScheme.primary,
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                              ),
-                            ),
-                          ],
                         ],
-                      ),
+                      ],
                     ),
                   ),
                 )

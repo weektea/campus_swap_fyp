@@ -34,10 +34,23 @@ export const suspendListing = async (req, res) => {
         product.status = 'Suspended';
         await product.save();
 
-        // UC10 / UC12 Cascade: Cancel any active order holding this product
-        await Transaction.update(
-            { status: 'Cancelled' },
-            { where: { product_id: product.id, status: ['Pending', 'Scheduled', 'To Confirm'] } }
+        // Deduct Seller Reputation Score for suspended listing (-0.5 penalty)
+        const seller = await User.findByPk(product.seller_id);
+        if (seller) {
+            const currentScore = parseFloat(seller.reputation_score !== undefined && seller.reputation_score !== null ? seller.reputation_score : 5.0);
+            seller.reputation_score = Math.max(1.0, parseFloat((currentScore - 0.5).toFixed(1)));
+            await seller.save();
+        }
+
+        // Notify Seller
+        const { reason } = req.body || {};
+        const reasonText = reason ? `Reason: "${reason}"` : `Reason: Community Policy Compliance Review`;
+        await createNotification(
+            product.seller_id,
+            'Listing Suspended - Action Required',
+            `Your listing "${product.title}" has been suspended by a moderator/admin. ${reasonText}.\n\nPlease visit Help Center to submit a Support Ticket if you wish to appeal to restore your listing or get advice on re-posting.`,
+            'System',
+            product.id
         );
 
         res.json({ message: 'Listing suspended successfully and active transactions cancelled.', product });
@@ -151,6 +164,24 @@ export const resolveReport = async (req, res) => {
                         tx.id
                     );
                 }
+
+                // Deduct Seller Reputation Score for suspended listing (-0.5 penalty)
+                const seller = await User.findByPk(product.seller_id);
+                if (seller) {
+                    const currentScore = parseFloat(seller.reputation_score !== undefined && seller.reputation_score !== null ? seller.reputation_score : 5.0);
+                    seller.reputation_score = Math.max(1.0, parseFloat((currentScore - 0.5).toFixed(1)));
+                    await seller.save();
+                }
+
+                // Notify the Seller
+                const reasonText = admin_notes ? `Reason: "${admin_notes}"` : `Violation: ${report.violation_type || 'Policy Violation'}`;
+                await createNotification(
+                    product.seller_id,
+                    'Listing Suspended - Action Required',
+                    `Your listing "${product.title}" was suspended following report review. ${reasonText}.\n\nIf you believe this is an error, please visit Help Center to submit a Support Ticket to appeal to moderators, or review our Community Guidelines before re-posting.`,
+                    'System',
+                    product.id
+                );
             }
         }
 
@@ -777,6 +808,10 @@ export const getAllUsers = async (req, res) => {
                     [
                         sequelize.literal('(SELECT COUNT(*) FROM "Reports" WHERE "Reports"."reported_user_id" = "User"."id" AND "Reports"."status" = \'Pending\')'),
                         'pending_reports_count'
+                    ],
+                    [
+                        sequelize.literal('(SELECT COALESCE(SUM("platform_fee"), 0) FROM "Transactions" WHERE "Transactions"."seller_id" = "User"."id" AND "Transactions"."status" = \'Completed\')'),
+                        'total_outstanding_fees'
                     ]
                 ]
             }
@@ -785,6 +820,7 @@ export const getAllUsers = async (req, res) => {
         // Map users and apply dynamic behavior flagging logic (Flag A & Flag B)
         const updatedUsers = users.map(userVal => {
             const user = userVal.toJSON();
+            user.total_outstanding_fees = parseFloat(parseFloat(user.total_outstanding_fees || 0).toFixed(2));
             const pendingReports = parseInt(user.pending_reports_count || 0, 10);
             
             let isFlagged = user.is_flagged || false;

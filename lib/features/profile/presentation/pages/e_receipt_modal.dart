@@ -225,17 +225,29 @@ class EReceiptModal extends StatelessWidget {
                             children: [
                               const Icon(Icons.shopping_bag_outlined, color: Color(0xFF0284C7), size: 18),
                               const SizedBox(width: 8),
+                              Text("Buyer", style: GoogleFonts.outfit(fontSize: 13, color: Colors.grey.shade600)),
+                              const SizedBox(width: 8),
                               Expanded(
-                                child: Text("Buyer", style: GoogleFonts.outfit(fontSize: 13, color: Colors.grey.shade600)),
-                              ),
-                              Text(
-                                buyerName,
-                                style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 13, color: const Color(0xFF0F172A)),
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                "($buyerUsername)",
-                                style: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF0284C7), fontWeight: FontWeight.w600),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.end,
+                                  children: [
+                                    Flexible(
+                                      child: Text(
+                                        buyerName,
+                                        style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 13, color: const Color(0xFF0F172A)),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Flexible(
+                                      child: Text(
+                                        "($buyerUsername)",
+                                        style: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF0284C7), fontWeight: FontWeight.w600),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ],
                           ),
@@ -247,17 +259,29 @@ class EReceiptModal extends StatelessWidget {
                             children: [
                               const Icon(Icons.storefront_outlined, color: Color(0xFF16A34A), size: 18),
                               const SizedBox(width: 8),
+                              Text("Seller", style: GoogleFonts.outfit(fontSize: 13, color: Colors.grey.shade600)),
+                              const SizedBox(width: 8),
                               Expanded(
-                                child: Text("Seller", style: GoogleFonts.outfit(fontSize: 13, color: Colors.grey.shade600)),
-                              ),
-                              Text(
-                                sellerName,
-                                style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 13, color: const Color(0xFF0F172A)),
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                "($sellerUsername)",
-                                style: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF16A34A), fontWeight: FontWeight.w600),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.end,
+                                  children: [
+                                    Flexible(
+                                      child: Text(
+                                        sellerName,
+                                        style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 13, color: const Color(0xFF0F172A)),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Flexible(
+                                      child: Text(
+                                        "($sellerUsername)",
+                                        style: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF16A34A), fontWeight: FontWeight.w600),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ],
                           ),
@@ -572,7 +596,7 @@ class EReceiptModal extends StatelessWidget {
   Widget _buildRowItem(String label, String value, {bool isBold = false, bool isSecondary = false, bool isBadge = false}) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      crossAxisAlignment: CrossAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
@@ -582,6 +606,7 @@ class EReceiptModal extends StatelessWidget {
             fontStyle: isSecondary ? FontStyle.italic : FontStyle.normal,
           ),
         ),
+        const SizedBox(width: 12),
         if (isBadge)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
@@ -599,12 +624,15 @@ class EReceiptModal extends StatelessWidget {
             ),
           )
         else
-          Text(
-            value,
-            style: GoogleFonts.outfit(
-              fontSize: isBold ? 14 : 13,
-              fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
-              color: const Color(0xFF0F172A),
+          Expanded(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: GoogleFonts.outfit(
+                fontSize: isBold ? 14 : 13,
+                fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
+                color: const Color(0xFF0F172A),
+              ),
             ),
           ),
       ],

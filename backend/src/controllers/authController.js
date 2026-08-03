@@ -463,6 +463,15 @@ export const getUserProfile = async (req, res) => {
             }
         });
 
+        // Calculate total outstanding fees (SUM of platform_fee for COMPLETED transactions as seller)
+        const feeSum = await Transaction.sum('platform_fee', {
+            where: {
+                seller_id: id,
+                status: 'Completed'
+            }
+        });
+        const totalOutstandingFees = parseFloat((feeSum || 0).toFixed(2));
+
         // 1. Calculate successful transactions count (buyer or seller completed)
         const successfulTransactionsCount = await Transaction.count({
             where: {
@@ -569,6 +578,7 @@ export const getUserProfile = async (req, res) => {
         userJSON.follower_count = followerCount;
         userJSON.following_count = followingCount;
         userJSON.is_following = isFollowing;
+        userJSON.total_outstanding_fees = totalOutstandingFees;
 
         // Calculate mock billing due date (last day of the current month)
         const now = new Date();

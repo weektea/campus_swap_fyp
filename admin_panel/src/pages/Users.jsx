@@ -241,6 +241,7 @@ const Users = () => {
                             <th>ROLE</th>
                             <th>VERIFICATION</th>
                             <th>ECO-SCORE</th>
+                            <th>OUTSTANDING FEES (RM)</th>
                             <th>FOLLOWERS</th>
                             <th>STATUS</th>
                             <th>ACTIONS</th>
@@ -303,6 +304,9 @@ const Users = () => {
                                     )}
                                 </td>
                                 <td style={{ color: 'var(--primary)', fontWeight: 'bold' }}>{typeof user.total_carbon_saved === 'number' ? user.total_carbon_saved.toFixed(1) : (user.total_carbon_saved || 0)}</td>
+                                <td style={{ fontWeight: 'bold', color: parseFloat(user.total_outstanding_fees || 0) > 0 ? '#d97706' : 'var(--text-muted)' }}>
+                                    RM {parseFloat(user.total_outstanding_fees || 0).toFixed(2)}
+                                </td>
                                 <td style={{ fontWeight: 'bold' }}>{user.follower_count || 0}</td>
                                 <td>
                                     {user.status === 'PERMANENTLY_DELETED' ? (
@@ -335,7 +339,7 @@ const Users = () => {
                         ))}
                         {paginatedUsers.length === 0 && (
                             <tr>
-                                <td colSpan="9" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>No users found.</td>
+                                <td colSpan="10" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>No users found.</td>
                             </tr>
                         )}
                     </tbody>

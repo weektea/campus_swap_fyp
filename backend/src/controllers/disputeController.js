@@ -63,6 +63,18 @@ export const createDispute = async (req, res) => {
             return sendError(res, 403, 'Access Denied: You are not authorized to file a dispute against this transaction.');
         }
 
+        // 7-day Post-Completion Window Check
+        if (transaction.status === 'Completed') {
+            const completedDate = transaction.completed_at || transaction.updatedAt;
+            if (completedDate) {
+                const diffMs = Date.now() - new Date(completedDate).getTime();
+                const diffDays = diffMs / (1000 * 60 * 60 * 24);
+                if (diffDays > 7) {
+                    return res.status(400).json({ error: 'Dispute channel closed: Disputes must be opened within 7 days of order completion.' });
+                }
+            }
+        }
+
         let dbReason = 'Other';
         if (selectedReason && typeof selectedReason === 'string') {
             const lowerReason = selectedReason.toLowerCase();
@@ -323,10 +335,13 @@ export const arbitrateDispute = async (req, res) => {
         dispute.handled_by = req.user.id;
         await dispute.save();
 
-        // Enforce warning/ban logic on loser
+        // Enforce warning/ban logic & reputation score penalty on loser
         const loserId = winning_party === 'Buyer' ? transaction.seller_id : transaction.buyer_id;
         const loser = await User.findByPk(loserId);
         if (loser) {
+            const currentScore = parseFloat(loser.reputation_score !== undefined && loser.reputation_score !== null ? loser.reputation_score : 5.0);
+            loser.reputation_score = Math.max(1.0, parseFloat((currentScore - 1.0).toFixed(1)));
+
             if (action_on_loser === 'ban') {
                 loser.is_active = false;
                 loser.deactivation_reason = `Suspended due to losing dispute #${dispute.id} in transaction #${transaction.id}`;
@@ -340,21 +355,22 @@ export const arbitrateDispute = async (req, res) => {
                     transaction.id
                 );
             } else if (action_on_loser === 'warn') {
-                loser.reputation_score = Math.max(1.0, loser.reputation_score - 1.0);
+                loser.warning_count = (loser.warning_count || 0) + 1;
                 await loser.save();
 
                 await createNotification(
                     loserId,
                     'Account Warning Issued',
-                    `A formal warning has been issued to your account following the arbitration of dispute #${dispute.id.toString().substring(0, 8).toUpperCase()}. Your reputation score was decreased.`,
+                    `A formal warning has been issued to your account following dispute arbitration. Your reputation score dropped to ${loser.reputation_score.toFixed(1)}.`,
                     'System',
                     transaction.id
                 );
             } else {
+                await loser.save();
                 await createNotification(
                     loserId,
-                    'Dispute Resolution',
-                    `The dispute #${dispute.id.toString().substring(0, 8).toUpperCase()} has been arbitrated against you.`,
+                    'Dispute Resolution & Score Penalty',
+                    `The dispute #${dispute.id.toString().substring(0, 8).toUpperCase()} has been arbitrated against you. A 1.0 penalty was applied to your reputation score.`,
                     'System',
                     dispute.id
                 );

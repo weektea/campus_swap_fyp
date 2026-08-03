@@ -505,6 +505,9 @@ export const updateTransactionStatus = async (req, res) => {
         const otherPartyId = String(requesterId) === String(transaction.buyer_id) ? transaction.seller_id : transaction.buyer_id;
 
         const updatePayload = { status: targetStatus };
+        if (req.body.payment_proof_url) {
+            updatePayload.payment_proof_url = req.body.payment_proof_url;
+        }
         if (targetStatus === 'Cancelled') {
             if (requesterId) updatePayload.cancelled_by_id = requesterId;
             if (cancellation_reason) updatePayload.cancellation_reason = cancellation_reason;

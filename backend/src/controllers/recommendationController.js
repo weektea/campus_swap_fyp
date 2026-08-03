@@ -52,7 +52,10 @@ export const getRecommendations = async (req, res) => {
         let reportedIds = [];
         if (user_id) {
             const reportedItems = await Report.findAll({
-                where: { reporter_id: user_id },
+                where: {
+                    reporter_id: user_id,
+                    product_id: { [Op.ne]: null }
+                },
                 attributes: ['product_id']
             });
             reportedIds = reportedItems.map(r => r.product_id).filter(Boolean);

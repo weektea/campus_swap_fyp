@@ -1,8 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Eye, Calendar, Clock, User, ShieldAlert, Award } from 'lucide-react';
-import api from '../services/api';
+import api, { IMAGE_BASE_URL } from '../services/api';
 
 import PaginationControls from '../components/PaginationControls';
+
+const getImageUrl = (url) => {
+    if (!url) return '';
+    if (url.startsWith('http://') || url.startsWith('https://')) return url;
+    return `${IMAGE_BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
+};
 
 const Transactions = () => {
     const [transactions, setTransactions] = useState([]);
@@ -327,8 +333,12 @@ const Transactions = () => {
                                     {selectedTransaction.payment_proof_url && (
                                         <div style={{ marginTop: '0.75rem' }}>
                                             <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '4px' }}>Proof of Payment:</div>
-                                            <a href={selectedTransaction.payment_proof_url} target="_blank" rel="noopener noreferrer">
-                                                <img src={selectedTransaction.payment_proof_url} alt="Payment Proof" style={{ maxWidth: '100%', maxHeight: '180px', borderRadius: '8px', border: '1px solid var(--border)', cursor: 'pointer' }} />
+                                            <a href={getImageUrl(selectedTransaction.payment_proof_url)} target="_blank" rel="noopener noreferrer">
+                                                <img 
+                                                    src={getImageUrl(selectedTransaction.payment_proof_url)} 
+                                                    alt="Payment Proof" 
+                                                    style={{ maxWidth: '100%', maxHeight: '220px', borderRadius: '8px', border: '1px solid var(--border)', cursor: 'pointer', objectFit: 'cover' }} 
+                                                />
                                             </a>
                                         </div>
                                     )}

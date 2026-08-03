@@ -28,19 +28,37 @@ export const updateReportStatus = async (req, res) => {
                     where: { product_id: product.id, status: ['Pending', 'Scheduled', 'To Confirm'] }
                 });
 
+                // Create Notification for the buyer
                 for (const tx of activeTransactions) {
                     tx.status = 'Cancelled';
                     await tx.save();
                     
-                    // Create Notification for the buyer
                     await createNotification(
                         tx.buyer_id,
                         'Order Cancelled - Item Suspended',
-                        `您的预订商品因违规已被下架，订单(ID: ${tx.id})已自动取消，请勿进行线下付款。`,
+                        `Your reserved item "${product.title}" has been suspended due to policy violations. Order (ID: ${tx.id}) has been automatically cancelled.`,
                         'System',
                         tx.id
                     );
                 }
+
+                // Deduct Seller Reputation Score for suspended listing (-0.5 penalty)
+                const seller = await User.findByPk(product.seller_id);
+                if (seller) {
+                    const currentScore = parseFloat(seller.reputation_score !== undefined && seller.reputation_score !== null ? seller.reputation_score : 5.0);
+                    seller.reputation_score = Math.max(1.0, parseFloat((currentScore - 0.5).toFixed(1)));
+                    await seller.save();
+                }
+
+                // Create Notification for the Seller
+                const reasonText = admin_notes ? `Reason: "${admin_notes}"` : `Violation: ${report.violation_type || 'Policy Violation'}`;
+                await createNotification(
+                    product.seller_id,
+                    'Listing Suspended - Action Required',
+                    `Your listing "${product.title}" was suspended following report review. ${reasonText}.\n\nIf you believe this is an error, please visit Help Center to submit a Support Ticket to appeal to moderators, or review our Community Guidelines before re-posting.`,
+                    'System',
+                    product.id
+                );
             }
         }
 

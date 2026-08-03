@@ -28,6 +28,7 @@ class _RateExperiencePageState extends State<RateExperiencePage> {
   int _rating = 0;
   final TextEditingController _commentController = TextEditingController();
   bool _isSubmitting = false;
+  final Set<String> _selectedTags = {};
 
   @override
   void dispose() {
@@ -35,8 +36,31 @@ class _RateExperiencePageState extends State<RateExperiencePage> {
     super.dispose();
   }
 
-  final List<String> _tags = ['Friendly', 'Punctual', 'Good Condition', 'Responsive', 'Polite'];
-  final Set<String> _selectedTags = {};
+  List<String> get _availableTags {
+    if (widget.isSeller) {
+      // Seller rating Buyer (Behavior, Punctuality & Communication)
+      return [
+        '🤝 Polite & Respectful',
+        '⏱️ Punctual for Meetup',
+        '💵 Fast Payment / Cash Ready',
+        '💬 Responsive & Clear',
+        '⚡ Decisive & No Hassle',
+        '⭐ Recommended Buyer',
+      ];
+    } else {
+      // Buyer rating Seller (Item condition match & Service attitude)
+      return [
+        '📦 Matches Description',
+        '✨ Item in Great Condition',
+        '🤝 Friendly & Helpful',
+        '⏱️ Punctual for Meetup',
+        '⚡ Fast Response',
+        '💯 Honest Seller',
+        '🏷️ Fair Price',
+        '🧼 Clean & Well Kept',
+      ];
+    }
+  }
 
   void _showErrorSnackBar(BuildContext context, String message) {
     final theme = Theme.of(context);
@@ -148,8 +172,8 @@ class _RateExperiencePageState extends State<RateExperiencePage> {
             ),
             const SizedBox(height: 4),
             Text(
-              'For: ${widget.productName}',
-              style: GoogleFonts.outfit(fontSize: 15, color: Colors.grey[600]),
+              widget.isSeller ? 'Rating Buyer • For: ${widget.productName}' : 'Rating Seller • For: ${widget.productName}',
+              style: GoogleFonts.outfit(fontSize: 14, color: Colors.grey[600], fontWeight: FontWeight.w500),
             ),
             
             const SizedBox(height: 24),
@@ -158,7 +182,7 @@ class _RateExperiencePageState extends State<RateExperiencePage> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: const Color(0xFFD6EBE0), // Light green tint based on screenshot
+                color: const Color(0xFFD6EBE0),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Row(
@@ -203,36 +227,48 @@ class _RateExperiencePageState extends State<RateExperiencePage> {
 
             const SizedBox(height: 24),
 
-            // Chips
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              alignment: WrapAlignment.center,
-              children: _tags.map((tag) {
-                final isSelected = _selectedTags.contains(tag);
-                return FilterChip(
-                  label: Text(tag, style: GoogleFonts.outfit(
-                      color: isSelected ? Colors.white : Colors.black87, 
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal
-                  )),
-                  selected: isSelected,
-                  selectedColor: primary,
-                  backgroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20), 
-                      side: BorderSide(color: isSelected ? primary : Colors.grey[300]!)
-                  ),
-                  onSelected: (selected) {
-                    setState(() {
-                      if (selected) {
-                        _selectedTags.add(tag);
-                      } else {
-                        _selectedTags.remove(tag);
-                      }
-                    });
-                  },
-                );
-              }).toList(),
+            // Role-specific Tag Section Header & Chips
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.isSeller 
+                    ? 'Buyer Attitude & Behavior Tags' 
+                    : 'Item Condition & Seller Service Tags',
+                  style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.bold, color: primary),
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _availableTags.map((tag) {
+                    final isSelected = _selectedTags.contains(tag);
+                    return FilterChip(
+                      label: Text(tag, style: GoogleFonts.outfit(
+                          color: isSelected ? Colors.white : Colors.black87, 
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                          fontSize: 13,
+                      )),
+                      selected: isSelected,
+                      selectedColor: primary,
+                      backgroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20), 
+                          side: BorderSide(color: isSelected ? primary : Colors.grey[300]!)
+                      ),
+                      onSelected: (selected) {
+                        setState(() {
+                          if (selected) {
+                            _selectedTags.add(tag);
+                          } else {
+                            _selectedTags.remove(tag);
+                          }
+                        });
+                      },
+                    );
+                  }).toList(),
+                ),
+              ],
             ),
 
             const SizedBox(height: 24),

@@ -40,8 +40,8 @@ class ReputationBadge extends StatelessWidget {
     Color borderColor;
     Color textColor;
 
-    // Minimum 1 Transaction Rule
-    if (completedTransactionsCount == 0) {
+    // Minimum 1 Transaction Rule (Unless penalized)
+    if (completedTransactionsCount == 0 && score >= 5.0) {
       label = "🌱 New Member";
       bgColor = isDark ? Colors.grey.shade800 : const Color(0xFFF1F5F9);
       borderColor = isDark ? Colors.grey.shade700 : const Color(0xFFCBD5E1);

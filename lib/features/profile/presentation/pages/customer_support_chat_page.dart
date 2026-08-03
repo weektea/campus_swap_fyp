@@ -63,9 +63,6 @@ class _CustomerSupportChatPageState extends State<CustomerSupportChatPage> {
 
   @override
   void dispose() {
-    if (_ticketId != null) {
-      SocketService().socket?.off('receive_new_message');
-    }
     _pollTimer?.cancel();
     _msgController.dispose();
     _scrollController.dispose();
