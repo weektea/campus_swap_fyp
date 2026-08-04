@@ -41,22 +41,23 @@ class HomePageState extends State<HomePage> {
 
   final ScrollController _scrollController = ScrollController();
 
-  List<Product> _newestProducts = [];
-  int _newestPage = 1;
-  bool _newestHasMore = true;
-  bool _isLoadingNewest = false;
-  bool _isLoadingMoreNewest = false;
+  bool _showScrollToTop = false;
 
   void _onScroll() {
-    if (_selectedTab != 'Newest') return;
-    if (!_scrollController.hasClients) return;
-    
-    final maxScroll = _scrollController.position.maxScrollExtent;
-    final currentScroll = _scrollController.position.pixels;
-    if (maxScroll - currentScroll <= 200) {
-      _fetchNextPageNewest();
+    if (_scrollController.hasClients) {
+      final offset = _scrollController.offset;
+      if (offset > 300 && !_showScrollToTop) {
+        setState(() {
+          _showScrollToTop = true;
+        });
+      } else if (offset <= 300 && _showScrollToTop) {
+        setState(() {
+          _showScrollToTop = false;
+        });
+      }
     }
   }
+
 
   String getTimeframe(DateTime date, DateTime now) {
     final localDate = date.toLocal(); // TimeZone Guard
@@ -77,14 +78,46 @@ class HomePageState extends State<HomePage> {
     }
   }
 
+  Widget _buildTimelineDivider(String label) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Expanded(
+            child: Container(
+              margin: const EdgeInsets.only(left: 32.0, right: 16.0),
+              height: 1,
+              color: Colors.grey[300],
+            ),
+          ),
+          Text(
+            label,
+            style: GoogleFonts.outfit(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey[500],
+              letterSpacing: 0.5,
+            ),
+          ),
+          Expanded(
+            child: Container(
+              margin: const EdgeInsets.only(left: 16.0, right: 32.0),
+              height: 1,
+              color: Colors.grey[300],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   List<dynamic> get _newestListItems {
     final List<dynamic> items = [];
     String? currentFrame;
     final now = DateTime.now();
-    
-    // Pagination Boundary Guard: Sequential evaluation of the combined list
-    // guarantees that we never insert duplicate timeline text dividers.
-    for (final product in _newestProducts) {
+
+    for (final product in _gridProducts) {
       final frame = getTimeframe(product.postedAt, now);
       if (frame != currentFrame) {
         currentFrame = frame;
@@ -92,100 +125,10 @@ class HomePageState extends State<HomePage> {
       }
       items.add(product);
     }
-    
-    if (_isLoadingMoreNewest) {
-      items.add(const _LoadingMoreMarker());
-    }
-    
     return items;
   }
 
-  Future<void> _fetchFirstPageNewest() async {
-    if (mounted) {
-      setState(() {
-        _isLoadingNewest = true;
-        _newestProducts = [];
-        _newestPage = 1;
-        _newestHasMore = true;
-      });
-    }
-    
-    try {
-      final apiClient = ApiClient();
-      const limit = 10;
-      
-      String endpoint = '/items/newest?limit=$limit&page=1';
-      if (UserSession().isLoggedIn) {
-        endpoint += '&exclude_reported_by=${UserSession().userId}';
-      }
-      
-      final response = await apiClient.get(endpoint);
-      if (response is List && mounted) {
-        final List<Product> newProducts = response.map((data) => Product.fromJson(data)).toList();
-        setState(() {
-          _newestProducts = newProducts;
-          if (newProducts.length < limit) {
-            _newestHasMore = false;
-          }
-          _isLoadingNewest = false;
-        });
-      } else if (mounted) {
-        setState(() {
-          _isLoadingNewest = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoadingNewest = false;
-        });
-      }
-    }
-  }
 
-  Future<void> _fetchNextPageNewest() async {
-    if (_isLoadingNewest || _isLoadingMoreNewest || !_newestHasMore) return;
-    
-    if (mounted) {
-      setState(() {
-        _isLoadingMoreNewest = true;
-      });
-    }
-    
-    try {
-      final apiClient = ApiClient();
-      const limit = 10;
-      final page = _newestPage + 1;
-      
-      String endpoint = '/items/newest?limit=$limit&page=$page';
-      if (UserSession().isLoggedIn) {
-        endpoint += '&exclude_reported_by=${UserSession().userId}';
-      }
-      
-      final response = await apiClient.get(endpoint);
-      if (response is List && mounted) {
-        final List<Product> newProducts = response.map((data) => Product.fromJson(data)).toList();
-        setState(() {
-          if (newProducts.isEmpty || newProducts.length < limit) {
-            _newestHasMore = false;
-          }
-          _newestProducts.addAll(newProducts);
-          _newestPage = page;
-          _isLoadingMoreNewest = false;
-        });
-      } else if (mounted) {
-        setState(() {
-          _isLoadingMoreNewest = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoadingMoreNewest = false;
-        });
-      }
-    }
-  }
 
   int _selectedIndex = 0;
   int _selectedCategoryIndex = 0;
@@ -214,20 +157,54 @@ class HomePageState extends State<HomePage> {
   List<Product> _recommendedProducts = [];
   bool _isLoadingRecommendations = false;
   List<Product> _trendingProducts = [];
-  String? _activeAbVariant;
 
   final List<String> _tabs = ['For You', 'All Listings', 'Popular', 'Newest'];
+
   String _selectedTab = 'For You';
 
   List<Product> get _gridProducts {
+      List<Product> baseList;
       if (_selectedTab == 'For You') {
-          return _recommendedProducts.isNotEmpty ? _recommendedProducts : _products;
+          final List<Product> result = List.from(_recommendedProducts);
+          final Set<String> seenIds = _recommendedProducts.map((p) => p.id).toSet();
+          for (final p in _products) {
+              if (!seenIds.contains(p.id)) {
+                  seenIds.add(p.id);
+                  result.add(p);
+              }
+          }
+          baseList = result.isNotEmpty ? result : _products;
+      } else if (_selectedTab == 'Popular') {
+          final List<Product> result = List.from(_trendingProducts);
+          final Set<String> seenIds = _trendingProducts.map((p) => p.id).toSet();
+          for (final p in _products) {
+              if (!seenIds.contains(p.id)) {
+                  seenIds.add(p.id);
+                  result.add(p);
+              }
+          }
+          baseList = result.isNotEmpty ? result : _products;
+      } else {
+          baseList = _products;
       }
-      if (_selectedTab == 'Popular') {
-          return _trendingProducts.isNotEmpty ? _trendingProducts : _products;
+
+      // Apply Category & SubCategory filtering across ALL tabs seamlessly
+      if (_selectedCategoryIndex > 0 || _selectedSubCategoryId != null) {
+          final String? selectedCategoryName = _selectedCategoryIndex > 0 ? _categories[_selectedCategoryIndex]['label'] : null;
+          return baseList.where((p) {
+              if (selectedCategoryName != null && p.category != selectedCategoryName) {
+                  return false;
+              }
+              if (_selectedSubCategoryId != null && p.subCategoryId != _selectedSubCategoryId) {
+                  return false;
+              }
+              return true;
+          }).toList();
       }
-      return _products;
+
+      return baseList;
   }
+
 
   Future<void> _fetchTrending() async {
     try {
@@ -257,11 +234,11 @@ class HomePageState extends State<HomePage> {
           final abVariant = response['ab_variant']?.toString() ?? 'Model_A_Hybrid_ML';
           debugPrint("Active Recommendation A/B Variant: $abVariant");
           setState(() {
-             _activeAbVariant = abVariant;
              final List data = response['data'] as List;
              _recommendedProducts = data.map((e) => Product.fromJson(e)).toList();
           });
-       } else if (response is List && mounted) {
+       }
+ else if (response is List && mounted) {
           setState(() {
              _recommendedProducts = response.map((e) => Product.fromJson(e)).toList();
           });
@@ -476,13 +453,45 @@ class HomePageState extends State<HomePage> {
         index: _selectedIndex,
         children: pages,
       ),
+      floatingActionButton: (_selectedIndex == 0 && _showScrollToTop)
+          ? FloatingActionButton.small(
+              heroTag: 'scrollToTopBtnHome',
+              onPressed: () {
+                _scrollController.animateTo(
+                  0,
+                  duration: const Duration(milliseconds: 400),
+                  curve: Curves.easeInOut,
+                );
+              },
+              backgroundColor: Theme.of(context).primaryColor,
+              elevation: 4,
+              child: const Icon(Icons.arrow_upward_rounded, color: Colors.white),
+            )
+          : null,
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex,
         onDestinationSelected: (idx) {
-          setState(() {
-            _selectedIndex = idx;
-          });
+          if (idx == 0) {
+            setState(() {
+              _selectedIndex = 0;
+              _selectedTab = 'For You';
+              _selectedCategoryIndex = 0;
+              _selectedSubCategoryId = null;
+            });
+            if (_scrollController.hasClients) {
+              _scrollController.animateTo(
+                0,
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOut,
+              );
+            }
+          } else {
+            setState(() {
+              _selectedIndex = idx;
+            });
+          }
         },
+
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.home_outlined),
@@ -518,16 +527,15 @@ class HomePageState extends State<HomePage> {
     return SafeArea(
       child: RefreshIndicator(
         onRefresh: () async {
-          if (_selectedTab == 'Newest') {
-            await _fetchFirstPageNewest();
-          } else if (_selectedTab == 'For You') {
-            await _fetchRecommendations();
+          if (_selectedTab == 'For You') {
+            await Future.wait([_fetchRecommendations(), _fetchProducts()]);
           } else if (_selectedTab == 'Popular') {
-            await _fetchTrending();
+            await Future.wait([_fetchTrending(), _fetchProducts()]);
           } else {
             await _fetchProducts();
           }
         },
+
         child: CustomScrollView(
           controller: _scrollController,
           physics: const AlwaysScrollableScrollPhysics(),
@@ -682,9 +690,10 @@ class HomePageState extends State<HomePage> {
                         setState(() {
                           _selectedCategoryIndex = index;
                           _selectedSubCategoryId = null; // Reset subcategory when category changes
-                          if (_selectedTab == 'For You') {
+                          if (index != 0) {
                             _selectedTab = 'All Listings';
                           }
+
                         });
                         _fetchProducts(); // Refresh with new category
                       },
@@ -711,6 +720,9 @@ class HomePageState extends State<HomePage> {
                           onTap: () {
                             setState(() {
                               _selectedSubCategoryId = null;
+                              if (_selectedTab == 'For You') {
+                                _selectedTab = 'All Listings';
+                              }
                             });
                             _fetchProducts();
                           },
@@ -755,6 +767,9 @@ class HomePageState extends State<HomePage> {
                         onTap: () {
                           setState(() {
                             _selectedSubCategoryId = isSelected ? null : subcatId;
+                            if (_selectedTab == 'For You') {
+                              _selectedTab = 'All Listings';
+                            }
                           });
                           _fetchProducts();
                         },
@@ -810,168 +825,84 @@ class HomePageState extends State<HomePage> {
 
             const SliverToBoxAdapter(child: SizedBox(height: 24)),
 
-            // Display Tabs + View Mode Switcher
+            // Display Tabs + View Mode Switcher (Tabs hidden when a specific Category is selected)
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Row(
                   children: [
-                    Expanded(
-                      child: SizedBox(
-                        height: 38,
-                        child: ListView.builder(
-                          scrollDirection: Axis.horizontal,
-                          itemCount: _tabs.length,
-                          itemBuilder: (context, index) {
-                            final tab = _tabs[index];
-                            final isSelected = _selectedTab == tab;
-                            return GestureDetector(
-                              onTap: () {
-                                setState(() => _selectedTab = tab);
-                                if (_scrollController.hasClients) {
-                                  _scrollController.animateTo(
-                                    0,
-                                    duration: const Duration(milliseconds: 300),
-                                    curve: Curves.easeOut,
-                                  );
-                                }
-                                if (tab == 'Newest') {
-                                    _fetchFirstPageNewest();
-                                } else if (tab == 'All Listings') {
-                                    _sortBy = 'newest'; 
-                                    _fetchProducts(); 
-                                } else if (tab == 'Popular') {
-                                    _fetchProducts();
-                                } else if (tab == 'For You') {
-                                    _fetchRecommendations(); // Refresh recommendation
-                                }
-                              },
-                              child: Container(
-                                margin: const EdgeInsets.only(right: 8),
-                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                                decoration: BoxDecoration(
-                                  color: isSelected 
-                                      ? Theme.of(context).colorScheme.primary 
-                                      : (Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1E1E1E) : Colors.grey[100]),
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: Center(
-                                  child: Text(
-                                    tab,
-                                    style: GoogleFonts.outfit(
-                                      color: isSelected 
-                                          ? Colors.white.withValues(alpha: 0.87) 
-                                          : Theme.of(context).colorScheme.onSurfaceVariant,
-                                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-                                      fontSize: 14,
+                    if (_selectedCategoryIndex == 0) ...[
+                      Expanded(
+                        child: SizedBox(
+                          height: 38,
+                          child: ListView.builder(
+                            scrollDirection: Axis.horizontal,
+                            itemCount: _tabs.length,
+                            itemBuilder: (context, index) {
+                              final tab = _tabs[index];
+                              final isSelected = _selectedTab == tab;
+                              return GestureDetector(
+                                onTap: () {
+                                  setState(() => _selectedTab = tab);
+                                  if (_scrollController.hasClients) {
+                                    _scrollController.animateTo(
+                                      0,
+                                      duration: const Duration(milliseconds: 300),
+                                      curve: Curves.easeOut,
+                                    );
+                                  }
+                                  if (tab == 'Newest') {
+                                      _sortBy = 'newest';
+                                      _fetchProducts();
+                                  } else if (tab == 'All Listings') {
+                                      _sortBy = 'newest'; 
+                                      _fetchProducts(); 
+                                  } else if (tab == 'Popular') {
+                                      _sortBy = 'popular';
+                                      _fetchProducts();
+                                  } else if (tab == 'For You') {
+                                      _fetchRecommendations(); // Refresh recommendation
+                                  }
+                                },
+
+                                child: Container(
+                                  margin: const EdgeInsets.only(right: 8),
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: isSelected 
+                                        ? Theme.of(context).colorScheme.primary 
+                                        : (Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1E1E1E) : Colors.grey[100]),
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      tab,
+                                      style: GoogleFonts.outfit(
+                                        color: isSelected 
+                                            ? Colors.white.withValues(alpha: 0.87) 
+                                            : Theme.of(context).colorScheme.onSurfaceVariant,
+                                        fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                                        fontSize: 14,
+                                      ),
                                     ),
                                   ),
                                 ),
-                              ),
-                            ).animate().fadeIn(duration: 300.ms, delay: (50*index).ms);
-                          },
+                              ).animate().fadeIn(duration: 300.ms, delay: (50*index).ms);
+                            },
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
+                      const SizedBox(width: 8),
+                    ] else ...[
+                      const Spacer(),
+                    ],
                     _buildViewModeToggle(),
                   ],
                 ),
               ),
             ),
-            const SliverToBoxAdapter(child: SizedBox(height: 16)),
 
-            // "For You" notice banner
-            if (_selectedTab == 'For You')
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                  child: Column(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).brightness == Brightness.dark 
-                              ? Colors.amber.withValues(alpha: 0.08) 
-                              : Colors.amber.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: Theme.of(context).brightness == Brightness.dark 
-                                ? Colors.amber.shade700.withValues(alpha: 0.5) 
-                                : Colors.amber.shade300, 
-                            width: 1,
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.info_outline_rounded, 
-                              color: Theme.of(context).brightness == Brightness.dark 
-                                  ? Colors.amber.shade200 
-                                  : Colors.amber.shade700, 
-                              size: 18,
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                'For You shows personalised picks — search, sort & filter apply to All Listings tab.',
-                                style: GoogleFonts.outfit(
-                                  fontSize: 12, 
-                                  color: Theme.of(context).brightness == Brightness.dark 
-                                      ? Colors.amber.shade200 
-                                      : Colors.amber.shade800,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (_activeAbVariant != null) ...[
-                        const SizedBox(height: 8),
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: _activeAbVariant!.contains('Hybrid_ML') 
-                                  ? Colors.blue.withValues(alpha: 0.1) 
-                                  : Colors.green.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                color: _activeAbVariant!.contains('Hybrid_ML') 
-                                    ? Colors.blue.withValues(alpha: 0.3) 
-                                    : Colors.green.withValues(alpha: 0.3),
-                              ),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  _activeAbVariant!.contains('Hybrid_ML') ? Icons.psychology : Icons.trending_up, 
-                                  size: 14, 
-                                  color: _activeAbVariant!.contains('Hybrid_ML') ? Colors.blue : Colors.green,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  'Recommendation Variant: ${_activeAbVariant!.replaceAll('_', ' ')}',
-                                  style: GoogleFonts.outfit(
-                                    fontSize: 11, 
-                                    fontWeight: FontWeight.bold,
-                                    color: _activeAbVariant!.contains('Hybrid_ML') 
-                                        ? (Theme.of(context).brightness == Brightness.dark ? Colors.blue[200] : Colors.blue[800])
-                                        : (Theme.of(context).brightness == Brightness.dark ? Colors.green[200] : Colors.green[800]),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-            if (_selectedTab == 'For You') const SliverToBoxAdapter(child: SizedBox(height: 12)),
+
 
             // Search / Filter Total Count Header Banner
             SliverToBoxAdapter(
@@ -981,9 +912,7 @@ class HomePageState extends State<HomePage> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      _selectedTab == 'Newest'
-                          ? 'Found ${_newestProducts.length} items'
-                          : 'Found ${_products.length} items',
+                      'Found ${_gridProducts.length} items',
                       style: GoogleFonts.outfit(
                         fontSize: 13,
                         fontWeight: FontWeight.bold,
@@ -1012,100 +941,7 @@ class HomePageState extends State<HomePage> {
             ),
 
             // Product Grid / List
-            if (_selectedTab == 'Newest') ...[
-              if (_isLoadingNewest)
-                const SliverFillRemaining(
-                  child: Center(child: CircularProgressIndicator()),
-                )
-              else if (_newestProducts.isEmpty)
-                SliverFillRemaining(
-                  child: Center(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 32.0),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.search_off_rounded,
-                            size: 64,
-                            color: Theme.of(context).brightness == Brightness.dark 
-                                ? Colors.white.withValues(alpha: 0.38) 
-                                : Colors.grey[400],
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            'No items found',
-                            style: GoogleFonts.outfit(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: Theme.of(context).colorScheme.onSurface,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Be the first to list an item for sale or rent!',
-                            style: GoogleFonts.outfit(
-                              fontSize: 14,
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                )
-              else
-                SliverPadding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  sliver: SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                        final item = _newestListItems[index];
-                        if (item is String) {
-                          return _buildTimelineDivider(item);
-                        } else if (item is Product) {
-                          final product = item;
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
-                            child: ProductListRow(
-                              product: product,
-                              isFavorite: _savedProductIds.contains(product.id),
-                              onFavoriteToggle: () => _toggleFavorite(product.id),
-                              onTap: () {
-                                Navigator.push(context, MaterialPageRoute(
-                                  builder: (_) => ProductDetailsPage(
-                                    product: product,
-                                    initialIsSaved: _savedProductIds.contains(product.id),
-                                  )
-                                )).then((result) {
-                                  _fetchSavedItems();
-                                  _fetchTrending();
-                                  _fetchRecommendations();
-                                  if (result == 'reported') {
-                                    _fetchFirstPageNewest();
-                                  }
-                                });
-                              },
-                            ).animate().fadeIn(duration: 300.ms).slideY(begin: 0.05, end: 0),
-                          );
-                        } else if (item is _LoadingMoreMarker) {
-                          return const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 20.0),
-                            child: Center(
-                              child: CircularProgressIndicator(),
-                            ),
-                          );
-                        }
-                        return const SizedBox.shrink();
-                      },
-                      childCount: _newestListItems.length,
-                    ),
-                  ),
-                ),
-            ] else ...[
-              if (_selectedTab == 'For You' && _isLoadingRecommendations)
+            if (_selectedTab == 'For You' && _isLoadingRecommendations) ...[
                 SliverPadding(
                   padding: const EdgeInsets.all(20),
                   sliver: SliverGrid(
@@ -1183,12 +1019,13 @@ class HomePageState extends State<HomePage> {
                       childCount: 6,
                     ),
                   ),
-                )
-              else if (_isLoading)
-                const SliverFillRemaining(
-                  child: Center(child: CircularProgressIndicator()),
-                )
-              else if (_gridProducts.isEmpty) ...[
+                ),
+            ] else if (_isLoading) ...[
+              const SliverFillRemaining(
+                child: Center(child: CircularProgressIndicator()),
+              ),
+            ] else if (_gridProducts.isEmpty) ...[
+
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 32.0, vertical: 36.0),
@@ -1273,8 +1110,7 @@ class HomePageState extends State<HomePage> {
                     ),
                   ),
                 )
-              ]
-              else
+              ] else ...[
                 ValueListenableBuilder<bool>(
                   valueListenable: ViewPreferenceService(),
                   builder: (context, isGrid, _) {
@@ -1317,6 +1153,48 @@ class HomePageState extends State<HomePage> {
                           ),
                         ),
                       );
+                    } else if (_selectedTab == 'Newest') {
+                      final items = _newestListItems;
+                      return SliverPadding(
+                        key: const PageStorageKey('home_products_newest_timeline'),
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                        sliver: SliverList(
+                          delegate: SliverChildBuilderDelegate(
+                            (context, index) {
+                              final item = items[index];
+                              if (item is String) {
+                                return _buildTimelineDivider(item);
+                              } else if (item is Product) {
+                                return Padding(
+                                  padding: const EdgeInsets.only(bottom: 12.0),
+                                  child: ProductListRow(
+                                    product: item,
+                                    isFavorite: _savedProductIds.contains(item.id),
+                                    onFavoriteToggle: () => _toggleFavorite(item.id),
+                                    onTap: () {
+                                      Navigator.push(context, MaterialPageRoute(
+                                        builder: (_) => ProductDetailsPage(
+                                          product: item,
+                                          initialIsSaved: _savedProductIds.contains(item.id),
+                                        )
+                                      )).then((result) {
+                                        _fetchSavedItems();
+                                        _fetchTrending();
+                                        _fetchRecommendations();
+                                        if (result == 'reported') {
+                                          _fetchProducts();
+                                        }
+                                      });
+                                    },
+                                  ).animate().fadeIn(duration: 300.ms, delay: (30 * index).ms).slideY(begin: 0.05, end: 0),
+                                );
+                              }
+                              return const SizedBox.shrink();
+                            },
+                            childCount: items.length,
+                          ),
+                        ),
+                      );
                     } else {
                       return SliverPadding(
                         key: const PageStorageKey('home_products_list'),
@@ -1354,45 +1232,13 @@ class HomePageState extends State<HomePage> {
                         ),
                       );
                     }
+
                   },
                 ),
-            ],
+              ],
+
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildTimelineDivider(String label) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 16.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Expanded(
-            child: Container(
-              margin: const EdgeInsets.only(left: 32.0, right: 16.0),
-              height: 1,
-              color: Colors.grey[300],
-            ),
-          ),
-          Text(
-            label,
-            style: GoogleFonts.outfit(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: Colors.grey[500],
-              letterSpacing: 0.5,
-            ),
-          ),
-          Expanded(
-            child: Container(
-              margin: const EdgeInsets.only(left: 16.0, right: 32.0),
-              height: 1,
-              color: Colors.grey[300],
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -1630,6 +1476,4 @@ class HomePageState extends State<HomePage> {
   }
 }
 
-class _LoadingMoreMarker {
-  const _LoadingMoreMarker();
-}
+

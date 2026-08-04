@@ -35,6 +35,21 @@ export const markAsRead = async (req, res) => {
 };
 
 /**
+ * Marks all notifications as read for the authenticated user.
+ */
+export const markAllAsRead = async (req, res) => {
+    try {
+        const user_id = req.user.id;
+        await Notification.update({ is_read: true }, { where: { user_id, is_read: false } });
+        res.json({ success: true, message: 'All notifications marked as read' });
+    } catch (error) {
+        console.error('Mark All Read Error:', error);
+        res.status(500).json({ error: 'Failed to mark all notifications as read' });
+    }
+};
+
+
+/**
  * Saves or updates the FCM device token for the authenticated user.
  */
 export const saveFcmToken = async (req, res) => {
@@ -51,6 +66,21 @@ export const saveFcmToken = async (req, res) => {
         res.status(500).json({ error: 'Failed to update FCM Token' });
     }
 };
+
+/**
+ * Removes the FCM device token for the authenticated user on logout.
+ */
+export const removeFcmToken = async (req, res) => {
+    try {
+        const user_id = req.user.id;
+        await User.update({ fcm_token: null }, { where: { id: user_id } });
+        res.json({ success: true, message: 'FCM Token cleared successfully' });
+    } catch (error) {
+        console.error('Remove FCM Token Error:', error);
+        res.status(500).json({ error: 'Failed to clear FCM Token' });
+    }
+};
+
 
 /**
  * Helper function to create a new notification and dispatch an FCM Push Notification.

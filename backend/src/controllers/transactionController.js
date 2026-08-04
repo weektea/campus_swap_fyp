@@ -81,11 +81,11 @@ export const createTransaction = async (req, res) => {
                 return res.status(400).json({ error: 'Rental end date cannot be before the start date.' });
             }
 
-            // Date-Range Overlap Conflict Detection with existing active rental bookings
+            // Date-Range Overlap Conflict Detection with confirmed active rental bookings
             const overlappingTx = await Transaction.findOne({
                 where: {
                     product_id,
-                    status: ['Pending', 'Scheduled', 'To Confirm'],
+                    status: ['Scheduled', 'To Confirm', 'On Rent'],
                     rental_start_date: { [Op.lte]: endDate },
                     rental_end_date: { [Op.gte]: startDate }
                 }
@@ -151,17 +151,8 @@ export const createTransaction = async (req, res) => {
             amount = finalAmount.toFixed(2);
         }
 
-        // Atomic Reservation to prevent double-booking
-        const [affectedRows] = await Product.update(
-            { status: 'Reserved' },
-            { where: { id: product_id, status: 'Available' } }
-        );
-
-        if (affectedRows === 0) {
-            return res.status(409).json({ error: 'Conflict Detected: Item already reserved' });
-        }
-
         // Calculate 2% Platform Fee (Differentiate SALE vs RENT)
+
         const totalAmount = parseFloat(amount);
         let rentalFee = totalAmount;
         let platformFee = 0.0;
@@ -202,6 +193,10 @@ export const createTransaction = async (req, res) => {
             'Transaction',
             transaction.id
         );
+
+        // Real-time socket update for buyer & seller order lists
+        emitToUser(buyer_id, 'transaction_status_updated', { transaction_id: transaction.id, status: 'Pending' });
+        emitToUser(seller_id, 'transaction_status_updated', { transaction_id: transaction.id, status: 'Pending' });
 
         const resObj = transaction.toJSON();
         const sellerNetEarnings = parseFloat((rentalFee - platformFee).toFixed(2));
@@ -504,7 +499,13 @@ export const updateTransactionStatus = async (req, res) => {
         const requesterId = req.user?.id;
         const otherPartyId = String(requesterId) === String(transaction.buyer_id) ? transaction.seller_id : transaction.buyer_id;
 
+        // Prevent buyer from cancelling after submitting payment proof (To Confirm status)
+        if (oldStatus === 'To Confirm' && targetStatus === 'Cancelled' && String(requesterId) === String(transaction.buyer_id)) {
+            return res.status(400).json({ error: 'Payment receipt has been submitted. Order cannot be cancelled by buyer.' });
+        }
+
         const updatePayload = { status: targetStatus };
+
         if (req.body.payment_proof_url) {
             updatePayload.payment_proof_url = req.body.payment_proof_url;
         }
@@ -726,6 +727,69 @@ export const updateTransactionStatus = async (req, res) => {
         }
 
         if (targetStatus === 'Scheduled') {
+            if (product && product.type !== 'Rent') {
+                // Sale Item: Change product status to Reserved
+                await Product.update(
+                    { status: 'Reserved' },
+                    { where: { id: transaction.product_id } }
+                );
+
+                // Auto-cancel all other pending offers for this sale item
+                const otherPendingTxs = await Transaction.findAll({
+                    where: {
+                        product_id: transaction.product_id,
+                        id: { [Op.ne]: transaction.id },
+                        status: 'Pending'
+                    }
+                });
+
+                for (const otherTx of otherPendingTxs) {
+                    await otherTx.update({
+                        status: 'Cancelled',
+                        cancellation_reason: 'The seller accepted an offer from another buyer.'
+                    });
+                    await createNotification(
+                        otherTx.buyer_id,
+                        'Offer Declined',
+                        `The item "${productTitle}" has been accepted by another buyer.`,
+                        'Transaction',
+                        otherTx.id
+                    );
+                    emitToUser(otherTx.buyer_id, 'transaction_status_updated', { transaction_id: otherTx.id, status: 'Cancelled' });
+                }
+            } else if (product && product.type === 'Rent') {
+                // Rent Item: Auto-cancel pending requests that overlap with accepted rental dates
+                if (transaction.rental_start_date && transaction.rental_end_date) {
+                    const acceptedStart = new Date(transaction.rental_start_date);
+                    const acceptedEnd = new Date(transaction.rental_end_date);
+
+                    const overlappingPendingTxs = await Transaction.findAll({
+                        where: {
+                            product_id: transaction.product_id,
+                            id: { [Op.ne]: transaction.id },
+                            status: 'Pending',
+                            rental_start_date: { [Op.lte]: acceptedEnd },
+                            rental_end_date: { [Op.gte]: acceptedStart }
+                        }
+                    });
+
+                    for (const otherTx of overlappingPendingTxs) {
+                        await otherTx.update({
+                            status: 'Cancelled',
+                            cancellation_reason: 'This item was booked by another student for your selected dates.'
+                        });
+                        await createNotification(
+                            otherTx.buyer_id,
+                            'Rental Dates Unavailable',
+                            `The item "${productTitle}" has been booked by another student for your selected dates.`,
+                            'Transaction',
+                            otherTx.id
+                        );
+                        emitToUser(otherTx.buyer_id, 'transaction_status_updated', { transaction_id: otherTx.id, status: 'Cancelled' });
+                    }
+                }
+            }
+
             // Notify Buyer
             await createNotification(
                 transaction.buyer_id,
@@ -735,6 +799,7 @@ export const updateTransactionStatus = async (req, res) => {
                 transaction.id
             );
         }
+
 
         // UC19 Payment Proof
         if (targetStatus === 'To Confirm') {
@@ -947,12 +1012,13 @@ export const getBookedDates = async (req, res) => {
         const activeBookings = await Transaction.findAll({
             where: {
                 product_id,
-                status: ['Pending', 'Scheduled', 'To Confirm'],
+                status: ['Scheduled', 'To Confirm', 'On Rent'],
                 rental_start_date: { [Op.ne]: null },
                 rental_end_date: { [Op.ne]: null }
             },
             attributes: ['id', 'rental_start_date', 'rental_end_date', 'rental_type', 'status']
         });
+
 
         res.json(activeBookings);
     } catch (error) {

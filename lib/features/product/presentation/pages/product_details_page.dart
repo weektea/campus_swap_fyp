@@ -793,6 +793,12 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
               Expanded(
                 child: OutlinedButton(
                   onPressed: () {
+                     if (UserSession().isLoggedIn) {
+                        ApiClient().post('/recommendations/track', {
+                           'product_id': widget.product.id,
+                           'type': 'message'
+                        }).catchError((_) {});
+                     }
                      Navigator.push(context, MaterialPageRoute(builder: (_) => ChatDetailPage(
                          sellerName: widget.product.sellerName,
                          otherUserId: widget.product.sellerId,
@@ -801,6 +807,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                          relatedProduct: widget.product,
                      )));
                   },
+
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     side: BorderSide(color: theme.colorScheme.primary),
@@ -1504,6 +1511,13 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
         }
 
         await apiClient.post('/transactions', payload);
+
+        // Record 'buy' interaction (+10 points) for popularity score tracking
+        apiClient.post('/recommendations/track', {
+           'product_id': widget.product.id,
+           'type': 'buy'
+        }).catchError((_) {});
+
         
         if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(

@@ -63,11 +63,13 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   void _logout() async {
+    await NotificationService().clearFcmToken();
     SocketService().disconnect();
     NotificationService().stopPolling();
     UserSession().clear();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('auto_login', false);
+
     if (mounted) {
       Navigator.pushAndRemoveUntil(
         context, 

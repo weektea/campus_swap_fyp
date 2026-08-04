@@ -57,6 +57,32 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     }
   }
 
+  String _formatChatTime(dynamic rawTime) {
+    if (rawTime == null) return '';
+    final DateTime? dt = DateTime.tryParse(rawTime.toString())?.toLocal();
+    if (dt == null) return '';
+
+    final DateTime now = DateTime.now();
+    final DateTime today = DateTime(now.year, now.month, now.day);
+    final DateTime yesterday = today.subtract(const Duration(days: 1));
+    final DateTime msgDate = DateTime(dt.year, dt.month, dt.day);
+
+    if (msgDate == today) {
+      final hour = dt.hour.toString().padLeft(2, '0');
+      final minute = dt.minute.toString().padLeft(2, '0');
+      return '$hour:$minute';
+    } else if (msgDate == yesterday) {
+      return 'Yesterday';
+    } else if (now.year == dt.year) {
+      final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      return '${dt.day} ${months[dt.month - 1]}';
+    } else {
+      final month = dt.month.toString().padLeft(2, '0');
+      final day = dt.day.toString().padLeft(2, '0');
+      return '$day/$month/${dt.year}';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -120,61 +146,124 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                             ),
                           ],
                         )
-                      : ListView.separated(
+                      : ListView.builder(
+                          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
                           itemCount: _conversations.length,
-                          separatorBuilder: (context, index) => const Divider(height: 1),
                           itemBuilder: (context, index) {
                             final chat = _conversations[index];
-                            final name = chat['name'] ?? 'Unknown';
+                            final name = (chat['full_name'] != null && chat['full_name'].toString().trim().isNotEmpty)
+                                ? chat['full_name'].toString()
+                                : (chat['name'] ?? 'User');
                             final lastMsg = chat['lastMessage'] ?? '';
-                            return ListTile(
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                              leading: CircleAvatar(
-                                radius: 28,
-                                backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.1),
-                                backgroundImage: chat['profile_image_url'] != null
-                                    ? NetworkImage('${ApiClient.baseUrl.replaceAll('/api', '')}${chat['profile_image_url']}')
-                                    : null,
-                                child: chat['profile_image_url'] == null
-                                    ? Text(
-                                        name.isNotEmpty ? name[0].toUpperCase() : '?',
-                                        style: theme.textTheme.titleLarge?.copyWith(
-                                          color: theme.colorScheme.primary,
-                                          fontWeight: FontWeight.bold,
+                            final rawTime = chat['time'];
+                            final formattedTime = _formatChatTime(rawTime);
+
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 10),
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.surface,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: theme.colorScheme.outlineVariant.withValues(alpha: 0.4)),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: theme.colorScheme.shadow.withValues(alpha: 0.03),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: Material(
+                                color: Colors.transparent,
+                                borderRadius: BorderRadius.circular(16),
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(16),
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => ChatDetailPage(
+                                          sellerName: name,
+                                          otherUserId: chat['id']?.toString(),
+                                          otherUserAvatar: chat['profile_image_url']?.toString(),
                                         ),
-                                      )
-                                    : null,
-                              ),
-                              title: Text(
-                                name,
-                                style: theme.textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              subtitle: Text(
-                                lastMsg,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.bodyMedium?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => ChatDetailPage(
-                                      sellerName: name,
-                                      otherUserId: chat['id']?.toString(),
-                                      otherUserAvatar: chat['profile_image_url']?.toString(),
+                                      ),
+                                    ).then((_) => _fetchConversations());
+                                  },
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                    child: Row(
+                                      children: [
+                                        CircleAvatar(
+                                          radius: 26,
+                                          backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.1),
+                                          backgroundImage: (chat['profile_image_url'] != null && chat['profile_image_url'].toString().isNotEmpty)
+                                              ? NetworkImage('${ApiClient.baseUrl.replaceAll('/api', '')}${chat['profile_image_url']}')
+                                              : null,
+                                          child: (chat['profile_image_url'] == null || chat['profile_image_url'].toString().isEmpty)
+                                              ? Text(
+                                                  name.isNotEmpty ? name[0].toUpperCase() : '?',
+                                                  style: theme.textTheme.titleMedium?.copyWith(
+                                                    color: theme.colorScheme.primary,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                )
+                                              : null,
+                                        ),
+                                        const SizedBox(width: 14),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Row(
+                                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                children: [
+                                                  Expanded(
+                                                    child: Text(
+                                                      name,
+                                                      maxLines: 1,
+                                                      overflow: TextOverflow.ellipsis,
+                                                      style: theme.textTheme.titleMedium?.copyWith(
+                                                        fontWeight: FontWeight.bold,
+                                                        fontSize: 15,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  if (formattedTime.isNotEmpty) ...[
+                                                    const SizedBox(width: 8),
+                                                    Text(
+                                                      formattedTime,
+                                                      style: theme.textTheme.bodySmall?.copyWith(
+                                                        color: theme.colorScheme.onSurfaceVariant,
+                                                        fontSize: 12,
+                                                        fontWeight: FontWeight.w500,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ],
+                                              ),
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                lastMsg,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: theme.textTheme.bodyMedium?.copyWith(
+                                                  color: theme.colorScheme.onSurfaceVariant,
+                                                  fontSize: 13,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
-                                ).then((_) => _fetchConversations());
-                              },
+                                ),
+                              ),
                             );
                           },
                         ),
                 ),
     );
   }
+
 }

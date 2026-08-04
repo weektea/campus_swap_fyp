@@ -583,10 +583,15 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
                 )
              ),
             
-            // Permanent Handover / Payment Proof Record Card (Preserved for future reference or dispute evidence)
-            if (_transaction['payment_proof_url'] != null) ...[
+            // Permanent Handover / Payment Proof Record Card (Shown for Completed, Disputed, On Rent status)
+            if (_transaction['payment_proof_url'] != null && status != 'To Confirm') ...[
               const SizedBox(height: 24),
-              Text('Handover & Payment Proof Record', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold)),
+              Text(
+                (_transaction['selected_payment_method']?.toString() ?? 'Cash') == 'Cash'
+                    ? 'Handover Proof Record'
+                    : 'Payment Receipt Record',
+                style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold)
+              ),
               const SizedBox(height: 12),
               Container(
                 width: double.infinity,
@@ -604,7 +609,9 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
                         const Icon(Icons.verified_outlined, size: 16, color: Colors.teal),
                         const SizedBox(width: 6),
                         Text(
-                          'Permanent Order Evidence Record',
+                          (_transaction['selected_payment_method']?.toString() ?? 'Cash') == 'Cash'
+                              ? 'Permanent Handover Evidence'
+                              : 'Permanent Payment Transfer Evidence',
                           style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.teal),
                         ),
                       ],
@@ -628,6 +635,7 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
                 ),
               ),
             ],
+
             const SizedBox(height: 24),
 
             // Party Info & Chat
@@ -1337,6 +1345,7 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
 
           if (isBuying) {
               return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                       Container(
                           width: double.infinity,
@@ -1354,22 +1363,54 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
                           ),
                       ),
                       const SizedBox(height: 16),
-                      SizedBox(
-                          width: double.infinity,
-                          height: 48,
-                          child: OutlinedButton(
-                              onPressed: () => _updateStatus('Cancelled'),
-                              style: OutlinedButton.styleFrom(
-                                  foregroundColor: Colors.red,
-                                  side: BorderSide(color: Colors.red.withValues(alpha: 0.5)),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      if (_transaction['payment_proof_url'] != null) ...[
+                          Text(
+                              isCash ? 'Your Submitted Handover Photo:' : 'Your Submitted Payment Receipt:', 
+                              style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.bold)
+                          ),
+                          const SizedBox(height: 8),
+                          ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: Image.network(
+                                  '${ApiClient.baseUrl.replaceAll('/api', '')}${_transaction['payment_proof_url']}',
+                                  width: double.infinity,
+                                  height: 220,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) => Container(
+                                      height: 100,
+                                      color: Colors.grey[200],
+                                      child: const Center(child: Icon(Icons.broken_image, color: Colors.grey)),
+                                  ),
                               ),
-                              child: Text('Cancel Order', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 16)),
+                          ),
+                          const SizedBox(height: 16),
+                      ],
+                      Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          decoration: BoxDecoration(
+                              color: Colors.grey.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
+                          ),
+                          child: Row(
+                              children: [
+                                  Icon(Icons.lock_outline, size: 16, color: Colors.grey[700]),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                      child: Text(
+                                          'Payment proof submitted. Order cannot be cancelled by buyer while awaiting verification.',
+                                          style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey[700], fontWeight: FontWeight.w500),
+                                      ),
+                                  ),
+                              ],
                           ),
                       ),
                   ],
               );
-          } else {
+          }
+
+ else {
               return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Eye, Calendar, Clock, User, ShieldAlert, Award } from 'lucide-react';
+import { Search, Eye, Calendar, Clock, User, ShieldAlert, Award, Download } from 'lucide-react';
 import api, { IMAGE_BASE_URL } from '../services/api';
 
 import PaginationControls from '../components/PaginationControls';
@@ -44,15 +44,53 @@ const Transactions = () => {
         }
     };
 
+    const handleExportTransactionsCSV = () => {
+        if (!sortedTransactions || sortedTransactions.length === 0) {
+            alert('No transaction data to export.');
+            return;
+        }
+        const csvRows = [
+            ['Order ID', 'Product Title', 'Type', 'Amount (RM)', 'Buyer Name', 'Buyer Email', 'Seller Name', 'Seller Email', 'Status', 'Meetup Location', 'Carbon Savings (kg)', 'Created At']
+        ];
+        sortedTransactions.forEach(t => {
+            csvRows.push([
+                t.id,
+                t.product?.title || 'Unknown Item',
+                t.type || 'Sale',
+                t.amount || t.agreed_price || '0.00',
+                t.buyer?.full_name || '',
+                t.buyer?.email || '',
+                t.seller?.full_name || '',
+                t.seller?.email || '',
+                t.status || '',
+                t.meetup_location || t.meetup_zone?.name || 'TBD',
+                t.carbon_saved_kg || '0.00',
+                t.createdAt ? new Date(t.createdAt).toLocaleString() : ''
+            ]);
+        });
+        const csvContent = csvRows.map(row => row.map(val => `"${String(val).replace(/"/g, '""')}"`).join(',')).join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `Campus_Swap_Transactions_Report_${new Date().toISOString().slice(0, 10)}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    };
+
     const filtered = transactions.filter(t => {
         const productTitle = t.product?.title?.toLowerCase() || '';
         const buyerEmail = t.buyer?.email?.toLowerCase() || '';
         const sellerEmail = t.seller?.email?.toLowerCase() || '';
-        const matchSearch = productTitle.includes(searchTerm.toLowerCase()) || 
-                            buyerEmail.includes(searchTerm.toLowerCase()) || 
-                            sellerEmail.includes(searchTerm.toLowerCase());
-        const matchStatus = filterStatus === 'All' ? true : t.status === filterStatus;
-        return matchSearch && matchStatus;
+        const idStr = (t.id || '').toLowerCase();
+        const matchesSearch = productTitle.includes(searchTerm.toLowerCase()) || 
+                              buyerEmail.includes(searchTerm.toLowerCase()) || 
+                              sellerEmail.includes(searchTerm.toLowerCase()) ||
+                              idStr.includes(searchTerm.toLowerCase());
+        const matchesStatus = filterStatus === 'All' ? true : t.status === filterStatus;
+        return matchesSearch && matchesStatus;
     });
 
     const sortedTransactions = [...filtered].sort((a, b) => {
@@ -77,12 +115,12 @@ const Transactions = () => {
                         Showing {filtered.length} of {transactions.length} transactions
                     </span>
                 </div>
-                <div className="flex gap-4">
-                    <div style={{ display: 'flex', alignItems: 'center', background: 'white', border: '1px solid var(--border)', borderRadius: '8px', padding: '8px 16px', width: '300px' }}>
+                <div className="flex gap-4 items-center">
+                    <div style={{ display: 'flex', alignItems: 'center', background: 'white', border: '1px solid var(--border)', borderRadius: '8px', padding: '8px 16px', width: '280px' }}>
                         <Search size={18} color="var(--text-muted)" style={{ marginRight: '8px' }} />
                         <input type="text" placeholder="Search by title or email..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} style={{ border: 'none', background: 'transparent', outline: 'none', width: '100%' }} />
                     </div>
-                    <select className="input" style={{ width: '150px', marginBottom: 0 }} value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
+                    <select className="input" style={{ width: '140px', marginBottom: 0 }} value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
                         <option value="All">All Status</option>
                         <option value="Pending">Pending</option>
                         <option value="Scheduled">Scheduled</option>
@@ -90,6 +128,14 @@ const Transactions = () => {
                         <option value="Cancelled">Cancelled</option>
                         <option value="Disputed">Disputed</option>
                     </select>
+                    <button 
+                        className="btn flex items-center gap-2" 
+                        onClick={handleExportTransactionsCSV}
+                        style={{ background: '#0d503c', color: 'white', border: 'none', padding: '8px 14px', fontSize: '0.85rem' }}
+                        title="Export filtered transactions list to CSV file"
+                    >
+                        <Download size={16} /> Export CSV
+                    </button>
                 </div>
             </div>
 

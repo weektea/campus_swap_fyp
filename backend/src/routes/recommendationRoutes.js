@@ -4,8 +4,9 @@ import { trackInteraction, getRecommendations, getTrendingItems, getTrendingCate
 
 const router = express.Router();
 
-router.post('/', authenticateToken, trackInteraction);
-router.post('/track', authenticateToken, trackInteraction);
+router.post('/', authenticateTokenOptional, trackInteraction);
+router.post('/track', authenticateTokenOptional, trackInteraction);
+
 router.get('/', authenticateTokenOptional, getRecommendations);
 router.get('/trending', authenticateTokenOptional, getTrendingItems); // Legacy /trending -> /trending/items
 router.get('/trending/items', authenticateTokenOptional, getTrendingItems);

@@ -1,13 +1,17 @@
 import express from 'express';
-import { getUserNotifications, markAsRead, deleteNotification, clearReadNotifications, saveFcmToken } from '../controllers/notificationController.js';
+import { getUserNotifications, markAsRead, markAllAsRead, deleteNotification, clearReadNotifications, saveFcmToken, removeFcmToken } from '../controllers/notificationController.js';
 import { authenticateToken } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
 router.get('/', authenticateToken, getUserNotifications);
 router.post('/fcm-token', authenticateToken, saveFcmToken);
+router.delete('/fcm-token', authenticateToken, removeFcmToken);
+router.patch('/mark-all-read', authenticateToken, markAllAsRead);
 router.patch('/:id/read', authenticateToken, markAsRead);
 router.delete('/clear-read', authenticateToken, clearReadNotifications);
 router.delete('/:id', authenticateToken, deleteNotification);
 
 export default router;
+
+

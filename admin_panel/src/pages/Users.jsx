@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Edit, UserPlus, Trash2, UserX } from 'lucide-react';
+import { Search, Edit, UserPlus, Trash2, UserX, Download } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 
@@ -58,14 +58,47 @@ const Users = () => {
     const fetchUsers = async () => {
         setLoading(true);
         try {
-            const endpoint = viewTab === 'active' ? '/admin/users' : '/admin/users/archived';
-            const res = await api.get(endpoint);
+            const res = await api.get(`/admin/users?view=${viewTab}`);
             setUsers(res.data);
         } catch (err) {
             console.error('Failed to fetch users', err);
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleExportUsersCSV = () => {
+        if (!sortedUsers || sortedUsers.length === 0) {
+            alert('No user data to export.');
+            return;
+        }
+        const csvRows = [
+            ['ID', 'Full Name', 'Username', 'Email', 'Role', 'Status', 'Reputation Score', 'Warnings', 'Verified', 'Created At']
+        ];
+        sortedUsers.forEach(u => {
+            csvRows.push([
+                u.id,
+                u.full_name || '',
+                u.username || '',
+                u.email || '',
+                u.role || '',
+                (u.is_active !== false && u.status !== 'suspended') ? 'Active' : 'Banned/Suspended',
+                u.reputation_score !== undefined && u.reputation_score !== null ? Number(u.reputation_score).toFixed(1) : '5.0',
+                u.warning_count || 0,
+                u.is_verified ? 'Yes' : 'No',
+                u.createdAt ? new Date(u.createdAt).toLocaleString() : ''
+            ]);
+        });
+        const csvContent = csvRows.map(row => row.map(val => `"${String(val).replace(/"/g, '""')}"`).join(',')).join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `Campus_Swap_Users_Directory_${new Date().toISOString().slice(0, 10)}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
     };
 
     const handleManageClick = (user) => {
@@ -192,6 +225,14 @@ const Users = () => {
                             <option value="Flagged">Flagged / Suspicious</option>
                         </select>
                     )}
+                    <button 
+                        className="btn flex items-center gap-2" 
+                        onClick={handleExportUsersCSV}
+                        style={{ background: '#0d503c', color: 'white', border: 'none', padding: '8px 14px', fontSize: '0.85rem' }}
+                        title="Export filtered users list to CSV file"
+                    >
+                        <Download size={16} /> Export CSV
+                    </button>
                     {viewTab === 'active' && currentUser?.role === 'admin' && (
                         <button 
                             className="btn flex items-center gap-2" 

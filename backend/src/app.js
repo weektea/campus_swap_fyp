@@ -619,6 +619,15 @@ if (process.env.NODE_ENV !== 'test') {
                     // Ignore error if value already exists or enum is not created yet
                 }
 
+                // Dynamically add 'CHAT' value to the notifications type enum in Postgres catalog
+                try {
+                    await sequelize.query('ALTER TYPE "enum_Notifications_type" ADD VALUE \'CHAT\';');
+                    console.log('Notifications type enum updated successfully with CHAT');
+                } catch (enumErr) {
+                    // Ignore error if value already exists or enum is not created yet
+                }
+
+
                 // Dynamically add cancelled_by_id column to Transactions table if missing
                 try {
                     await sequelize.query('ALTER TABLE "Transactions" ADD COLUMN IF NOT EXISTS cancelled_by_id UUID;');
@@ -678,6 +687,7 @@ import ticketRoutes from './routes/ticketRoutes.js';
 import zoneRoutes from './routes/zoneRoutes.js';
 import analyticsRoutes from './routes/analyticsRoutes.js';
 import onboardingRoutes from './routes/onboardingRoutes.js';
+import facultyRoutes from './routes/facultyRoutes.js';
 
 app.use('/api/auth', authRoutes);
 app.use('/api/onboarding', onboardingRoutes);
@@ -698,6 +708,7 @@ app.use('/api/sustainability', sustainabilityRoutes);
 app.use('/api/tickets', ticketRoutes);
 app.use('/api/support_tickets', ticketRoutes);
 app.use('/api/zones', zoneRoutes);
+app.use('/api/faculties', facultyRoutes);
 app.use('/api/profile/analytics', analyticsRoutes);
 
 import { getPolicyByType } from './controllers/systemController.js';

@@ -14,8 +14,11 @@ import Listings from './pages/Listings';
 import Analytics from './pages/Analytics';
 import Transactions from './pages/Transactions';
 import Categories from './pages/Categories';
+import Faculties from './pages/Faculties';
 import Reviews from './pages/Reviews';
+import PopularListings from './pages/PopularListings';
 import MLModels from './pages/MLModels';
+
 import Broadcast from './pages/Broadcast';
 import System from './pages/System';
 import PrivateRoute from './components/PrivateRoute';
@@ -101,6 +104,15 @@ function App() {
           </PrivateRoute>
         } />
 
+        <Route path="/popular-listings" element={
+          <PrivateRoute>
+            <Layout>
+              <PopularListings />
+            </Layout>
+          </PrivateRoute>
+        } />
+
+
         <Route path="/analytics" element={
           <PrivateRoute>
             <Layout>
@@ -129,6 +141,14 @@ function App() {
           <PrivateRoute>
             <Layout>
               <Categories />
+            </Layout>
+          </PrivateRoute>
+        } />
+
+        <Route path="/faculties" element={
+          <PrivateRoute>
+            <Layout>
+              <Faculties />
             </Layout>
           </PrivateRoute>
         } />

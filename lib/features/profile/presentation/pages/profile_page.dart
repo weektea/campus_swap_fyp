@@ -497,12 +497,14 @@ class _ProfilePageState extends State<ProfilePage> {
               );
 
               if (confirm == true) {
-                // Clear session
+                // Clear session & FCM device token on backend
+                await NotificationService().clearFcmToken();
                 SocketService().disconnect();
                 NotificationService().stopPolling();
                 UserSession().clear();
                 final prefs = await SharedPreferences.getInstance();
                 await prefs.setBool('auto_login', false);
+
                 if (context.mounted) {
                   Navigator.pushAndRemoveUntil(
                     context, 

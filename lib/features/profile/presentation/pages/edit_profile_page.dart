@@ -17,29 +17,26 @@ class _EditProfilePageState extends State<EditProfilePage> {
   final _studentIdController = TextEditingController();
   final _usernameController = TextEditingController();
   final _fullNameController = TextEditingController();
+  final _phoneController = TextEditingController();
+  String _faculty = 'FOCS';
   String _privacySetting = 'Public';
-  String _primaryIntent = 'browse';
-  List<String> _preferenceTags = [];
   bool _isLoading = false;
   bool _isUploading = false;
 
-  final List<String> _availableCategories = [
-    'Electronics & Gadgets',
-    'Textbooks & Books',
-    'Fashion & Apparel',
-    'Furniture & Dorm',
-    'Sports & Outdoor',
-    'Stationery & Art',
-    'Games & Consoles',
-    'FCI Special',
-    'Year 1 Essentials',
-    'Transport & Bikes',
+  List<Map<String, String>> _facultyList = [
+    {'code': 'FAFB', 'name': 'Faculty of Accountancy, Finance and Business'},
+    {'code': 'FOAS', 'name': 'Faculty of Applied Sciences'},
+    {'code': 'FOCS', 'name': 'Faculty of Computing and Information Technology'},
+    {'code': 'FOBE', 'name': 'Faculty of Built Environment'},
+    {'code': 'FOET', 'name': 'Faculty of Engineering and Technology'},
+    {'code': 'FCCI', 'name': 'Faculty of Communication and Creative Industries'},
+    {'code': 'FSSH', 'name': 'Faculty of Social Science and Humanities'},
   ];
 
   @override
   void initState() {
     super.initState();
-    _loadProfileData();
+    _loadFacultiesAndProfile();
   }
 
   @override
@@ -49,13 +46,33 @@ class _EditProfilePageState extends State<EditProfilePage> {
     _studentIdController.dispose();
     _usernameController.dispose();
     _fullNameController.dispose();
+    _phoneController.dispose();
     super.dispose();
   }
 
-  Future<void> _loadProfileData() async {
+  Future<void> _loadFacultiesAndProfile() async {
     setState(() => _isLoading = true);
+    final apiClient = ApiClient();
+
+    // 1. Fetch dynamic faculties list from backend
     try {
-      final apiClient = ApiClient();
+      final facRes = await apiClient.get('/faculties');
+      if (facRes is List && facRes.isNotEmpty) {
+        final fetchedList = facRes.map<Map<String, String>>((item) => {
+          'code': item['code']?.toString().toUpperCase() ?? '',
+          'name': item['name']?.toString() ?? '',
+        }).where((item) => item['code']!.isNotEmpty).toList();
+
+        if (fetchedList.isNotEmpty) {
+          _facultyList = fetchedList;
+        }
+      }
+    } catch (e) {
+      debugPrint("Using default faculties list due to network error: $e");
+    }
+
+    // 2. Fetch User Profile
+    try {
       final res = await apiClient.get('/auth/user/${UserSession().userId}');
       if (res != null && res['user'] != null) {
         final userData = res['user'];
@@ -64,8 +81,22 @@ class _EditProfilePageState extends State<EditProfilePage> {
         _studentIdController.text = userData['university_id'] ?? '';
         _usernameController.text = userData['username'] ?? '';
         _fullNameController.text = userData['full_name'] ?? '';
-        _primaryIntent = userData['primary_intent'] ?? 'browse';
-        _preferenceTags = List<String>.from(userData['preference_tags'] ?? []);
+        _phoneController.text = userData['phone_number'] ?? userData['phone'] ?? '';
+        
+        final savedFaculty = userData['faculty']?.toString().toUpperCase();
+        if (savedFaculty != null && savedFaculty.isNotEmpty) {
+          // If 'FCI' was stored earlier, auto-remap to 'FOCS'
+          final targetCode = (savedFaculty == 'FCI') ? 'FOCS' : savedFaculty;
+          
+          final exists = _facultyList.any((item) => item['code'] == targetCode);
+          if (exists) {
+            _faculty = targetCode;
+          } else {
+            _faculty = targetCode;
+            _facultyList.add({'code': targetCode, 'name': targetCode});
+          }
+        }
+
         if (userData['privacy_setting'] != null) {
           _privacySetting = userData['privacy_setting'];
           if (_privacySetting == 'Friends Only') {
@@ -76,7 +107,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
     } catch (e) {
       // Ignore
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -91,14 +122,11 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
       try {
           final apiClient = ApiClient();
-          // 1. Upload Image
           final uploadRes = await apiClient.postMultipart('/upload', pickedFile);
           final imageUrl = uploadRes['url']; 
 
-          // 2. Update User Profile
           await apiClient.patch('/auth/user/${session.userId}', {'profile_picture': imageUrl});
 
-          // 3. Update Local Session
           setState(() {
               session.avatarUrl = imageUrl;
               _isUploading = false;
@@ -152,14 +180,12 @@ class _EditProfilePageState extends State<EditProfilePage> {
     try {
       final apiClient = ApiClient();
       await apiClient.patch('/auth/user/${UserSession().userId}', {
+        'phone_number': _phoneController.text.trim(),
+        'faculty': _faculty,
         'year_of_study': int.tryParse(_yearController.text),
         'bio': _bioController.text,
         'privacy_setting': _privacySetting,
-        'primary_intent': _primaryIntent,
-        'preference_tags': _preferenceTags,
       });
-      UserSession().primaryIntent = _primaryIntent;
-      UserSession().preferenceTags = List<String>.from(_preferenceTags);
       if (mounted) {
         _showSuccessSnackBar(context, 'Profile updated successfully!');
         Navigator.pop(context);
@@ -218,7 +244,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                   ),
                   const SizedBox(height: 32),
 
-                  Text("Academic Info", style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey[700])),
+                  Text("Contact & Account Info", style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey[700])),
                   const SizedBox(height: 16),
                   
                   // Full Name Field (Immutable once set)
@@ -261,6 +287,22 @@ class _EditProfilePageState extends State<EditProfilePage> {
                   ),
                   const SizedBox(height: 16),
                   
+                  // Editable Phone Number Field
+                  TextFormField(
+                    controller: _phoneController,
+                    keyboardType: TextInputType.phone,
+                    decoration: InputDecoration(
+                        labelText: 'Phone Number',
+                        hintText: 'e.g. +60123456789',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        prefixIcon: const Icon(Icons.phone_outlined, color: Colors.teal),
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+
+                  Text("Academic Info", style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey[700])),
+                  const SizedBox(height: 16),
+
                   // Read-Only Student ID Field
                   TextFormField(
                     controller: _studentIdController,
@@ -274,18 +316,48 @@ class _EditProfilePageState extends State<EditProfilePage> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  
 
+                  // Editable Faculty Dropdown Field
+                  DropdownButtonFormField<String>(
+                    value: _faculty,
+                    isExpanded: true,
+                    decoration: InputDecoration(
+                        labelText: 'Faculty',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        prefixIcon: const Icon(Icons.school_outlined, color: Colors.teal),
+                    ),
+                    items: _facultyList.map((item) {
+                      final code = item['code']!;
+                      final name = item['name']!;
+                      final displayText = name != code ? '$code - $name' : code;
+                      return DropdownMenuItem<String>(
+                        value: code,
+                        child: Text(
+                          displayText,
+                          style: GoogleFonts.outfit(fontSize: 14),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      );
+                    }).toList(),
+                    onChanged: (val) {
+                      if (val != null) setState(() => _faculty = val);
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  
+                  // Editable Year of Study Field
                   TextFormField(
                     controller: _yearController,
                     keyboardType: TextInputType.number,
                     decoration: InputDecoration(
                         labelText: 'Year of Study (1-4)',
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        prefixIcon: const Icon(Icons.calendar_today_outlined, color: Colors.teal),
                     ),
                   ),
                   const SizedBox(height: 32),
-                  Text("About Me", style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey[700])),
+
+                  Text("About Me & Privacy", style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey[700])),
                   const SizedBox(height: 16),
                   TextFormField(
                     controller: _bioController,
@@ -304,40 +376,12 @@ class _EditProfilePageState extends State<EditProfilePage> {
                       labelText: 'Profile Privacy',
                       helperText: 'Controls visibility of Email, Faculty, and Year of Study.',
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      prefixIcon: const Icon(Icons.privacy_tip_outlined, color: Colors.teal),
                     ),
                     items: ['Public', 'Private'].map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
                     onChanged: (val) {
                       if (val != null) setState(() => _privacySetting = val);
                     },
-                  ),
-                  const SizedBox(height: 32),
-                  Text("Looking For (Interests)", style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey[700])),
-                  const SizedBox(height: 8),
-                  Text("Select interest categories to calibrate your ML recommendation feed:", style: GoogleFonts.outfit(fontSize: 13, color: Colors.grey[600])),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: _availableCategories.map((cat) {
-                      final isSelected = _preferenceTags.contains(cat);
-                      return FilterChip(
-                        label: Text(cat, style: GoogleFonts.outfit(fontSize: 13, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
-                        selected: isSelected,
-                        onSelected: (selected) {
-                          setState(() {
-                            if (selected) {
-                              if (!_preferenceTags.contains(cat)) _preferenceTags.add(cat);
-                            } else {
-                              _preferenceTags.remove(cat);
-                            }
-                          });
-                        },
-                        selectedColor: const Color(0xFF005A43),
-                        checkmarkColor: Colors.white,
-                        labelStyle: TextStyle(color: isSelected ? Colors.white : Colors.black87),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                      );
-                    }).toList(),
                   ),
                   const SizedBox(height: 48),
                   SizedBox(

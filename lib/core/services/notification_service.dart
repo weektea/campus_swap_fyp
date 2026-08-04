@@ -6,6 +6,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:campus_swap/core/api/api_client.dart';
 import 'package:campus_swap/main.dart' show navigatorKey;
 import 'package:campus_swap/features/notification/presentation/pages/notifications_page.dart';
+import 'package:campus_swap/core/session/user_session.dart';
+
 
 @pragma('vm:entry-point')
 void backgroundNotificationHandler(NotificationResponse response) {
@@ -100,6 +102,30 @@ class NotificationService {
     }
   }
 
+  /// Clears FCM device token on backend when logging out
+  Future<void> clearFcmToken() async {
+    try {
+      await _apiClient.delete('/notifications/fcm-token');
+      debugPrint('FCM Token successfully cleared on backend.');
+    } catch (e) {
+      debugPrint('Failed to clear FCM Token: $e');
+    }
+  }
+
+  /// Clears local notification popup cache when switching accounts
+  Future<void> clearLocalCache() async {
+    _poppedNotificationIds.clear();
+    _recentPopUps.clear();
+    _isPoppedIdsLoaded = false;
+    unreadCountNotifier.value = 0;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('popped_notification_ids');
+    } catch (e) {
+      debugPrint('Error clearing notification cache: $e');
+    }
+  }
+
   void startPolling() {
     _pollingTimer?.cancel();
     checkForNotifications(); // Run immediately on start
@@ -113,6 +139,9 @@ class NotificationService {
   }
 
   Future<void> checkForNotifications() async {
+    final session = UserSession();
+    if (!session.isLoggedIn) return; // Do not check if logged out
+
     try {
       await _loadPoppedIds();
       final response = await _apiClient.get('/notifications');
@@ -139,6 +168,7 @@ class NotificationService {
       // Silent error for polling
     }
   }
+
 
   Future<void> showPopUpNotification({
     required String title,

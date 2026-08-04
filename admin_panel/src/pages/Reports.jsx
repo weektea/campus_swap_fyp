@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { AlertTriangle, CheckCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Download } from 'lucide-react';
 import api, { IMAGE_BASE_URL } from '../services/api';
 
 const Reports = () => {
@@ -18,6 +18,37 @@ const Reports = () => {
     const [loadingTranscript, setLoadingTranscript] = useState(false);
     const [showTranscriptModal, setShowTranscriptModal] = useState(false);
     const [showInspectModal, setShowInspectModal] = useState(false);
+
+    const handleExportReportsCSV = () => {
+        if (!allReports || allReports.length === 0) {
+            alert('No report data to export.');
+            return;
+        }
+        const csvRows = [
+            ['Report ID', 'Reporter Email', 'Target Item/User', 'Reason Category', 'Description', 'Status', 'Submitted Date']
+        ];
+        allReports.forEach(r => {
+            csvRows.push([
+                r.id,
+                r.reporter || 'Anonymous',
+                r.target || '',
+                r.type || 'Violation',
+                r.raw?.reason || r.raw?.description || '',
+                r.status || '',
+                r.submittedAt ? new Date(r.submittedAt).toLocaleString() : ''
+            ]);
+        });
+        const csvContent = csvRows.map(row => row.map(val => `"${String(val).replace(/"/g, '""')}"`).join(',')).join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `Campus_Swap_Listing_Reports_${new Date().toISOString().slice(0, 10)}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    };
 
     const fetchPrivateTranscript = async () => {
         const reporterId = selectedReport?.raw?.reporter_id;
@@ -142,8 +173,16 @@ const Reports = () => {
         <div className="flex gap-6 h-full" style={{ minHeight: '80vh' }}>
             {/* Sidebar List */}
             <div className="card flex flex-col gap-2" style={{ width: '300px', padding: '1rem', overflowY: 'auto' }}>
-                <div style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#2563eb', background: '#eff6ff', border: '1px solid #bfdbfe', padding: '6px 10px', borderRadius: '6px', textAlign: 'center', marginBottom: '8px' }}>
-                    Total Reports Found: {allReports.length} ({displayedReports.length} in view)
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem', fontWeight: 'bold', color: '#2563eb', background: '#eff6ff', border: '1px solid #bfdbfe', padding: '6px 10px', borderRadius: '6px', marginBottom: '8px' }}>
+                    <span>Total Reports: {allReports.length}</span>
+                    <button
+                        className="btn"
+                        onClick={handleExportReportsCSV}
+                        style={{ padding: '3px 8px', fontSize: '0.75rem', background: '#0d503c', color: 'white', border: 'none', display: 'flex', alignItems: 'center', gap: '4px', borderRadius: '4px' }}
+                        title="Export Reports CSV"
+                    >
+                        <Download size={12} /> Export CSV
+                    </button>
                 </div>
                 {/* Tab Switcher */}
                 <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: '12px' }}>

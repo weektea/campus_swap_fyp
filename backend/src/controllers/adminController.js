@@ -13,11 +13,24 @@ import { emitToUser } from '../config/socket.js';
 export const getListings = async (req, res) => {
     try {
         const products = await Product.findAll({ 
-            include: [{ 
-                model: User, 
-                as: 'seller', 
-                attributes: ['username', 'full_name', 'email', 'reputation_score', 'is_active', 'is_verified'] 
-            }] 
+            include: [
+                { 
+                    model: User, 
+                    as: 'seller', 
+                    attributes: ['username', 'full_name', 'email', 'reputation_score', 'is_active', 'is_verified'] 
+                },
+                {
+                    model: Category,
+                    as: 'categoryModel',
+                    attributes: ['id', 'name']
+                },
+                {
+                    model: SubCategory,
+                    as: 'subcategoryModel',
+                    attributes: ['id', 'name', 'category_id']
+                }
+            ],
+            order: [['createdAt', 'DESC']]
         });
         res.set('X-Total-Count', products.length);
         res.json(products);
@@ -415,9 +428,18 @@ export const getSystemMetrics = async (req, res) => {
         }
         const newRegistrations = await User.count({ where: userRegWhere });
         
-        // Active disputes (strictly 'New' or 'Investigating' states)
+        // Action Item Categories Breakdown
+        const supportTicketsCount = await SupportTicket.count({
+            where: { status: ['Open', 'Pending', 'Escalated'] }
+        });
+
+        const listingReportsCount = await Report.count({
+            where: { status: ['Pending', 'In-Progress', 'Escalated'] }
+        });
+
+        // Active disputes (strictly 'New' or 'Investigating' or 'Escalated' states)
         const activeDisputes = await Dispute.count({
-            where: { status: ['New', 'Investigating'] }
+            where: { status: ['New', 'Investigating', 'Escalated'] }
         });
 
         // Transactions completed in range
@@ -535,12 +557,18 @@ export const getSystemMetrics = async (req, res) => {
             SELECT p.id, p.title, p.price, p.type, 
                    COUNT(CASE WHEN ui.interaction_type = 'view' THEN 1 END) as view_count,
                    COUNT(CASE WHEN ui.interaction_type = 'save' THEN 1 END) as save_count,
-                   COALESCE(SUM(ui.weight), 0) as popularity_score
+                   COUNT(CASE WHEN ui.interaction_type = 'message' THEN 1 END) as message_count,
+                   COALESCE(SUM(CASE 
+                       WHEN ui.interaction_type = 'view' THEN 1
+                       WHEN ui.interaction_type = 'message' THEN 3
+                       WHEN ui.interaction_type = 'save' THEN 5
+                       WHEN ui.interaction_type = 'buy' THEN 10
+                       ELSE 0 END), 0) as popularity_score
             FROM "Products" p
             LEFT JOIN "UserInteractions" ui ON ui.product_id = p.id
             WHERE p.status = 'Available'
             GROUP BY p.id, p.title, p.price, p.type
-            ORDER BY popularity_score DESC
+            ORDER BY popularity_score DESC, view_count DESC
             LIMIT 5
         `, {
             type: sequelize.QueryTypes.SELECT
@@ -552,6 +580,9 @@ export const getSystemMetrics = async (req, res) => {
             suspended_users: suspendedUsers,
             total_listings: productsCount,
             active_disputes: activeDisputes,
+            support_tickets_count: supportTicketsCount,
+            listing_reports_count: listingReportsCount,
+            trade_disputes_count: activeDisputes,
             completed_transactions: transactions.length,
             gmv: gmv.toFixed(2),
             carbon_saved_kg: estimatedCarbonSaved,
@@ -574,17 +605,24 @@ export const getMLDashboardMetrics = async (req, res) => {
             SELECT p.id, p.title, p.price, p.category,
                    COUNT(CASE WHEN ui.interaction_type = 'view' THEN 1 END) as view_count,
                    COUNT(CASE WHEN ui.interaction_type = 'save' THEN 1 END) as save_count,
+                   COUNT(CASE WHEN ui.interaction_type = 'message' THEN 1 END) as message_count,
                    COUNT(ui.id) as total_interactions,
-                   COALESCE(SUM(ui.weight), 0) as popularity_score
+                   COALESCE(SUM(CASE 
+                       WHEN ui.interaction_type = 'view' THEN 1
+                       WHEN ui.interaction_type = 'message' THEN 3
+                       WHEN ui.interaction_type = 'save' THEN 5
+                       WHEN ui.interaction_type = 'buy' THEN 10
+                       ELSE 0 END), 0) as popularity_score
             FROM "Products" p
             LEFT JOIN "UserInteractions" ui ON ui.product_id = p.id
             WHERE p.status = 'Available'
             GROUP BY p.id, p.title, p.price, p.category
-            ORDER BY popularity_score DESC
+            ORDER BY popularity_score DESC, view_count DESC
             LIMIT 5
         `, {
             type: sequelize.QueryTypes.SELECT
         });
+
 
         // 2. User Activity Heatmap (Interactions grouped by hour of the day)
         const heatmapQuery = await sequelize.query(`
@@ -1310,25 +1348,56 @@ export const getAlerts = async (req, res) => {
         const { role } = req.user;
         const alerts = [];
 
-        if (role === 'admin') {
-            const reports = await Report.count({ where: { status: 'Escalated' } });
-            if (reports > 0) alerts.push({ type: 'report', count: reports, message: `${reports} reports escalated to Admin`, link: '/reports' });
+        const isEscalatedOnly = (role === 'admin');
+        const statusFilterTickets = isEscalatedOnly ? ['Escalated'] : ['Open', 'Pending', 'In-Progress'];
+        const statusFilterReports = isEscalatedOnly ? ['Escalated'] : ['Pending', 'In-Progress'];
+        const statusFilterDisputes = isEscalatedOnly ? ['Escalated'] : ['New', 'Investigating'];
 
-            const disputes = await Dispute.count({ where: { status: 'Escalated' } });
-            if (disputes > 0) alerts.push({ type: 'dispute', count: disputes, message: `${disputes} disputes escalated to Admin`, link: '/disputes' });
+        // 1. Support & Appeal Tickets
+        const supportTickets = await SupportTicket.count({
+            where: { status: statusFilterTickets }
+        });
+        if (supportTickets > 0) {
+            alerts.push({
+                category_key: 'support_ticket',
+                type: 'ticket',
+                title: 'Support & Appeal Tickets',
+                count: supportTickets,
+                message: `${supportTickets} open support ticket(s) / appeal(s) awaiting response`,
+                link: '/tickets',
+                badgeColor: '#3b82f6',
+                icon: 'HelpCircle'
+            });
+        }
 
-            const tickets = await SupportTicket.count({ where: { status: 'Escalated' } });
-            if (tickets > 0) alerts.push({ type: 'ticket', count: tickets, message: `${tickets} support tickets escalated to Admin`, link: '/tickets' });
-        } else {
-            // Moderator
-            const reports = await Report.count({ where: { status: ['Pending', 'In-Progress'] } });
-            if (reports > 0) alerts.push({ type: 'report', count: reports, message: `${reports} pending/in-progress reports`, link: '/reports' });
+        // 2. Listing Violation Reports
+        const reports = await Report.count({ where: { status: statusFilterReports } });
+        if (reports > 0) {
+            alerts.push({
+                category_key: 'listing_report',
+                type: 'report',
+                title: 'Listing Violation Reports',
+                count: reports,
+                message: `${reports} listing violation report(s) needing action`,
+                link: '/reports',
+                badgeColor: '#f59e0b',
+                icon: 'Flag'
+            });
+        }
 
-            const disputes = await Dispute.count({ where: { status: ['New', 'Investigating'] } });
-            if (disputes > 0) alerts.push({ type: 'dispute', count: disputes, message: `${disputes} new/investigating disputes`, link: '/disputes' });
-
-            const tickets = await SupportTicket.count({ where: { status: ['Open', 'Pending'] } });
-            if (tickets > 0) alerts.push({ type: 'ticket', count: tickets, message: `${tickets} open/pending support tickets`, link: '/tickets' });
+        // 3. Trade Disputes
+        const disputes = await Dispute.count({ where: { status: statusFilterDisputes } });
+        if (disputes > 0) {
+            alerts.push({
+                category_key: 'trade_dispute',
+                type: 'dispute',
+                title: 'Trade & Order Disputes',
+                count: disputes,
+                message: `${disputes} active trade dispute(s) pending triage`,
+                link: '/disputes',
+                badgeColor: '#8b5cf6',
+                icon: 'Scale'
+            });
         }
 
         res.json({ alerts, total: alerts.reduce((acc, a) => acc + a.count, 0) });
@@ -1824,3 +1893,39 @@ export const getOnboardingAnalytics = async (req, res) => {
         res.status(500).json({ error: 'Failed to retrieve onboarding analytics' });
     }
 };
+
+/**
+ * GET /api/admin/popular-listings
+ * Returns top 50 trending products with popularity score calculation and interaction breakdown.
+ */
+export const getPopularListings = async (req, res) => {
+    try {
+        const popularListings = await sequelize.query(`
+            SELECT p.id, p.title, p.price, p.type, p.category, p.image_urls,
+                   COUNT(CASE WHEN ui.interaction_type = 'view' THEN 1 END) as view_count,
+                   COUNT(CASE WHEN ui.interaction_type = 'save' THEN 1 END) as save_count,
+                   COUNT(CASE WHEN ui.interaction_type = 'message' THEN 1 END) as message_count,
+                   COUNT(CASE WHEN ui.interaction_type = 'buy' THEN 1 END) as buy_count,
+                   COALESCE(SUM(CASE 
+                       WHEN ui.interaction_type = 'view' THEN 1
+                       WHEN ui.interaction_type = 'message' THEN 3
+                       WHEN ui.interaction_type = 'save' THEN 5
+                       WHEN ui.interaction_type = 'buy' THEN 10
+                       ELSE 0 END), 0) as popularity_score
+            FROM "Products" p
+            LEFT JOIN "UserInteractions" ui ON ui.product_id = p.id
+            WHERE p.status = 'Available'
+            GROUP BY p.id, p.title, p.price, p.type, p.category, p.image_urls
+            ORDER BY popularity_score DESC, view_count DESC, p."createdAt" DESC
+            LIMIT 50
+        `, {
+            type: sequelize.QueryTypes.SELECT
+        });
+
+        res.json(popularListings);
+    } catch (error) {
+        console.error('Get Popular Listings Error:', error);
+        res.status(500).json({ error: 'Failed to fetch popular listings' });
+    }
+};
+

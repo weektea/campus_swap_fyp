@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:campus_swap/core/services/socket_service.dart';
+import 'package:campus_swap/core/services/notification_service.dart';
+
 
 class UserSession {
   static final UserSession _instance = UserSession._internal();
@@ -99,6 +101,8 @@ class UserSession {
 
   void clear() {
     SocketService().disconnect();
+    NotificationService().stopPolling();
+    NotificationService().clearLocalCache();
     userId = null;
     email = null;
     username = null;
@@ -111,4 +115,5 @@ class UserSession {
     preferenceTags.clear();
     sessionInteractions.clear();
   }
+
 }

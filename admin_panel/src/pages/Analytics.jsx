@@ -10,11 +10,26 @@
 //   - anomaly_logs                       → Anomaly Behavior Logs table
 // Until these are returned correctly, Section 4 will render empty charts.
 // =============================================================================
+import * as XLSX from 'xlsx';
 import React, { useState, useEffect } from 'react';
-import { Calendar, Download, Printer, Users, BarChart3, ShieldAlert, Award } from 'lucide-react';
+import { 
+    Calendar, Download, Printer, Users, BarChart3, ShieldAlert, Award,
+    CheckSquare, Square, FileSpreadsheet, FileText, X, Layers, ShoppingBag, 
+    CreditCard, AlertTriangle, Headset, Compass, RefreshCw
+} from 'lucide-react';
 import { LineChart, Line, BarChart, Bar, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import api from '../services/api';
 
+const DATASETS_CONFIG = [
+    { id: 'summary', label: 'Platform Summary & ESG Impact', icon: BarChart3, desc: 'Overall platform stats, user counts, carbon savings, GMV', color: '#10b981' },
+    { id: 'users', label: 'User Directory & Verification Status', icon: Users, desc: 'User accounts, emails, roles, status, verification, reputation', color: '#3b82f6' },
+    { id: 'listings', label: 'Marketplace Listings & Inventory', icon: ShoppingBag, desc: 'All items, categories, price/rates, sale vs rent, seller details', color: '#f59e0b' },
+    { id: 'transactions', label: 'Orders & Financial Transactions Log', icon: CreditCard, desc: 'Completed & active orders, payment methods, meetup locations, carbon saved', color: '#8b5cf6' },
+    { id: 'reports', label: 'Violations & Listing Reports Log', icon: AlertTriangle, desc: 'User report tickets, violation reasons, reported products, resolution status', color: '#ef4444' },
+    { id: 'disputes', label: 'Trade Disputes Audit Log', icon: ShieldAlert, desc: 'Arbitrated trade disputes, claims, evidence notes, resolutions', color: '#dc2626' },
+    { id: 'tickets', label: 'Customer Support Tickets & Helpdesk', icon: Headset, desc: 'Customer support tickets, priorities, admin assignment, resolution log', color: '#06b6d4' },
+    { id: 'onboarding', label: 'User Intent & Onboarding Analytics', icon: Compass, desc: 'User goals (Buy/Rent), preferred categories, onboarding status', color: '#ec4899' },
+];
 
 const Analytics = () => {
     const [metrics, setMetrics] = useState(null);
@@ -28,6 +43,13 @@ const Analytics = () => {
     const [endDate, setEndDate] = useState(() => {
         return new Date().toISOString().split('T')[0];
     });
+
+    // Unified Export Data Center State
+    const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+    const [selectedDatasets, setSelectedDatasets] = useState(['summary', 'users', 'listings', 'transactions', 'reports', 'disputes', 'tickets', 'onboarding']);
+    const [isExporting, setIsExporting] = useState(false);
+    const [exportProgressText, setExportProgressText] = useState('');
+
 
     const fetchMetrics = async (selectedRange) => {
         setLoading(true);
@@ -126,6 +148,332 @@ const Analytics = () => {
         }
     };
 
+    const downloadCSVBlob = (csvRows, filename) => {
+        const csvContent = csvRows.map(row => row.map(val => `"${String(val).replace(/"/g, '""')}"`).join(',')).join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    };
+
+    const handleExportUsersCSVInAnalytics = async () => {
+        try {
+            const res = await api.get('/admin/users');
+            const data = res.data || [];
+            const csvRows = [
+                ['ID', 'Full Name', 'Username', 'Email', 'Role', 'Status', 'Reputation Score', 'Warnings', 'Verified', 'Created At']
+            ];
+            data.forEach(u => {
+                csvRows.push([
+                    u.id,
+                    u.full_name || '',
+                    u.username || '',
+                    u.email || '',
+                    u.role || '',
+                    (u.is_active !== false && u.status !== 'suspended') ? 'Active' : 'Banned/Suspended',
+                    u.reputation_score !== undefined && u.reputation_score !== null ? Number(u.reputation_score).toFixed(1) : '5.0',
+                    u.warning_count || 0,
+                    u.is_verified ? 'Yes' : 'No',
+                    u.createdAt ? new Date(u.createdAt).toLocaleString() : ''
+                ]);
+            });
+            downloadCSVBlob(csvRows, `Campus_Swap_Users_Directory_${new Date().toISOString().slice(0, 10)}.csv`);
+        } catch (err) {
+            console.error(err);
+            alert('Failed to export Users CSV.');
+        }
+    };
+
+    const handleExportListingsCSVInAnalytics = async () => {
+        try {
+            const res = await api.get('/admin/listings');
+            const data = res.data || [];
+            const csvRows = [
+                ['Listing ID', 'Title', 'Category', 'Subcategory', 'Type', 'Price/Rental Rate', 'Seller Name', 'Seller Email', 'Status', 'Condition', 'Posted Date']
+            ];
+            data.forEach(item => {
+                csvRows.push([
+                    item.id,
+                    item.title || '',
+                    item.categoryModel?.name || 'General',
+                    item.subcategoryModel?.name || '',
+                    item.type || 'Sale',
+                    item.type === 'Rent' ? `RM ${item.rental_price_per_day}/day` : `RM ${item.price}`,
+                    item.seller?.full_name || '',
+                    item.seller?.email || '',
+                    item.status || '',
+                    item.condition || '',
+                    item.createdAt ? new Date(item.createdAt).toLocaleString() : ''
+                ]);
+            });
+            downloadCSVBlob(csvRows, `Campus_Swap_Listings_Report_${new Date().toISOString().slice(0, 10)}.csv`);
+        } catch (err) {
+            console.error(err);
+            alert('Failed to export Listings CSV.');
+        }
+    };
+
+    const handleExportTransactionsCSVInAnalytics = async () => {
+        try {
+            const res = await api.get('/admin/transactions');
+            const data = res.data || [];
+            const csvRows = [
+                ['Order ID', 'Product Title', 'Type', 'Amount (RM)', 'Buyer Name', 'Buyer Email', 'Seller Name', 'Seller Email', 'Status', 'Meetup Location', 'Carbon Savings (kg)', 'Created At']
+            ];
+            data.forEach(t => {
+                csvRows.push([
+                    t.id,
+                    t.product?.title || 'Unknown Item',
+                    t.type || 'Sale',
+                    t.amount || t.agreed_price || '0.00',
+                    t.buyer?.full_name || '',
+                    t.buyer?.email || '',
+                    t.seller?.full_name || '',
+                    t.seller?.email || '',
+                    t.status || '',
+                    t.meetup_location || t.meetup_zone?.name || 'TBD',
+                    t.carbon_saved_kg || '0.00',
+                    t.createdAt ? new Date(t.createdAt).toLocaleString() : ''
+                ]);
+            });
+            downloadCSVBlob(csvRows, `Campus_Swap_Transactions_Report_${new Date().toISOString().slice(0, 10)}.csv`);
+        } catch (err) {
+            console.error(err);
+            alert('Failed to export Transactions CSV.');
+        }
+    };
+
+    const toggleSelectDataset = (id) => {
+        if (selectedDatasets.includes(id)) {
+            setSelectedDatasets(selectedDatasets.filter(item => item !== id));
+        } else {
+            setSelectedDatasets([...selectedDatasets, id]);
+        }
+    };
+
+    const toggleSelectAllDatasets = () => {
+        if (selectedDatasets.length === DATASETS_CONFIG.length) {
+            setSelectedDatasets([]);
+        } else {
+            setSelectedDatasets(DATASETS_CONFIG.map(d => d.id));
+        }
+    };
+
+    const handleExportToExcelWorkbook = async () => {
+        if (selectedDatasets.length === 0) {
+            alert('Please select at least one dataset to export.');
+            return;
+        }
+
+        setIsExporting(true);
+        setExportProgressText('Preparing Excel workbook compilation...');
+
+        try {
+            const workbook = XLSX.utils.book_new();
+
+            for (const datasetId of selectedDatasets) {
+                if (datasetId === 'summary') {
+                    setExportProgressText('Processing Platform Summary & ESG...');
+                    const summaryRows = [
+                        { Category: 'User Ecology', Metric: 'New Registrations', Value: metrics?.new_registrations || 0, Notes: 'In period' },
+                        { Category: 'User Ecology', Metric: 'Active Users', Value: metrics?.active_users || 0, Notes: 'Current active users' },
+                        { Category: 'User Ecology', Metric: 'Total Registered Users', Value: metrics?.total_users || 0, Notes: 'All-time platform' },
+                        { Category: 'Environmental Impact', Metric: 'Total Carbon Saved (kg CO2e)', Value: Number(metrics?.carbon_saved_kg || 0).toFixed(2), Notes: 'Avoided emissions' },
+                        { Category: 'Environmental Impact', Metric: 'Top Eco-Category', Value: `${metrics?.top_eco_category || 'N/A'} (${metrics?.top_eco_category_percentage || 0}%)`, Notes: 'Highest contributor' },
+                        { Category: 'Transactions', Metric: 'Completed Orders', Value: metrics?.completed_transactions || 0, Notes: 'Successful transactions' },
+                        { Category: 'Transactions', Metric: 'GMV (RM)', Value: metrics?.gmv || '0.00', Notes: 'Gross Merchandise Volume' },
+                        { Category: 'Trust & Safety', Metric: 'Active Disputes', Value: metrics?.active_disputes || 0, Notes: 'Ongoing disputes' },
+                        { Category: 'Trust & Safety', Metric: 'Suspended Users', Value: metrics?.suspended_users || 0, Notes: 'Deactivated accounts' },
+                    ];
+
+                    if (metrics?.category_distribution) {
+                        metrics.category_distribution.forEach(c => {
+                            summaryRows.push({
+                                Category: 'Carbon by Category',
+                                Metric: c.name,
+                                Value: `${Number(c.value).toFixed(2)} kg`,
+                                Notes: 'Avoided emissions'
+                            });
+                        });
+                    }
+
+                    const ws = XLSX.utils.json_to_sheet(summaryRows);
+                    XLSX.utils.book_append_sheet(workbook, ws, 'Summary & ESG');
+
+                } else if (datasetId === 'users') {
+                    setExportProgressText('Fetching User Directory...');
+                    const res = await api.get('/admin/users');
+                    const users = (res.data || []).map(u => ({
+                        'User ID': u.id,
+                        'Full Name': u.full_name || '',
+                        'Username': u.username || '',
+                        'Email': u.email || '',
+                        'Role': u.role || '',
+                        'Status': (u.is_active !== false && u.status !== 'suspended') ? 'Active' : 'Banned/Suspended',
+                        'Reputation Score': u.reputation_score !== undefined ? Number(u.reputation_score).toFixed(1) : '5.0',
+                        'Warning Count': u.warning_count || 0,
+                        'Verified': u.is_verified ? 'Yes' : 'No',
+                        'Joined Date': u.createdAt ? new Date(u.createdAt).toLocaleString() : ''
+                    }));
+                    const ws = XLSX.utils.json_to_sheet(users.length > 0 ? users : [{ 'Status': 'No users found' }]);
+                    XLSX.utils.book_append_sheet(workbook, ws, 'User Directory');
+
+                } else if (datasetId === 'listings') {
+                    setExportProgressText('Fetching Marketplace Listings...');
+                    const res = await api.get('/admin/listings');
+                    const listings = (res.data || []).map(item => ({
+                        'Listing ID': item.id,
+                        'Title': item.title || '',
+                        'Category': item.categoryModel?.name || item.category || 'General',
+                        'Subcategory': item.subcategoryModel?.name || item.subCategoryName || '',
+                        'Type': item.type || 'Sale',
+                        'Price/Rate (RM)': item.type === 'Rent' ? `${item.rental_price_per_day}/day` : item.price,
+                        'Seller Name': item.seller?.full_name || '',
+                        'Seller Email': item.seller?.email || '',
+                        'Status': item.status || '',
+                        'Condition': item.condition || '',
+                        'Posted Date': item.createdAt ? new Date(item.createdAt).toLocaleString() : ''
+                    }));
+                    const ws = XLSX.utils.json_to_sheet(listings.length > 0 ? listings : [{ 'Status': 'No listings found' }]);
+                    XLSX.utils.book_append_sheet(workbook, ws, 'Marketplace Listings');
+
+                } else if (datasetId === 'transactions') {
+                    setExportProgressText('Fetching Orders & Transactions...');
+                    const res = await api.get('/admin/transactions');
+                    const txs = (res.data || []).map(t => ({
+                        'Order ID': t.id,
+                        'Product Title': t.product?.title || 'Unknown Item',
+                        'Type': t.type || 'Sale',
+                        'Amount (RM)': t.amount || t.agreed_price || '0.00',
+                        'Buyer Name': t.buyer?.full_name || '',
+                        'Buyer Email': t.buyer?.email || '',
+                        'Seller Name': t.seller?.full_name || '',
+                        'Seller Email': t.seller?.email || '',
+                        'Status': t.status || '',
+                        'Meetup Location': t.meetup_location || t.meetup_zone?.name || 'TBD',
+                        'Carbon Savings (kg)': t.carbon_saved_kg || '0.00',
+                        'Order Date': t.createdAt ? new Date(t.createdAt).toLocaleString() : ''
+                    }));
+                    const ws = XLSX.utils.json_to_sheet(txs.length > 0 ? txs : [{ 'Status': 'No transactions found' }]);
+                    XLSX.utils.book_append_sheet(workbook, ws, 'Transactions Log');
+
+                } else if (datasetId === 'reports') {
+                    setExportProgressText('Fetching Violations & Reports...');
+                    const res = await api.get('/admin/reports');
+                    const reports = (res.data || []).map(r => ({
+                        'Report ID': r.id,
+                        'Reporter Name': r.reporter?.full_name || '',
+                        'Reported Item/User': r.product?.title || r.reportedUser?.full_name || 'N/A',
+                        'Reason': r.reason || '',
+                        'Category': r.category || '',
+                        'Status': r.status || 'Pending',
+                        'Created Date': r.createdAt ? new Date(r.createdAt).toLocaleString() : ''
+                    }));
+                    const ws = XLSX.utils.json_to_sheet(reports.length > 0 ? reports : [{ 'Status': 'No reports found' }]);
+                    XLSX.utils.book_append_sheet(workbook, ws, 'Violations Log');
+
+                } else if (datasetId === 'disputes') {
+                    setExportProgressText('Fetching Trade Disputes...');
+                    const res = await api.get('/admin/disputes');
+                    const disputes = (res.data || []).map(d => ({
+                        'Dispute ID': d.id,
+                        'Transaction ID': d.transaction_id || '',
+                        'Buyer Name': d.buyer?.full_name || '',
+                        'Seller Name': d.seller?.full_name || '',
+                        'Reason': d.reason || '',
+                        'Amount (RM)': d.disputed_amount || '0.00',
+                        'Status': d.status || '',
+                        'Resolution Note': d.resolution_notes || '',
+                        'Created Date': d.createdAt ? new Date(d.createdAt).toLocaleString() : ''
+                    }));
+                    const ws = XLSX.utils.json_to_sheet(disputes.length > 0 ? disputes : [{ 'Status': 'No disputes found' }]);
+                    XLSX.utils.book_append_sheet(workbook, ws, 'Trade Disputes');
+
+                } else if (datasetId === 'tickets') {
+                    setExportProgressText('Fetching Support Tickets...');
+                    const res = await api.get('/admin/tickets');
+                    const tickets = (res.data || []).map(t => ({
+                        'Ticket ID': t.id,
+                        'User Name': t.user?.full_name || '',
+                        'Email': t.user?.email || '',
+                        'Subject': t.subject || '',
+                        'Category': t.category || '',
+                        'Priority': t.priority || 'Normal',
+                        'Status': t.status || '',
+                        'Assigned Admin': t.assignedAdmin?.full_name || 'Unassigned',
+                        'Created Date': t.createdAt ? new Date(t.createdAt).toLocaleString() : ''
+                    }));
+                    const ws = XLSX.utils.json_to_sheet(tickets.length > 0 ? tickets : [{ 'Status': 'No tickets found' }]);
+                    XLSX.utils.book_append_sheet(workbook, ws, 'Support Tickets');
+
+                } else if (datasetId === 'onboarding') {
+                    setExportProgressText('Fetching Onboarding Analytics...');
+                    const res = await api.get('/admin/analytics/onboarding');
+                    const data = res.data || {};
+                    const onboardingRows = [
+                        { Metric: 'Total Registered Users', Value: data.total_users || 0 },
+                        { Metric: 'Completed Onboarding Users', Value: data.total_onboarded_users || 0 },
+                    ];
+                    if (data.intent_distribution) {
+                        onboardingRows.push(
+                            { Metric: 'Intent: Buy Only', Value: data.intent_distribution.Buy || 0 },
+                            { Metric: 'Intent: Rent Only', Value: data.intent_distribution.Rent || 0 },
+                            { Metric: 'Intent: Both Buy & Rent', Value: data.intent_distribution.Both || 0 }
+                        );
+                    }
+                    if (data.top_categories) {
+                        data.top_categories.forEach(c => {
+                            onboardingRows.push({ Metric: `Preferred Category: ${c.name}`, Value: `${c.count} users` });
+                        });
+                    }
+                    const ws = XLSX.utils.json_to_sheet(onboardingRows);
+                    XLSX.utils.book_append_sheet(workbook, ws, 'Onboarding Analytics');
+                }
+            }
+
+            const dateStr = new Date().toISOString().slice(0, 10);
+            XLSX.writeFile(workbook, `CampusSwap_Master_Export_${dateStr}.xlsx`);
+            setIsExportModalOpen(false);
+        } catch (err) {
+            console.error('Multi-Tab Excel Export Error:', err);
+            alert('Failed to generate multi-sheet Excel export.');
+        } finally {
+            setIsExporting(false);
+            setExportProgressText('');
+        }
+    };
+
+    const handleExportSelectedCSVs = async () => {
+        if (selectedDatasets.length === 0) {
+            alert('Please select at least one dataset.');
+            return;
+        }
+
+        setIsExporting(true);
+        setExportProgressText('Downloading individual CSV reports...');
+
+        try {
+            for (const id of selectedDatasets) {
+                if (id === 'summary') handleExportCSV();
+                else if (id === 'users') await handleExportUsersCSVInAnalytics();
+                else if (id === 'listings') await handleExportListingsCSVInAnalytics();
+                else if (id === 'transactions') await handleExportTransactionsCSVInAnalytics();
+                else if (id === 'environmental' && range === 'custom') await handleExportEnvironmentalCSV();
+            }
+            setIsExportModalOpen(false);
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setIsExporting(false);
+            setExportProgressText('');
+        }
+    };
+
     const handleExportPDF = () => {
         window.print();
     };
@@ -137,6 +485,7 @@ const Analytics = () => {
             handleExportCSV();
         }
     };
+
 
     if (loading) return <div className="p-8 text-center text-gray-500">Loading platform reports...</div>;
 
@@ -312,8 +661,8 @@ const Analytics = () => {
                         print-color-adjust: exact !important;
                     }
                     @page {
-                        margin: 12mm 15mm;
-                        size: portrait;
+                        margin: 10mm 12mm;
+                        size: A4 portrait;
                     }
                     aside.sidebar,
                     main.main-content > header,
@@ -326,9 +675,8 @@ const Analytics = () => {
                         margin-left: 0 !important;
                         padding: 0 !important;
                         width: 100% !important;
-                        min-height: auto !important;
                         background: white !important;
-                        color: black !important;
+                        color: #1f2937 !important;
                     }
                     .page-container {
                         padding: 0 !important;
@@ -337,88 +685,103 @@ const Analytics = () => {
                     body {
                         background-color: white !important;
                         color: #1f2937 !important;
-                        font-size: 10pt !important;
-                        line-height: 1.4;
+                        font-size: 9.5pt !important;
                     }
                     .print-report-header {
-                        display: block !important;
-                        text-align: left;
-                        margin-bottom: 2rem;
-                        border-bottom: 3px double #0d503c;
-                        padding-bottom: 1.25rem;
+                        display: flex !important;
+                        justify-content: space-between;
+                        align-items: flex-end;
+                        margin-bottom: 1.25rem !important;
+                        border-bottom: 2px solid #0d503c !important;
+                        padding-bottom: 0.5rem !important;
                     }
                     .print-report-header h1 {
                         color: #0d503c !important;
-                        margin: 0 0 0.4rem 0;
-                        font-size: 20pt;
+                        margin: 0 0 0.2rem 0;
+                        font-size: 16pt;
                         font-weight: 800;
-                        letter-spacing: -0.5px;
                     }
                     .print-report-header p {
                         margin: 0;
-                        font-size: 9.5pt;
+                        font-size: 8.5pt;
                         color: #4b5563;
                     }
                     .print-report-footer {
-                        display: block !important;
+                        display: flex !important;
+                        justify-content: space-between;
                         position: fixed;
                         bottom: 0;
                         left: 0;
                         right: 0;
-                        text-align: center;
                         font-size: 8pt;
                         color: #9ca3af;
                         border-top: 1px solid #e5e7eb;
                         padding-top: 6px;
+                        background: white;
                     }
                     .print-domain-section {
+                        margin-bottom: 1.5rem !important;
+                        border: 1px solid #e5e7eb !important;
+                        border-radius: 12px;
+                        padding: 1rem !important;
+                        background: white !important;
                         page-break-inside: avoid;
                         break-inside: avoid;
-                        margin-bottom: 2rem !important;
-                        border: 1px solid #d1d5db !important;
-                        border-radius: 10px;
-                        padding: 1.25rem;
-                        background: white !important;
                     }
                     .print-domain-title {
                         border-bottom: 2px solid #0d503c !important;
                         color: #0d503c !important;
-                        padding-bottom: 0.5rem;
+                        padding-bottom: 0.4rem;
                         margin-bottom: 1rem;
-                        font-size: 13pt;
+                        font-size: 12pt;
                         font-weight: 700;
                     }
-                    .card, .chart-container-card {
-                        box-shadow: none !important;
-                        border: 1px solid #e5e7eb !important;
-                        page-break-inside: avoid;
-                        break-inside: avoid;
-                    }
+
+                    /* Small Metric KPI Cards (Numbers) stay side-by-side */
                     .print-grid-3 {
                         display: grid !important;
                         grid-template-columns: repeat(3, 1fr) !important;
-                        gap: 0.85rem !important;
+                        gap: 0.75rem !important;
                     }
                     .print-grid-4 {
                         display: grid !important;
                         grid-template-columns: repeat(4, 1fr) !important;
-                        gap: 0.85rem !important;
+                        gap: 0.75rem !important;
                     }
-                    .print-grid-2, .analytics-grid-2 {
-                        display: grid !important;
-                        grid-template-columns: 1fr 1fr !important;
-                        gap: 1rem !important;
+
+                    /* All Chart Cards & Tables STACK VERTICALLY (Full Width, No Squishing) */
+                    .dashboard-grid-2,
+                    .analytics-grid-2 {
+                        display: flex !important;
+                        flex-direction: column !important;
+                        gap: 1.25rem !important;
+                        width: 100% !important;
                     }
                     .print-flex-row {
                         display: flex !important;
-                        flex-direction: row !important;
-                        gap: 1rem !important;
+                        flex-direction: column !important;
+                        gap: 1.25rem !important;
+                        width: 100% !important;
                     }
-                    .print-flex-child {
-                        flex: 1 !important;
-                    }
-                    svg {
+
+                    .card, .chart-container-card, .print-flex-child {
+                        box-shadow: none !important;
+                        border: 1px solid #e5e7eb !important;
+                        background: white !important;
+                        width: 100% !important;
                         max-width: 100% !important;
+                        min-width: 100% !important;
+                        box-sizing: border-box !important;
+                        page-break-inside: avoid;
+                        break-inside: avoid;
+                    }
+
+                    /* Hide scrollbars elegantly */
+                    ::-webkit-scrollbar {
+                        display: none !important;
+                    }
+                    * {
+                        scrollbar-width: none !important;
                     }
                 }
                 .print-report-header, .print-report-footer {
@@ -428,8 +791,14 @@ const Analytics = () => {
 
             {/* Print Header */}
             <div className="print-report-header">
-                <h1>Campus Swap Platform Performance & Sustainability Report</h1>
-                <p>Generated on: {new Date().toLocaleDateString()} | Reporting Period: {getRangeLabel()}</p>
+                <div>
+                    <h1>Campus Swap Platform Performance Report</h1>
+                    <p>TAR UMT Official Analytics & Sustainability Audit</p>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                    <p style={{ fontWeight: 'bold', color: '#0d503c', margin: 0 }}>Period: {getRangeLabel()}</p>
+                    <p style={{ margin: 0, fontSize: '8pt', color: '#6b7280' }}>Date: {new Date().toLocaleDateString()} {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                </div>
             </div>
 
             {/* Screen Action Bar */}
@@ -488,11 +857,30 @@ const Analytics = () => {
                             <span>Print PDF</span>
                         </button>
 
-                        {/* Export CSV Button (Unified Action) */}
-                        <button className="btn flex items-center gap-2" onClick={handleUnifiedExportCSV} style={{ padding: '0.6rem 1.2rem', fontSize: '0.9rem', height: '42px' }}>
-                            <Download size={16} />
-                            <span>Export CSV</span>
+                        {/* Unified Data Export Center Button */}
+                        <button 
+                            className="btn" 
+                            onClick={() => setIsExportModalOpen(true)}
+                            style={{ 
+                                padding: '0.6rem 1.25rem', 
+                                fontSize: '0.9rem', 
+                                height: '42px', 
+                                background: 'linear-gradient(135deg, #0d503c 0%, #059669 100%)', 
+                                color: 'white', 
+                                border: 'none', 
+                                borderRadius: '8px', 
+                                cursor: 'pointer', 
+                                fontWeight: 'bold',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                boxShadow: '0 4px 12px rgba(5, 150, 105, 0.25)'
+                            }}
+                        >
+                            <Download size={18} />
+                            <span>Export Data Center</span>
                         </button>
+
                     </div>
                 </div>
             </div>
@@ -863,10 +1251,174 @@ const Analytics = () => {
 
             {/* Print Footer */}
             <div className="print-report-footer">
-                Campus Swap Platform Official Analytics & Sustainability Report — Internal Confidential
+                <span>TAR UMT Campus Swap System Report</span>
+                <span>Confidential — Internal Administrative Audit</span>
+                <span>Generated by System Administrator</span>
             </div>
+
+            {/* Unified Export Data Center Modal */}
+            {isExportModalOpen && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    background: 'rgba(0,0,0,0.65)',
+                    backdropFilter: 'blur(5px)',
+                    zIndex: 2000,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '1.5rem'
+                }}>
+                    <div style={{
+                        background: 'white',
+                        borderRadius: '20px',
+                        width: '100%',
+                        maxWidth: '880px',
+                        maxHeight: '90vh',
+                        overflow: 'hidden',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.3)',
+                        animation: 'fadeIn 0.2s ease-in-out'
+                    }}>
+                        {/* Modal Header */}
+                        <div style={{
+                            padding: '1.25rem 1.75rem',
+                            background: 'linear-gradient(135deg, #0d503c 0%, #047857 100%)',
+                            color: 'white',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                <div style={{ padding: '8px', borderRadius: '10px', background: 'rgba(255,255,255,0.15)' }}>
+                                    <FileSpreadsheet size={26} color="white" />
+                                </div>
+                                <div>
+                                    <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: '800', color: 'white' }}>
+                                        Unified Data Export Center
+                                    </h2>
+                                    <p style={{ margin: 0, fontSize: '0.825rem', opacity: 0.9, color: '#d1fae5' }}>
+                                        Select datasets to compile into a single multi-tab Excel (.xlsx) workbook or individual CSVs
+                                    </p>
+                                </div>
+                            </div>
+                            <button 
+                                onClick={() => !isExporting && setIsExportModalOpen(false)}
+                                style={{ background: 'transparent', border: 'none', color: 'white', cursor: 'pointer', opacity: 0.85, padding: '4px' }}
+                            >
+                                <X size={24} />
+                            </button>
+                        </div>
+
+                        {/* Modal Body: Checkbox Options Grid */}
+                        <div style={{ padding: '1.5rem 1.75rem', overflowY: 'auto', flex: 1, background: '#f8fafc' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                                <span style={{ fontSize: '0.925rem', fontWeight: '700', color: 'var(--text-main)' }}>
+                                    Select Datasets to Include ({selectedDatasets.length} of {DATASETS_CONFIG.length} selected):
+                                </span>
+                                <button 
+                                    onClick={toggleSelectAllDatasets}
+                                    style={{ background: 'transparent', border: 'none', color: 'var(--primary)', fontWeight: '700', fontSize: '0.875rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                                >
+                                    {selectedDatasets.length === DATASETS_CONFIG.length ? <Square size={16} /> : <CheckSquare size={16} />}
+                                    <span>{selectedDatasets.length === DATASETS_CONFIG.length ? 'Deselect All' : 'Select All'}</span>
+                                </button>
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', gap: '1rem' }}>
+                                {DATASETS_CONFIG.map((item) => {
+                                    const IconComponent = item.icon;
+                                    const isSelected = selectedDatasets.includes(item.id);
+                                    return (
+                                        <div 
+                                            key={item.id}
+                                            onClick={() => toggleSelectDataset(item.id)}
+                                            style={{
+                                                padding: '1rem 1.25rem',
+                                                borderRadius: '14px',
+                                                border: `2px solid ${isSelected ? item.color : '#e2e8f0'}`,
+                                                background: isSelected ? 'white' : '#f1f5f9',
+                                                boxShadow: isSelected ? '0 4px 12px rgba(0,0,0,0.05)' : 'none',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.2s ease',
+                                                display: 'flex',
+                                                alignItems: 'flex-start',
+                                                gap: '12px'
+                                            }}
+                                        >
+                                            <div style={{ marginTop: '2px', color: isSelected ? item.color : '#94a3b8' }}>
+                                                {isSelected ? <CheckSquare size={22} /> : <Square size={22} />}
+                                            </div>
+                                            <div style={{ flex: 1 }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                                                    <IconComponent size={18} color={item.color} />
+                                                    <span style={{ fontWeight: '700', fontSize: '0.95rem', color: isSelected ? '#0f172a' : '#475569' }}>
+                                                        {item.label}
+                                                    </span>
+                                                </div>
+                                                <p style={{ margin: 0, fontSize: '0.825rem', color: '#64748b', lineHeight: '1.35' }}>
+                                                    {item.desc}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        {/* Modal Footer: Action Buttons */}
+                        <div style={{ padding: '1.25rem 1.75rem', background: 'white', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+                            <div style={{ fontSize: '0.85rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                {isExporting && (
+                                    <>
+                                        <RefreshCw size={18} className="spin" color="var(--primary)" />
+                                        <span style={{ fontWeight: '700', color: 'var(--primary)' }}>{exportProgressText}</span>
+                                    </>
+                                )}
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '12px' }}>
+                                <button 
+                                    onClick={handleExportSelectedCSVs}
+                                    disabled={isExporting || selectedDatasets.length === 0}
+                                    className="btn btn-secondary"
+                                    style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '0.7rem 1.25rem', fontWeight: '600', borderRadius: '10px' }}
+                                >
+                                    <FileText size={18} />
+                                    <span>Export Separate CSVs</span>
+                                </button>
+
+                                <button 
+                                    onClick={handleExportToExcelWorkbook}
+                                    disabled={isExporting || selectedDatasets.length === 0}
+                                    className="btn btn-primary"
+                                    style={{ 
+                                        display: 'flex', 
+                                        alignItems: 'center', 
+                                        gap: '8px', 
+                                        padding: '0.7rem 1.5rem', 
+                                        fontWeight: '700',
+                                        background: 'linear-gradient(135deg, #15803d 0%, #16a34a 100%)',
+                                        border: 'none',
+                                        borderRadius: '10px',
+                                        boxShadow: '0 4px 14px rgba(22, 163, 74, 0.35)'
+                                    }}
+                                >
+                                    <FileSpreadsheet size={18} />
+                                    <span>Export Multi-Tab Excel (.xlsx)</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
 
 export default Analytics;
+

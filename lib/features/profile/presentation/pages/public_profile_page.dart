@@ -476,21 +476,23 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
                              _buildInfoRow('Email', _userProfile!['email']),
                            if (_userProfile!['phone_number'] != null)
                              _buildInfoRow('Phone Number', _userProfile!['phone_number']),
+                           if (_userProfile!['faculty'] != null)
+                             _buildInfoRow('Faculty', _userProfile!['faculty']),
                            if (_userProfile!['year_of_study'] != null)
                              _buildInfoRow('Year of Study', 'Year ${_userProfile!['year_of_study']}'),
-                            if (_userProfile!['preference_tags'] != null && (_userProfile!['preference_tags'] as List).isNotEmpty)
-                               _buildTagsRow('Looking For / Interests', List<String>.from(_userProfile!['preference_tags']), isDark),
                           
-                          if (_userProfile!['email'] == null && _userProfile!['phone_number'] == null && _userProfile!['year_of_study'] == null)
+                          if (_userProfile!['email'] == null && _userProfile!['faculty'] == null && _userProfile!['year_of_study'] == null)
                             Padding(
                               padding: const EdgeInsets.symmetric(vertical: 8.0),
                               child: Row(
                                 children: [
                                   const Icon(Icons.lock_outline, size: 16, color: Colors.grey),
                                   const SizedBox(width: 8),
-                                  Text(
-                                    "This profile is private.",
-                                    style: GoogleFonts.outfit(color: Colors.grey[600], fontStyle: FontStyle.italic),
+                                  Expanded(
+                                    child: Text(
+                                      "Email, Faculty, and Year of Study are hidden (Profile Privacy: Private).",
+                                      style: GoogleFonts.outfit(color: Colors.grey[600], fontStyle: FontStyle.italic, fontSize: 13),
+                                    ),
                                   ),
                                 ],
                               ),

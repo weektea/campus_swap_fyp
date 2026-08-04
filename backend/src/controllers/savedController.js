@@ -1,4 +1,4 @@
-import { SavedItem, Product, User, Report } from '../models/index.js';
+import { SavedItem, Product, User, Report, UserInteraction } from '../models/index.js';
 import { Op } from 'sequelize';
 
 /**
@@ -27,7 +27,20 @@ export const toggleSave = async (req, res) => {
         } else {
             await SavedItem.create({ user_id, product_id });
             isSaved = true;
+
+            // Automatically record 'save' interaction for popularity score tracking
+            try {
+                await UserInteraction.create({
+                    user_id,
+                    product_id,
+                    interaction_type: 'save',
+                    weight: 5
+                });
+            } catch (err) {
+                console.error('Failed to log save interaction:', err);
+            }
         }
+
 
         const favorite_count = await SavedItem.count({ where: { product_id } });
         return res.json({

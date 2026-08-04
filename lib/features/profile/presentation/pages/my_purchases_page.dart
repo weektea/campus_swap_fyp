@@ -170,33 +170,46 @@ class _MyTransactionsPageState extends State<MyTransactionsPage> with SingleTick
   Widget _buildList(List<dynamic> transactions, {required bool isBuying}) {
       final theme = Theme.of(context);
       if (transactions.isEmpty) {
-          return EmptyStateWidget(
-              icon: isBuying ? Icons.shopping_bag_outlined : Icons.receipt_long_outlined,
-              title: isBuying ? 'No Purchases Yet' : 'No Sales Yet',
-              message: isBuying ? 'You haven\'t bought anything yet. Explore the marketplace to find great deals!' : 'You haven\'t sold anything yet. List your items to start earning!',
-              buttonText: isBuying ? 'Explore Market' : 'Start Selling',
-              onActionPressed: () {
-                  if (isBuying) {
-                      if (widget.isPushed) {
-                          Navigator.pop(context, 'go_to_home'); // Return result to switch tab to home page
-                      } else {
-                          // Directly embedded in HomePage, change selected tab to Home (index 0)
-                          final homeState = context.findAncestorStateOfType<HomePageState>();
-                          if (homeState != null) {
-                              homeState.setSelectedIndex(0);
-                          }
-                      }
-                  } else {
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => const SellPage(isPushed: true))).then((_) => _fetchAllTransactions());
-                  }
-              },
+          return RefreshIndicator(
+            onRefresh: _fetchAllTransactions,
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: SizedBox(
+                height: MediaQuery.of(context).size.height * 0.6,
+                child: EmptyStateWidget(
+                    icon: isBuying ? Icons.shopping_bag_outlined : Icons.receipt_long_outlined,
+                    title: isBuying ? 'No Purchases Yet' : 'No Sales Yet',
+                    message: isBuying ? 'You haven\'t bought anything yet. Explore the marketplace to find great deals!' : 'You haven\'t sold anything yet. List your items to start earning!',
+                    buttonText: isBuying ? 'Explore Market' : 'Start Selling',
+                    onActionPressed: () {
+                        if (isBuying) {
+                            if (widget.isPushed) {
+                                Navigator.pop(context, 'go_to_home'); // Return result to switch tab to home page
+                            } else {
+                                // Directly embedded in HomePage, change selected tab to Home (index 0)
+                                final homeState = context.findAncestorStateOfType<HomePageState>();
+                                if (homeState != null) {
+                                    homeState.setSelectedIndex(0);
+                                }
+                            }
+                        } else {
+                            Navigator.push(context, MaterialPageRoute(builder: (_) => const SellPage(isPushed: true))).then((_) => _fetchAllTransactions());
+                        }
+                    },
+                ),
+              ),
+            ),
           );
+
       }
 
-      return ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: transactions.length,
-        itemBuilder: (context, index) {
+      return RefreshIndicator(
+        onRefresh: _fetchAllTransactions,
+        child: ListView.builder(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(16),
+          itemCount: transactions.length,
+          itemBuilder: (context, index) {
             final item = transactions[index];
             final product = item['product'] ?? {};
             final status = item['status'];
@@ -363,7 +376,8 @@ class _MyTransactionsPageState extends State<MyTransactionsPage> with SingleTick
                 ),
             );
         },
-      );
+      ),
+    );
   }
 
   Color _getStatusColor(BuildContext context, String status) {

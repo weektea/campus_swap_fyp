@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Lock, CheckCircle } from 'lucide-react';
+import { Lock, CheckCircle, ShieldCheck, AlertOctagon, Download } from 'lucide-react';
 import api, { IMAGE_BASE_URL } from '../services/api';
 import { useSocket } from '../context/SocketContext';
 
@@ -23,6 +23,7 @@ const Tickets = () => {
     const location = useLocation();
     const [allTickets, setAllTickets] = useState([]);
     const [activeTab, setActiveTab] = useState('Pending'); // Pending | History
+    const [ticketTypeFilter, setTicketTypeFilter] = useState('All'); // All | Appeals | General
     const [selectedTicket, setSelectedTicket] = useState(null);
     const [messages, setMessages] = useState([]);
     const [chatInput, setChatInput] = useState('');
@@ -30,12 +31,46 @@ const Tickets = () => {
     const [replyContent, setReplyContent] = useState('');
     const [action, setAction] = useState('Resolved'); // Resolved, Escalated
     const [currentUser, setCurrentUser] = useState(null);
+    const [isReactivating, setIsReactivating] = useState(false);
     const socket = useSocket();
 
     const getImageUrl = (url) => {
         if (!url) return '';
         if (url.startsWith('http://') || url.startsWith('https://')) return url;
         return `${IMAGE_BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
+    };
+
+    const handleExportTicketsCSV = () => {
+        if (!allTickets || allTickets.length === 0) {
+            alert('No ticket data to export.');
+            return;
+        }
+        const csvRows = [
+            ['Reference ID', 'Type', 'Student Name', 'Student Email', 'Subject', 'Priority', 'Status', 'Locked Handler', 'Created At']
+        ];
+        allTickets.forEach(ticket => {
+            csvRows.push([
+                ticket.reference_id || `TCK-${ticket.id}`,
+                ticket.type === 'SUSPENSION_APPEAL' ? 'Account Appeal' : 'Support Ticket',
+                ticket.student?.full_name || '',
+                ticket.student?.email || '',
+                ticket.subject || '',
+                ticket.priority || 'Normal',
+                ticket.status || '',
+                ticket.handler?.full_name || ticket.locked_by || 'Unassigned',
+                ticket.createdAt ? new Date(ticket.createdAt).toLocaleString() : ''
+            ]);
+        });
+        const csvContent = csvRows.map(row => row.map(val => `"${String(val).replace(/"/g, '""')}"`).join(',')).join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `Campus_Swap_Support_Tickets_Report_${new Date().toISOString().slice(0, 10)}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
     };
 
     const formatChatTimestamp = (createdAtStr) => {
@@ -62,7 +97,6 @@ const Tickets = () => {
     useEffect(() => {
         if (selectedTicket) {
             fetchMessages(selectedTicket.realId);
-            // Poll for new messages every 3 seconds
             const interval = setInterval(() => fetchMessages(selectedTicket.realId), 3000);
             return () => clearInterval(interval);
         }
@@ -94,60 +128,36 @@ const Tickets = () => {
         };
     }, [socket, selectedTicket]);
 
-    const pendingTickets = allTickets.filter(t => t.status !== 'Resolved');
-    const historyTickets = allTickets.filter(t => t.status === 'Resolved');
-    const displayedTickets = activeTab === 'Pending' ? pendingTickets : historyTickets;
-    const isModerator = currentUser?.role === 'moderator';
-
-    const fetchMessages = async (referenceId) => {
-        try {
-            const res = await api.get(`/tickets/thread/${referenceId}`);
-            setMessages(res.data);
-        } catch (err) {
-            console.error('Failed to fetch thread messages', err);
-        }
-    };
-
-    const handleSendChatMessage = async (e) => {
-        e.preventDefault();
-        if (!chatInput.trim() || !selectedTicket) return;
-        try {
-            const res = await api.post(`/tickets/thread/${selectedTicket.realId}`, {
-                reference_type: 'SupportTicket',
-                content: chatInput.trim()
-            });
-            setMessages(prev => [...prev, {
-                ...res.data,
-                sender: currentUser
-            }]);
-            setChatInput('');
-        } catch (err) {
-            alert('Failed to send message: ' + (err.response?.data?.error || err.message));
-        }
-    };
-
     const fetchTickets = async () => {
         setLoading(true);
         try {
             const res = await api.get('/admin/tickets');
-            const data = res.data.map(t => ({
-                id: `TKT-${t.id}`,
-                realId: t.id,
-                studentEmail: t.student?.email || 'Unknown',
-                content: t.issue_description || t.description || 'No description',
-                submittedAt: t.createdAt,
-                status: t.status,
-                lockedBy: t.lockedByModeratorId,
-                raw: t
-            }));
+            const data = res.data.map(t => {
+                const isAppeal = t.type === 'SUSPENSION_APPEAL' || (t.subject && t.subject.toLowerCase().includes('suspended'));
+                return {
+                    id: `TKT-${t.id.substring(0, 8)}`,
+                    realId: t.id,
+                    isAppeal,
+                    studentEmail: t.student?.email || 'Unknown',
+                    studentName: t.student?.full_name || t.student?.username || 'User',
+                    studentId: t.student?.id || t.user_id,
+                    studentStatus: t.student?.status,
+                    studentIsActive: t.student?.is_active,
+                    subject: t.subject || 'Support Ticket',
+                    content: t.issue_description || t.description || 'No description',
+                    submittedAt: t.createdAt,
+                    status: t.status,
+                    lockedBy: t.lockedByModeratorId,
+                    raw: t
+                };
+            });
 
             data.sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
             setAllTickets(data);
 
-            // Pre-select if navigated from dashboard
             const targetId = location.state?.selectedId;
             if (targetId) {
-                const found = data.find(t => t.realId === targetId);
+                const found = data.find(t => t.realId === targetId || t.id === targetId);
                 if (found) {
                     setSelectedTicket(found);
                     setReplyContent(found.raw.reply_content || '');
@@ -177,6 +187,33 @@ const Tickets = () => {
         }
     };
 
+    const fetchMessages = async (referenceId) => {
+        try {
+            const res = await api.get(`/tickets/thread/${referenceId}`);
+            setMessages(res.data);
+        } catch (err) {
+            console.error('Failed to fetch thread messages', err);
+        }
+    };
+
+    const handleSendChatMessage = async (e) => {
+        e.preventDefault();
+        if (!chatInput.trim() || !selectedTicket) return;
+        try {
+            const res = await api.post(`/tickets/thread/${selectedTicket.realId}`, {
+                reference_type: 'SupportTicket',
+                content: chatInput.trim()
+            });
+            setMessages(prev => [...prev, {
+                ...res.data,
+                sender: currentUser
+            }]);
+            setChatInput('');
+        } catch (err) {
+            alert('Failed to send message: ' + (err.response?.data?.error || err.message));
+        }
+    };
+
     const handleLockTicket = async () => {
         if (!selectedTicket) return;
         try {
@@ -188,6 +225,22 @@ const Tickets = () => {
         }
     };
 
+    const handleReactivateUser = async () => {
+        if (!selectedTicket?.studentId) return;
+        if (!window.confirm(`Reactivate account for user ${selectedTicket.studentName}?`)) return;
+
+        setIsReactivating(true);
+        try {
+            await api.post(`/admin/users/${selectedTicket.studentId}/suspend`, { is_active: true });
+            alert(`User ${selectedTicket.studentName} has been successfully reactivated!`);
+            fetchTickets();
+        } catch (err) {
+            alert(err.response?.data?.error || 'Failed to reactivate user');
+        } finally {
+            setIsReactivating(false);
+        }
+    };
+
     const handleSubmitAction = async () => {
         if (!selectedTicket) return;
         try {
@@ -195,7 +248,7 @@ const Tickets = () => {
                 status: action,
                 reply_content: replyContent
             });
-            alert('Reply sent successfully!');
+            alert('Reply submitted successfully!');
             setReplyContent('');
             setSelectedTicket(null);
             fetchTickets();
@@ -204,19 +257,43 @@ const Tickets = () => {
         }
     };
 
+    // Filter tickets by Tab (Pending/History) and Filter Type (All/Appeals/General)
+    const baseTickets = activeTab === 'Pending' 
+        ? allTickets.filter(t => t.status !== 'Resolved') 
+        : allTickets.filter(t => t.status === 'Resolved');
+
+    const displayedTickets = baseTickets.filter(t => {
+        if (ticketTypeFilter === 'Appeals') return t.isAppeal;
+        if (ticketTypeFilter === 'General') return !t.isAppeal;
+        return true;
+    });
+
+    const isModerator = currentUser?.role === 'moderator';
+    const appealsCount = baseTickets.filter(t => t.isAppeal).length;
+
     if (loading) return <div className="p-8 text-center text-gray-500">Loading tickets...</div>;
 
     return (
         <div className="flex gap-6 h-full" style={{ minHeight: '80vh' }}>
             {/* Sidebar List */}
-            <div className="card flex flex-col gap-2" style={{ width: '300px', padding: '1rem', overflowY: 'auto' }}>
-                <div style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#2563eb', background: '#eff6ff', border: '1px solid #bfdbfe', padding: '6px 10px', borderRadius: '6px', textAlign: 'center', marginBottom: '8px' }}>
-                    Total Tickets Found: {allTickets.length}
-                </div>
-                {/* Tab Switcher */}
-                <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: '12px' }}>
+            <div className="card flex flex-col gap-2" style={{ width: '320px', padding: '1rem', overflowY: 'auto' }}>
+                {/* Header Stats */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                    <span style={{ fontSize: '0.85rem', fontWeight: 'bold', color: 'var(--text-main)' }}>Tickets Console ({allTickets.length})</span>
                     <button
-                        onClick={() => { setActiveTab('Pending'); setSelectedTicket(pendingTickets[0] || null); }}
+                        className="btn"
+                        onClick={handleExportTicketsCSV}
+                        style={{ padding: '4px 8px', fontSize: '0.75rem', background: '#0d503c', color: 'white', border: 'none', display: 'flex', alignItems: 'center', gap: '4px', borderRadius: '6px' }}
+                        title="Export Tickets CSV"
+                    >
+                        <Download size={13} /> Export CSV
+                    </button>
+                </div>
+
+                {/* Status Tab Switcher (Pending vs History) */}
+                <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: '8px' }}>
+                    <button
+                        onClick={() => { setActiveTab('Pending'); setSelectedTicket(null); }}
                         style={{
                             flex: 1,
                             padding: '8px',
@@ -229,10 +306,10 @@ const Tickets = () => {
                             fontSize: '0.85rem'
                         }}
                     >
-                        Pending ({pendingTickets.length})
+                        Pending ({allTickets.filter(t => t.status !== 'Resolved').length})
                     </button>
                     <button
-                        onClick={() => { setActiveTab('History'); setSelectedTicket(historyTickets[0] || null); }}
+                        onClick={() => { setActiveTab('History'); setSelectedTicket(null); }}
                         style={{
                             flex: 1,
                             padding: '8px',
@@ -245,10 +322,39 @@ const Tickets = () => {
                             fontSize: '0.85rem'
                         }}
                     >
-                        History ({historyTickets.length})
+                        History ({allTickets.filter(t => t.status === 'Resolved').length})
                     </button>
                 </div>
 
+                {/* Sub-Filter Pills (All | Appeals | General) */}
+                <div style={{ display: 'flex', gap: '4px', marginBottom: '12px' }}>
+                    {[
+                        { label: 'All', key: 'All' },
+                        { label: `🔒 Appeals (${appealsCount})`, key: 'Appeals' },
+                        { label: '💬 General', key: 'General' }
+                    ].map(f => (
+                        <button
+                            key={f.key}
+                            onClick={() => setTicketTypeFilter(f.key)}
+                            style={{
+                                flex: 1,
+                                border: 'none',
+                                borderRadius: '12px',
+                                padding: '4px 6px',
+                                fontSize: '0.72rem',
+                                fontWeight: 'bold',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s',
+                                background: ticketTypeFilter === f.key ? (f.key === 'Appeals' ? '#ef4444' : 'var(--primary)') : '#f3f4f6',
+                                color: ticketTypeFilter === f.key ? 'white' : '#4b5563'
+                            }}
+                        >
+                            {f.label}
+                        </button>
+                    ))}
+                </div>
+
+                {/* Ticket Items List */}
                 {displayedTickets.map(ticket => (
                     <div 
                         key={ticket.id}
@@ -269,18 +375,33 @@ const Tickets = () => {
                             padding: '12px', 
                             borderRadius: '8px', 
                             border: '1px solid var(--border)',
-                            background: selectedTicket?.id === ticket.id ? '#eff6ff' : 'white',
-                            borderColor: selectedTicket?.id === ticket.id ? '#bfdbfe' : 'var(--border)',
+                            background: selectedTicket?.id === ticket.id ? (ticket.isAppeal ? '#fef2f2' : '#eff6ff') : 'white',
+                            borderColor: selectedTicket?.id === ticket.id ? (ticket.isAppeal ? '#fca5a5' : '#bfdbfe') : (ticket.isAppeal ? '#fee2e2' : 'var(--border)'),
                             cursor: 'pointer',
-                            display: 'flex', flexDirection: 'column', gap: '4px'
+                            display: 'flex', flexDirection: 'column', gap: '6px'
                         }}
                     >
                         <div className="flex justify-between items-center">
-                            <span style={{ fontWeight: 'bold', fontSize: '0.875rem' }}>{ticket.id}</span>
+                            <span style={{ fontWeight: 'bold', fontSize: '0.85rem' }}>{ticket.id}</span>
                             <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{new Date(ticket.submittedAt).toLocaleDateString()}</span>
                         </div>
-                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            User: {ticket.studentEmail}
+                        
+                        {/* Appeal Badge Indicator */}
+                        {ticket.isAppeal ? (
+                            <span style={{ fontSize: '0.7rem', color: '#dc2626', fontWeight: 'bold', background: '#fee2e2', padding: '2px 8px', borderRadius: '6px', width: 'fit-content', border: '1px solid #fca5a5' }}>
+                                🔒 Account Appeal
+                            </span>
+                        ) : (
+                            <span style={{ fontSize: '0.7rem', color: '#2563eb', fontWeight: 'bold', background: '#eff6ff', padding: '2px 8px', borderRadius: '6px', width: 'fit-content' }}>
+                                💬 Support Inquiry
+                            </span>
+                        )}
+
+                        <div style={{ fontSize: '0.8rem', color: '#374151', fontWeight: '500', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {ticket.subject}
+                        </div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            User: {ticket.studentName} ({ticket.studentEmail})
                         </div>
                         <div>
                             <span style={getStatusBadgeStyle(ticket.status)}>
@@ -289,45 +410,72 @@ const Tickets = () => {
                         </div>
                     </div>
                 ))}
-                {displayedTickets.length === 0 && <div style={{ color: 'var(--text-muted)', textAlign: 'center', marginTop: '2rem' }}>No {activeTab.toLowerCase()} tickets.</div>}
+                {displayedTickets.length === 0 && <div style={{ color: 'var(--text-muted)', textAlign: 'center', marginTop: '2rem', fontSize: '0.85rem' }}>No {activeTab.toLowerCase()} tickets found.</div>}
             </div>
 
+            {/* Ticket Workspace Details */}
             <div className="flex-1 flex flex-col gap-6">
                 {!selectedTicket ? (
                     <div className="card flex items-center justify-center h-full" style={{ color: 'var(--text-muted)' }}>
-                        Select a ticket from the left to view details.
+                        Select a ticket from the left to view thread and respond.
                     </div>
                 ) : (
                     <>
+                        {/* Account Appeal Special Banner */}
+                        {selectedTicket.isAppeal && (
+                            <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', padding: '12px 20px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: '#991b1b' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <AlertOctagon size={22} color="#dc2626" />
+                                    <div>
+                                        <strong style={{ fontSize: '0.95rem' }}>Suspended Account Reactivation Appeal</strong>
+                                        <p style={{ margin: 0, fontSize: '0.8rem', color: '#7f1d1d' }}>
+                                            Submitted by suspended user: <strong>{selectedTicket.studentName}</strong> ({selectedTicket.studentEmail})
+                                        </p>
+                                    </div>
+                                </div>
+                                <button 
+                                    className="btn" 
+                                    style={{ background: '#dc2626', color: 'white', fontSize: '0.8rem', padding: '6px 14px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                                    onClick={handleReactivateUser}
+                                    disabled={isReactivating}
+                                >
+                                    <ShieldCheck size={16} />
+                                    {isReactivating ? 'Reactivating...' : 'Reactivate Account'}
+                                </button>
+                            </div>
+                        )}
+
                         {selectedTicket.status !== 'Resolved' && selectedTicket.lockedBy === currentUser?.id && (
-                            <div style={{ background: '#e8f5e9', padding: '12px 32px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px', color: '#2e7d32', fontWeight: 'bold' }}>
-                                <Lock size={18} /><span>Ticket {selectedTicket.id} is currently locked by you.</span>
+                            <div style={{ background: '#e8f5e9', padding: '10px 20px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px', color: '#2e7d32', fontWeight: 'bold', fontSize: '0.85rem' }}>
+                                <Lock size={16} /><span>Ticket {selectedTicket.id} is currently locked by you.</span>
                             </div>
                         )}
                         {selectedTicket.status !== 'Resolved' && selectedTicket.lockedBy && selectedTicket.lockedBy !== currentUser?.id && (
-                            <div style={{ background: '#fef2f2', padding: '12px 32px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px', color: '#dc2626', fontWeight: 'bold' }}>
-                                <Lock size={18} /><span>Ticket {selectedTicket.id} is locked by another moderator.</span>
+                            <div style={{ background: '#fff7ed', padding: '10px 20px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px', color: '#c2410c', fontWeight: 'bold', fontSize: '0.85rem' }}>
+                                <Lock size={16} /><span>Ticket {selectedTicket.id} is locked by another staff member.</span>
                             </div>
                         )}
 
                         <div className="flex gap-6 items-start">
                              <div style={{ flex: 3 }} className="flex flex-col gap-6">
+                                 {/* Ticket Description Card */}
                                  <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-                                     <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--border)' }}>
-                                         <h2 style={{ margin: 0, fontSize: '1.25rem' }}>Support Ticket Details</h2>
+                                     <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                         <h2 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 'bold' }}>{selectedTicket.subject}</h2>
+                                         <span style={getStatusBadgeStyle(selectedTicket.status)}>{selectedTicket.status}</span>
                                      </div>
                                      <div style={{ padding: '1.5rem' }}>
-                                         <div style={{ fontWeight: 'bold', marginBottom: '8px' }}>User's Issue: </div>
-                                         <div style={{ lineHeight: 1.6, background: '#f9fafb', padding: '1rem', borderRadius: '8px' }}>
+                                         <div style={{ fontWeight: '600', marginBottom: '8px', fontSize: '0.85rem', color: '#4b5563' }}>Issue Description / Reason:</div>
+                                         <div style={{ lineHeight: 1.6, background: '#f9fafb', padding: '1rem', borderRadius: '8px', border: '1px solid #f3f4f6', fontSize: '0.9rem' }}>
                                              {selectedTicket.content}
                                          </div>
-                                         <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginTop: '1rem' }}>
-                                             Submitted by: {selectedTicket.studentEmail}
+                                         <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '1rem' }}>
+                                             Submitted by: <strong>{selectedTicket.studentName}</strong> ({selectedTicket.studentEmail})
                                          </div>
                                      </div>
                                  </div>
 
-                                 {/* Chat Thread */}
+                                 {/* Support Chat Thread */}
                                  <div className="card" style={{ display: 'flex', flexDirection: 'column', height: '400px' }}>
                                      <h3 style={{ margin: '0 0 1rem 0', fontSize: '1.1rem' }}>Support Chat Thread</h3>
                                      <div style={{ flex: 1, overflowY: 'auto', padding: '1rem', background: '#f8fafc', borderRadius: '12px', marginBottom: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
@@ -411,6 +559,7 @@ const Tickets = () => {
                                  </div>
                              </div>
 
+                            {/* Action & Resolution Terminal */}
                             <div className="card" style={{ flex: 2 }}>
                                 <h2 style={{ margin: '0 0 1.5rem 0', fontSize: '1.25rem' }}>Helpdesk Terminal</h2>
                                 

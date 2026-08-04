@@ -203,10 +203,7 @@ export const getAllProducts = async (req, res) => {
             }
         }
 
-        console.log('----- DEBUG PRODUCTS -----');
-        console.log('Query Params:', req.query);
-        console.log('Where Clause:', JSON.stringify(whereClause, null, 2));
-        console.log('--------------------------');
+
 
         // Sorting
         let order = [['createdAt', 'DESC']]; // Default
@@ -218,7 +215,24 @@ export const getAllProducts = async (req, res) => {
             order = [['price', 'DESC']];
         } else if (sort === 'newest') {
             order = [['createdAt', 'DESC']];
+        } else if (sort === 'popular') {
+            order = [
+                [
+                    sequelize.literal(`(
+                        SELECT COALESCE(SUM(CASE 
+                            WHEN ui.interaction_type = 'view' THEN 1
+                            WHEN ui.interaction_type = 'message' THEN 3
+                            WHEN ui.interaction_type = 'save' THEN 5
+                            ELSE 0 END), 0)
+                        FROM "UserInteractions" AS ui
+                        WHERE ui.product_id = "Product"."id"
+                    )`),
+                    'DESC'
+                ],
+                ['createdAt', 'DESC']
+            ];
         }
+
 
         const products = await Product.findAll({
             where: whereClause,

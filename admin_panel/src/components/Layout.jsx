@@ -13,13 +13,20 @@ import {
     History as HistoryIcon,
     ShoppingCart,
     Tags,
+    GraduationCap,
     MessageSquareWarning,
     Bell,
+    Lock,
+    Flag,
+    Scale,
+    HelpCircle,
     BrainCircuit,
     Settings,
     Menu,
-    X
+    X,
+    Flame
 } from 'lucide-react';
+
 import api from '../services/api';
 import { useSocket } from '../context/SocketContext';
 
@@ -169,6 +176,11 @@ const Layout = ({ children }) => {
                             <Search size={20} style={{ flexShrink: 0 }} />
                             <span>All Listings</span>
                         </NavLink>
+                        <NavLink to="/popular-listings" onClick={handleNavClick} className={({isActive}) => `nav-link ${isActive ? 'active' : ''}`}>
+                            <Flame size={20} style={{ flexShrink: 0, color: '#f97316' }} />
+                            <span>Popular Listings</span>
+                        </NavLink>
+
                         <NavLink to="/transactions" onClick={handleNavClick} className={({isActive}) => `nav-link ${isActive ? 'active' : ''}`}>
                             <ShoppingCart size={20} style={{ flexShrink: 0 }} />
                             <span>Transactions</span>
@@ -176,6 +188,10 @@ const Layout = ({ children }) => {
                         <NavLink to="/categories" onClick={handleNavClick} className={({isActive}) => `nav-link ${isActive ? 'active' : ''}`}>
                             <Tags size={20} style={{ flexShrink: 0 }} />
                             <span>Categories & Zones</span>
+                        </NavLink>
+                        <NavLink to="/faculties" onClick={handleNavClick} className={({isActive}) => `nav-link ${isActive ? 'active' : ''}`}>
+                            <GraduationCap size={20} style={{ flexShrink: 0 }} />
+                            <span>Campus Faculties</span>
                         </NavLink>
                         <NavLink to="/broadcast" onClick={handleNavClick} className={({isActive}) => `nav-link ${isActive ? 'active' : ''}`}>
                             <Bell size={20} style={{ flexShrink: 0 }} />
@@ -390,54 +406,77 @@ const Layout = ({ children }) => {
                                     right: '0',
                                     marginTop: '8px',
                                     width: '320px',
+                                    maxWidth: 'calc(100vw - 2rem)',
                                     background: 'white',
                                     borderRadius: '12px',
-                                    boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1)',
+                                    boxShadow: '0 10px 25px -5px rgba(0,0,0,0.15), 0 8px 10px -6px rgba(0,0,0,0.1)',
                                     border: '1px solid #e5e7eb',
-                                    zIndex: 100,
+                                    zIndex: 1000,
                                     overflow: 'hidden'
                                 }}>
                                     <div style={{ padding: '1rem', borderBottom: '1px solid #e5e7eb', background: '#f9fafb' }}>
                                         <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 'bold' }}>Actionable Alerts</h3>
                                     </div>
-                                    <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                                    <div style={{ maxHeight: '360px', overflowY: 'auto' }}>
                                         {alerts.items.length === 0 ? (
                                             <div style={{ padding: '2rem 1rem', textAlign: 'center', color: '#6b7280' }}>
                                                 <Bell size={32} style={{ margin: '0 auto 8px auto', opacity: 0.2 }} />
                                                 <p style={{ margin: 0 }}>You're all caught up!</p>
                                             </div>
                                         ) : (
-                                            alerts.items.map((alert, i) => (
-                                                <div 
-                                                    key={i} 
-                                                    onClick={() => { setIsDropdownOpen(false); navigate(alert.link); }}
-                                                    style={{ 
-                                                        padding: '1rem', 
-                                                        borderBottom: '1px solid #f3f4f6',
-                                                        cursor: 'pointer',
-                                                        transition: 'background 0.2s',
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        gap: '12px'
-                                                    }}
-                                                    onMouseEnter={e => e.currentTarget.style.background = '#f9fafb'}
-                                                    onMouseLeave={e => e.currentTarget.style.background = 'white'}
-                                                >
-                                                    <div style={{ 
-                                                        width: '8px', 
-                                                        height: '8px', 
-                                                        borderRadius: '50%', 
-                                                        background: '#ef4444',
-                                                        flexShrink: 0
-                                                    }}></div>
-                                                    <div style={{ flex: 1 }}>
-                                                        <p style={{ margin: 0, fontSize: '0.875rem', fontWeight: '500', color: '#111827' }}>
-                                                            {alert.message}
-                                                        </p>
-                                                        <span style={{ fontSize: '0.75rem', color: '#ef4444', fontWeight: 'bold' }}>Requires Action</span>
+                                            alerts.items.map((alertItem, i) => {
+                                                const color = alertItem.badgeColor || '#ef4444';
+                                                const getIcon = () => {
+                                                    if (alertItem.icon === 'Lock') return <Lock size={18} color={color} />;
+                                                    if (alertItem.icon === 'Flag') return <Flag size={18} color={color} />;
+                                                    if (alertItem.icon === 'Scale') return <Scale size={18} color={color} />;
+                                                    return <HelpCircle size={18} color={color} />;
+                                                };
+                                                return (
+                                                    <div 
+                                                        key={i} 
+                                                        onClick={() => { setIsDropdownOpen(false); navigate(alertItem.link); }}
+                                                        style={{ 
+                                                            padding: '0.85rem 1rem', 
+                                                            borderBottom: '1px solid #f3f4f6',
+                                                            cursor: 'pointer',
+                                                            transition: 'background 0.2s',
+                                                            display: 'flex',
+                                                            alignItems: 'flex-start',
+                                                            gap: '12px'
+                                                        }}
+                                                        onMouseEnter={e => e.currentTarget.style.background = '#f9fafb'}
+                                                        onMouseLeave={e => e.currentTarget.style.background = 'white'}
+                                                    >
+                                                        <div style={{ 
+                                                            width: '32px', 
+                                                            height: '32px', 
+                                                            borderRadius: '8px', 
+                                                            background: `${color}18`,
+                                                            border: `1px solid ${color}40`,
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            flexShrink: 0
+                                                        }}>
+                                                            {getIcon()}
+                                                        </div>
+                                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }}>
+                                                                <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: color }}>
+                                                                    {alertItem.title || alertItem.type}
+                                                                </span>
+                                                                <span style={{ fontSize: '0.7rem', fontWeight: 'bold', background: color, color: 'white', padding: '1px 6px', borderRadius: '10px' }}>
+                                                                    {alertItem.count}
+                                                                </span>
+                                                            </div>
+                                                            <p style={{ margin: 0, fontSize: '0.825rem', color: '#374151', lineHeight: '1.3' }}>
+                                                                {alertItem.message}
+                                                            </p>
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            ))
+                                                );
+                                            })
                                         )}
                                     </div>
                                 </div>

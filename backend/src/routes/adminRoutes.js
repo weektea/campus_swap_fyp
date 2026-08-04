@@ -14,7 +14,9 @@ router.get('/alerts', authenticateToken, isAdminOrModerator, adminController.get
 
 // Manage Listings (All Products)
 router.get('/listings', authenticateToken, isAdminOrModerator, adminController.getAllListings);
+router.get('/popular-listings', authenticateToken, isAdminOrModerator, adminController.getPopularListings);
 router.put('/listings/:id/status', authenticateToken, isAdminOrModerator, adminController.updateListingStatus);
+
 router.delete('/listings/:id', authenticateToken, isAdmin, adminController.deleteListing);
 
 // Manage Transactions
@@ -24,7 +26,9 @@ router.get('/transactions', authenticateToken, isAdminOrModerator, adminControll
 router.get('/reviews', authenticateToken, isAdminOrModerator, adminController.getAllReviews);
 router.delete('/reviews/:id', authenticateToken, isAdmin, adminController.deleteReview);
 
-// Manage Categories & Zones
+import * as facultyController from '../controllers/facultyController.js';
+
+// Manage Categories & Zones & Faculties
 router.get('/categories', authenticateToken, isAdminOrModerator, adminController.getAllCategories);
 router.post('/categories', authenticateToken, isAdmin, adminController.createCategory);
 router.put('/categories/:id', authenticateToken, isAdmin, adminController.updateCategory);
@@ -38,6 +42,11 @@ router.get('/zones', authenticateToken, isAdminOrModerator, adminController.getA
 router.post('/zones', authenticateToken, isAdmin, adminController.createZone);
 router.put('/zones/:id', authenticateToken, isAdmin, adminController.updateZone);
 router.delete('/zones/:id', authenticateToken, isAdmin, adminController.deleteZone);
+
+router.get('/faculties', authenticateToken, isAdminOrModerator, facultyController.getAllFaculties);
+router.post('/faculties', authenticateToken, isAdmin, facultyController.createFaculty);
+router.put('/faculties/:id', authenticateToken, isAdmin, facultyController.updateFaculty);
+router.delete('/faculties/:id', authenticateToken, isAdmin, facultyController.deleteFaculty);
 
 // Manage Reports and Disputes
 router.get('/reports', authenticateToken, isAdminOrModerator, adminController.getReports);

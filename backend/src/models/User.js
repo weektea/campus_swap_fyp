@@ -100,6 +100,11 @@ const User = sequelize.define('User', {
         defaultValue: false,
     },
 
+    faculty: {
+        type: DataTypes.STRING,
+        allowNull: true,
+        defaultValue: 'FCI',
+    },
     year_of_study: {
         type: DataTypes.INTEGER,
         allowNull: true,

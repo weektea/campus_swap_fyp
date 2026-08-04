@@ -5,11 +5,14 @@ import axios from 'axios';
 
 const ML_SERVICE_URL = process.env.ML_SERVICE_URL || 'http://localhost:5000';
 
-// Track a user action
 export const trackInteraction = async (req, res) => {
     try {
         const { product_id, type } = req.body;
-        const user_id = req.user.id; // From auth middleware
+        const user_id = req.user ? req.user.id : null;
+
+        if (!product_id || !type) {
+            return res.status(400).json({ error: 'Missing product_id or type' });
+        }
 
         let weight = 1;
         switch (type) {
@@ -32,6 +35,7 @@ export const trackInteraction = async (req, res) => {
         res.status(500).json({ error: 'Failed to track' });
     }
 };
+
 
 // Get Recommendations (Hybrid Content-Based + KNN Collaborative with A/B Testing)
 export const getRecommendations = async (req, res) => {
@@ -133,7 +137,7 @@ export const getRecommendations = async (req, res) => {
                   ${user_id ? 'AND p.seller_id != :user_id' : ''}
                 GROUP BY ui.product_id
                 ORDER BY score DESC
-                LIMIT 5
+                LIMIT 25
             `, {
                 replacements: user_id ? { user_id } : {},
                 type: sequelize.QueryTypes.SELECT
@@ -172,7 +176,7 @@ export const getRecommendations = async (req, res) => {
                 },
                 include: [{ model: User, as: 'seller', attributes: ['username', 'full_name', 'reputation_score', 'profile_image_url'] }],
                 order: [['createdAt', 'DESC']],
-                limit: 10
+                limit: 50
             });
 
             // Interleave 50% Trending + 50% Recency with Deduplication & Bounds Safeguards
@@ -181,7 +185,7 @@ export const getRecommendations = async (req, res) => {
 
             const maxLen = Math.max(trendingProducts.length, newestProducts.length);
             for (let i = 0; i < maxLen; i++) {
-                if (resultList.length >= 10) break;
+                if (resultList.length >= 50) break;
 
                 if (i < trendingProducts.length && trendingProducts[i]) {
                     const item = trendingProducts[i];
@@ -191,7 +195,7 @@ export const getRecommendations = async (req, res) => {
                     }
                 }
 
-                if (resultList.length >= 10) break;
+                if (resultList.length >= 50) break;
 
                 if (i < newestProducts.length && newestProducts[i]) {
                     const item = newestProducts[i];
@@ -439,41 +443,55 @@ export const getTrendingItems = async (req, res) => {
             type: sequelize.QueryTypes.SELECT
         });
 
-        if (trendingQuery.length === 0) {
-            // Cold start fallback: return latest available items (optionally filtered by category)
+        let trendingProducts = [];
+
+        if (trendingQuery.length > 0) {
+            const productIds = trendingQuery.map(row => row.product_id);
+            const fetched = await Product.findAll({
+                where: {
+                    id: { [Op.in]: productIds },
+                    status: 'Available'
+                },
+                include: [{
+                    model: User,
+                    as: 'seller',
+                    attributes: ['username', 'full_name', 'reputation_score', 'profile_image_url']
+                }]
+            });
+
+            trendingProducts = productIds
+                .map(id => fetched.find(p => p.id === id))
+                .filter(Boolean);
+        }
+
+        // Fill up to requested limit with newest available items if items with interactions < limit
+        const targetLimit = parseInt(limit);
+        if (trendingProducts.length < targetLimit) {
+            const existingIds = trendingProducts.map(p => p.id);
             const fallbackWhere = { status: 'Available' };
+            if (existingIds.length > 0) {
+                fallbackWhere.id = { [Op.notIn]: existingIds };
+            }
             if (category) {
                 fallbackWhere.category = category;
             }
-            const fallback = await Product.findAll({
+
+            const extraProducts = await Product.findAll({
                 where: fallbackWhere,
-                include: [{ model: User, as: 'seller', attributes: ['username', 'full_name', 'reputation_score', 'profile_image_url'] }],
+                include: [{
+                    model: User,
+                    as: 'seller',
+                    attributes: ['username', 'full_name', 'reputation_score', 'profile_image_url']
+                }],
                 order: [['createdAt', 'DESC']],
-                limit: parseInt(limit)
+                limit: targetLimit - trendingProducts.length
             });
-            return res.json(fallback);
+
+            trendingProducts.push(...extraProducts);
         }
 
-        const productIds = trendingQuery.map(row => row.product_id);
+        res.json(trendingProducts);
 
-        const products = await Product.findAll({
-            where: {
-                id: { [Op.in]: productIds },
-                status: 'Available'
-            },
-            include: [{
-                model: User,
-                as: 'seller',
-                attributes: ['username', 'full_name', 'reputation_score', 'profile_image_url']
-            }]
-        });
-
-        // Sort products according to the score ranking
-        const sortedProducts = productIds
-            .map(id => products.find(p => p.id === id))
-            .filter(Boolean);
-
-        res.json(sortedProducts);
     } catch (error) {
         console.error('Get Trending Items Error:', error);
         res.status(500).json({ error: 'Failed to fetch trending items' });

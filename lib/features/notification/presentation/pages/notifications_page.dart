@@ -138,14 +138,51 @@ class _NotificationsPageState extends State<NotificationsPage> {
       );
   }
 
+  Future<void> _markAllAsRead() async {
+       try {
+           final apiClient = ApiClient();
+           await apiClient.patch('/notifications/mark-all-read', {});
+           setState(() {
+               for (var note in _notifications) {
+                   note['is_read'] = true;
+               }
+               NotificationService().unreadCountNotifier.value = 0;
+           });
+           if (mounted) {
+               ScaffoldMessenger.of(context).showSnackBar(
+                   SnackBar(
+                       content: Text('All notifications marked as read', style: GoogleFonts.outfit()),
+                       behavior: SnackBarBehavior.floating,
+                   ),
+               );
+           }
+       } catch (e) {
+           if (mounted) {
+               ScaffoldMessenger.of(context).showSnackBar(
+                   SnackBar(
+                       content: Text('Failed to mark all as read', style: GoogleFonts.outfit()),
+                       behavior: SnackBarBehavior.floating,
+                   ),
+               );
+           }
+       }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final hasUnreadNotifications = _notifications.any((n) => n['is_read'] == false);
     final hasReadNotifications = _notifications.any((n) => n['is_read'] == true);
 
     return Scaffold(
         appBar: AppBar(
             title: Text(_notifications.isNotEmpty ? 'Notifications (${_notifications.length})' : 'Notifications', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
             actions: [
+                if (hasUnreadNotifications)
+                    IconButton(
+                        icon: const Icon(Icons.done_all_rounded),
+                        tooltip: 'Mark all as read',
+                        onPressed: _markAllAsRead,
+                    ),
                 if (hasReadNotifications)
                     IconButton(
                         icon: const Icon(Icons.delete_sweep),
@@ -154,6 +191,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
                     ),
             ],
         ),
+
         body: _isLoading 
             ? const Center(child: CircularProgressIndicator())
             : _notifications.isEmpty
