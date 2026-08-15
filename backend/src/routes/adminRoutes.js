@@ -22,8 +22,11 @@ router.delete('/listings/:id', authenticateToken, isAdmin, adminController.delet
 // Manage Transactions
 router.get('/transactions', authenticateToken, isAdminOrModerator, adminController.getAllTransactions);
 
-// Manage Reviews
+// Manage Reviews & NLP Auto-Moderation
 router.get('/reviews', authenticateToken, isAdminOrModerator, adminController.getAllReviews);
+router.get('/flagged-reviews', authenticateToken, isAdminOrModerator, adminController.getFlaggedReviews);
+router.post('/reviews/:id/approve', authenticateToken, isAdminOrModerator, adminController.approveReview);
+router.post('/reviews/:id/delete', authenticateToken, isAdmin, adminController.deleteReview);
 router.delete('/reviews/:id', authenticateToken, isAdmin, adminController.deleteReview);
 
 import * as facultyController from '../controllers/facultyController.js';
@@ -92,6 +95,33 @@ router.delete('/users/:id/permanent', authenticateToken, isAdmin, adminControlle
 router.get('/backups', authenticateToken, isAdmin, adminController.getBackups);
 router.post('/backup', authenticateToken, isAdmin, adminController.backupDatabase);
 router.post('/restore/:id', authenticateToken, isAdmin, adminController.restoreDatabase);
+
+import multer from 'multer';
+
+const csvUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 10 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+        if (
+            file.mimetype.includes('csv') || 
+            file.mimetype === 'text/plain' || 
+            file.mimetype === 'application/vnd.ms-excel' || 
+            file.originalname.toLowerCase().endsWith('.csv')
+        ) {
+            cb(null, true);
+        } else {
+            cb(new Error('Only CSV files (.csv) are allowed for whitelist upload.'));
+        }
+    }
+});
+
+// Student Whitelist (Directory) Management
+router.get('/whitelist', authenticateToken, isAdminOrModerator, adminController.getStudentWhitelist);
+router.post('/whitelist/upload', authenticateToken, isAdmin, csvUpload.single('file'), adminController.uploadStudentWhitelist);
+router.post('/whitelist', authenticateToken, isAdmin, adminController.createStudentWhitelistEntry);
+router.put('/whitelist/:id/status', authenticateToken, isAdminOrModerator, adminController.updateStudentWhitelistStatus);
+router.delete('/whitelist/:id', authenticateToken, isAdmin, adminController.deleteStudentWhitelistEntry);
+router.get('/whitelist/export', authenticateToken, isAdminOrModerator, adminController.exportStudentWhitelistCSV);
 
 // System Management (Admin Only)
 router.get('/system/health', authenticateToken, isAdmin, systemController.getSystemHealth);

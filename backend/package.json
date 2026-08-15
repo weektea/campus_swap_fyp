@@ -12,6 +12,7 @@
     "axios": "^1.13.2",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
+    "csv-parser": "^3.2.1",
     "dotenv": "^16.3.1",
     "express": "^4.22.1",
     "firebase-admin": "^14.2.0",
@@ -22,7 +23,8 @@
     "nodemailer": "^9.0.3",
     "pg": "^8.11.3",
     "sequelize": "^6.35.1",
-    "socket.io": "^4.8.3"
+    "socket.io": "^4.8.3",
+    "stripe": "^22.5.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"

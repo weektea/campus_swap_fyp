@@ -3,6 +3,7 @@ import { createNotification } from './notificationController.js';
 import { emitToAdmins } from '../config/socket.js';
 import { getCarbonValue } from './transactionController.js';
 import { sendError } from '../middleware/authMiddleware.js';
+import { processStripeRefund } from './paymentController.js';
 
 const rollbackCarbonPoints = async (transaction) => {
     try {
@@ -218,6 +219,12 @@ export const arbitrateDispute = async (req, res) => {
             dispute.status = 'Resolved';
             await transaction.save();
 
+            // Auto-trigger Stripe refund if paid via Stripe Escrow
+            if (transaction.stripe_payment_intent_id && transaction.stripe_payment_status !== 'refunded') {
+                console.log(`[Dispute Arbitration] Refunding Buyer via Stripe Escrow for Transaction #${transaction.id}...`);
+                await processStripeRefund(transaction, 'fraudulent');
+            }
+
             if (wasCompleted) {
                 // Deduct previously awarded carbon points and items reused count
                 await rollbackCarbonPoints(transaction);
@@ -287,27 +294,45 @@ export const arbitrateDispute = async (req, res) => {
                      co2Saved = getCarbonValue(catName, subCatName, product);
                 }
 
-                // Calculate 2% Platform Fee (based on transaction.amount)
-                const platformFee = parseFloat((parseFloat(transaction.amount) * 0.02).toFixed(2));
+                // Calculate 2% Platform Fee based strictly on Net Rental Fee (amount - deposit_amount)
+                const totalAmt = parseFloat(transaction.amount || 0);
+                const depAmt = transaction.deposit_amount ? parseFloat(transaction.deposit_amount) : 0.0;
+                const isRentItem = (product && product.type === 'Rent') || transaction.rental_start_date != null;
+                const rentFee = isRentItem ? Math.max(0, totalAmt - depAmt) : totalAmt;
+
+                const platformFee = parseFloat((rentFee * 0.02).toFixed(2));
                 transaction.platform_fee = platformFee;
                 transaction.awarded_carbon_points = co2Saved;
                 await transaction.save();
 
+                const isOfflineOrDirectPayment = transaction.selected_payment_method !== 'Stripe' && !transaction.stripe_payment_intent_id;
+
                 if (product) {
                      if (transaction.buyer_id === transaction.seller_id) {
-                          await User.increment(
-                              { items_reused: 1, total_carbon_saved: co2Saved, carbon_saved_buyer: co2Saved, carbon_saved_seller: co2Saved, accumulated_balance_due: platformFee },
-                              { where: { id: transaction.buyer_id } }
-                          );
+                          const selfPayload = {
+                              items_reused: 1, 
+                              total_carbon_saved: co2Saved, 
+                              carbon_saved_buyer: co2Saved, 
+                              carbon_saved_seller: co2Saved 
+                          };
+                          if (isOfflineOrDirectPayment) {
+                              selfPayload.accumulated_balance_due = platformFee;
+                          }
+                          await User.increment(selfPayload, { where: { id: transaction.buyer_id } });
                       } else {
                           await User.increment(
                               { items_reused: 1, total_carbon_saved: co2Saved, carbon_saved_buyer: co2Saved },
                               { where: { id: transaction.buyer_id } }
                           );
-                          await User.increment(
-                              { items_reused: 1, total_carbon_saved: co2Saved, carbon_saved_seller: co2Saved, accumulated_balance_due: platformFee },
-                              { where: { id: transaction.seller_id } }
-                          );
+                          const sellerPayload = {
+                              items_reused: 1, 
+                              total_carbon_saved: co2Saved, 
+                              carbon_saved_seller: co2Saved 
+                          };
+                          if (isOfflineOrDirectPayment) {
+                              sellerPayload.accumulated_balance_due = platformFee;
+                          }
+                          await User.increment(sellerPayload, { where: { id: transaction.seller_id } });
                       }
                  }
 

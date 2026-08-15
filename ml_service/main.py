@@ -11,7 +11,9 @@ import os
 import uuid
 import threading
 import time
+import math
 from model_vision import predict_image, fine_tune_model, FLAT_CLASSES
+from nlp_moderator import analyze_review_text
 
 app = FastAPI(title="Campus Swap ML Microservice")
 
@@ -316,8 +318,11 @@ async def predict_price(req: PriceSuggestionRequest):
         "note": f"Estimated using baseline pricing index for {category} at {condition} condition."
     }
 
-# --- Intelligent Price Suggestion API ---
-import psycopg2
+try:
+    import psycopg2
+    from psycopg2.extras import RealDictCursor
+except ImportError:
+    psycopg2 = None
 
 class PriceSuggestMLRequest(BaseModel):
     original_price: float
@@ -730,9 +735,12 @@ class ProductItem(BaseModel):
     category: str
     subcategory: Optional[str] = None
     seller_id: Optional[str] = None
+    seller_faculty: Optional[str] = None
+    days_since_listed: Optional[float] = 0.0
 
 class HybridRecommendRequest(BaseModel):
     user_id: str
+    user_faculty: Optional[str] = None
     interactions: List[InteractionItem]
     products: List[ProductItem]
     followed_seller_ids: Optional[List[str]] = None
@@ -918,12 +926,77 @@ async def get_hybrid_recommendations(req: HybridRecommendRequest):
             if pid and pid in followed_network_pids:
                 final_scores[idx] *= 1.30
 
+    # 3. Campus Context Homophily Boost: If item's seller belongs to the SAME faculty as current user -> +15% (1.15x multiplier)
+    user_faculty = (req.user_faculty or '').strip().lower()
+    if user_faculty:
+        for idx, p in enumerate(products_data):
+            seller_faculty = (p.get('seller_faculty') or '').strip().lower()
+            if seller_faculty and seller_faculty == user_faculty:
+                final_scores[idx] *= 1.15
+
+    # 4. Time-Decay Freshness Penalty: Exponential decay with max 60-day cap
+    for idx, p in enumerate(products_data):
+        days_listed = min(60.0, max(0.0, float(p.get('days_since_listed') or 0.0)))
+        decay_factor = math.exp(-0.02 * days_listed)
+        final_scores[idx] *= decay_factor
+
+    # Sort candidates by final score descending
     scored_products = list(zip(product_ids, final_scores))
     scored_products.sort(key=lambda x: x[1], reverse=True)
     
-    recommended_ids = [pid for pid, score in scored_products[:10]]
-    
-    return {"recommended_product_ids": recommended_ids}
+    # 5. Re-ranking Phase: Intra-List Diversity Filter (Max 4 items per subcategory in Top 10)
+    MAX_PER_SUBCATEGORY = 4
+    TOP_N_TARGET = 10
+
+    prod_cat_map = {}
+    for p in products_data:
+        subcat = p.get('subcategory') or p.get('category') or 'general'
+        prod_cat_map[p['id']] = subcat.strip().lower()
+
+    selected_ids = []
+    deferred_ids = []
+    subcat_counts = {}
+
+    for pid, score in scored_products:
+        subcat = prod_cat_map.get(pid, 'general')
+        count = subcat_counts.get(subcat, 0)
+        
+        if len(selected_ids) < TOP_N_TARGET:
+            if count < MAX_PER_SUBCATEGORY:
+                selected_ids.append(pid)
+                subcat_counts[subcat] = count + 1
+            else:
+                # 5th item of same subcategory, defer down to prevent echo chamber
+                deferred_ids.append(pid)
+        else:
+            deferred_ids.append(pid)
+
+    final_recommended_ids = (selected_ids + deferred_ids)[:TOP_N_TARGET]
+
+    return {"recommended_product_ids": final_recommended_ids}
+
+# ==============================================================================
+# Automated NLP Review Moderation Endpoint (Sentiment & Toxicity Filter)
+# ==============================================================================
+
+class ReviewAnalysisRequest(BaseModel):
+    text: Optional[str] = ""
+
+class ReviewAnalysisResponse(BaseModel):
+    is_toxic: bool
+    sentiment_score: float
+    sentiment_label: str
+    compound: float
+    flag_reason: Optional[str] = None
+
+@app.post("/nlp/analyze-review", response_model=ReviewAnalysisResponse)
+async def analyze_review_endpoint(payload: ReviewAnalysisRequest):
+    """
+    Evaluates review comment text using VADER Sentiment & Lexical Toxicity Detection.
+    Flags malicious reviews, profanity, and severe negative sentiment.
+    """
+    result = analyze_review_text(payload.text)
+    return result
 
 if __name__ == "__main__":
     import uvicorn

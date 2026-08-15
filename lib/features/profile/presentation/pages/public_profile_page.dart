@@ -392,9 +392,9 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
                                  child: Container(
                                    padding: const EdgeInsets.all(12),
                                    decoration: BoxDecoration(
-                                     color: isDark ? Colors.teal.shade900.withOpacity(0.2) : Colors.teal.shade50,
+                                     color: isDark ? Colors.teal.shade900.withValues(alpha: 0.2) : Colors.teal.shade50,
                                      borderRadius: BorderRadius.circular(12),
-                                     border: Border.all(color: isDark ? Colors.teal.shade800.withOpacity(0.4) : Colors.teal.shade100),
+                                     border: Border.all(color: isDark ? Colors.teal.shade800.withValues(alpha: 0.4) : Colors.teal.shade100),
                                    ),
                                    child: Column(
                                      children: [
@@ -418,9 +418,9 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
                                  child: Container(
                                    padding: const EdgeInsets.all(12),
                                    decoration: BoxDecoration(
-                                     color: isDark ? Colors.teal.shade900.withOpacity(0.2) : Colors.teal.shade50,
+                                     color: isDark ? Colors.teal.shade900.withValues(alpha: 0.2) : Colors.teal.shade50,
                                      borderRadius: BorderRadius.circular(12),
-                                     border: Border.all(color: isDark ? Colors.teal.shade800.withOpacity(0.4) : Colors.teal.shade100),
+                                     border: Border.all(color: isDark ? Colors.teal.shade800.withValues(alpha: 0.4) : Colors.teal.shade100),
                                    ),
                                    child: Column(
                                      children: [
@@ -781,47 +781,6 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
             child: Text(
               value,
               style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 14, color: Colors.black87),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTagsRow(String label, List<String> tags, bool isDark) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            flex: 2,
-            child: Text(
-              label,
-              style: GoogleFonts.outfit(color: Colors.grey.shade600, fontSize: 14),
-            ),
-          ),
-          Expanded(
-            flex: 3,
-            child: Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: tags.map((t) => Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF005A43).withValues(alpha: 0.2) : const Color(0xFFE6F4F1),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: isDark ? const Color(0xFF005A43) : const Color(0xFFB2DFDB)),
-                ),
-                child: Text(
-                  t,
-                  style: GoogleFonts.outfit(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: isDark ? const Color(0xFF80CBC4) : const Color(0xFF005A43),
-                  ),
-                ),
-              )).toList(),
             ),
           ),
         ],

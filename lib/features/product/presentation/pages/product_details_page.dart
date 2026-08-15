@@ -11,6 +11,7 @@ import 'package:campus_swap/features/profile/presentation/pages/public_profile_p
 import 'package:campus_swap/features/product/presentation/pages/edit_listing_page.dart';
 import 'package:campus_swap/features/product/presentation/pages/report_listing_page.dart';
 import 'package:campus_swap/features/product/presentation/pages/full_screen_image_viewer.dart';
+import 'package:campus_swap/features/product/presentation/pages/checkout_page.dart';
 import 'package:campus_swap/core/widgets/reputation_badge.dart';
 
 class ProductDetailsPage extends StatefulWidget {
@@ -820,9 +821,18 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
               Expanded(
                 flex: 2,
                 child: ElevatedButton(
-                  onPressed: () => widget.product.type == 'Rent'
-                      ? _showBuyConfirmation(context)
-                      : _showMakeOfferConfirmation(context),
+                  onPressed: () {
+                    if (widget.product.type == 'Rent') {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => CheckoutPage(product: widget.product),
+                        ),
+                      );
+                    } else {
+                      _showMakeOfferConfirmation(context);
+                    }
+                  },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: widget.product.type == 'Rent' ? theme.colorScheme.primary : Colors.orange,
                     foregroundColor: Colors.white,
@@ -947,7 +957,6 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
 
   String _selectedLocation = 'Library';
   List<String> _campusLocations = ['Library', 'Student Center', 'Cafeteria A', 'Main Hall', 'Sports Complex', 'Hostel Block B'];
-  bool _hasFetchedLocations = false;
 
   Future<void> _fetchCampusLocations([StateSetter? modalState]) async {
     if (!UserSession().isLoggedIn) return;
@@ -967,7 +976,6 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
         if (loadedNames.isNotEmpty && mounted) {
           setState(() {
             _campusLocations = loadedNames;
-            _hasFetchedLocations = true;
             if (!_campusLocations.contains(_selectedLocation)) {
               _selectedLocation = _campusLocations.first;
             }
@@ -982,9 +990,6 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
       debugPrint('Stack trace: $stack');
     }
   }
-
-  DateTime? _rentStartDate;
-  DateTime? _rentEndDate;
 
   void _reportListing() {
     if (!UserSession().isLoggedIn) {
@@ -1219,276 +1224,6 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
       },
     );
   }
-
-  void _showBuyConfirmation(BuildContext context) {
-    if (!UserSession().isLoggedIn) {
-       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-         content: Text('Please login first'),
-         behavior: SnackBarBehavior.floating,
-       ));
-       return;
-    }
-
-    final isRent = widget.product.type == 'Rent';
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true, // Allow full height for keyboard
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (context) {
-        final List<String> availablePaymentMethods = widget.product.acceptedPaymentMethods.isNotEmpty
-            ? widget.product.acceptedPaymentMethods
-            : ['Cash'];
-        String? selectedPaymentMethod = availablePaymentMethods.isNotEmpty ? availablePaymentMethods.first : null;
-
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            final theme = Theme.of(context);
-            if (!_hasFetchedLocations) {
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                    if (!_hasFetchedLocations) {
-                        _fetchCampusLocations(setModalState);
-                    }
-                });
-            }
-
-            int rentDays = 0;
-            double totalRentCost = 0.0;
-            if (isRent && _rentStartDate != null && _rentEndDate != null) {
-              rentDays = _rentEndDate!.difference(_rentStartDate!).inDays + 1; // Inclusive
-              totalRentCost = rentDays * widget.product.rentalPricePerDay;
-            }
-
-          return Padding(
-            padding: EdgeInsets.only(
-                left: 24, 
-                right: 24, 
-                top: 24, 
-                bottom: MediaQuery.of(context).viewInsets.bottom + 24 // Keyboard padding
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(isRent ? 'Confirm Rental' : 'Confirm Purchase', style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
-                const SizedBox(height: 16),
-                
-                // Location Selector (FYP Map Requirement)
-                Text("Select Meetup Location", style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    decoration: BoxDecoration(
-                        border: Border.all(color: theme.colorScheme.outline),
-                        borderRadius: BorderRadius.circular(12)
-                    ),
-                    child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                            value: _selectedLocation,
-                            isExpanded: true,
-                            items: _campusLocations.map((loc) => DropdownMenuItem(
-                                value: loc,
-                                child: Row(
-                                    children: [
-                                        Icon(Icons.location_on, color: theme.colorScheme.primary, size: 18),
-                                        const SizedBox(width: 8),
-                                        Text(loc, style: theme.textTheme.bodyMedium),
-                                    ],
-                                )
-                            )).toList(),
-                            onChanged: (val) {
-                                if (val != null) setModalState(() => _selectedLocation = val);
-                            }
-                        ),
-                    ),
-                ),
-
-                const SizedBox(height: 16),
-                Text("Select Payment Method (Accepted by Seller)", style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    decoration: BoxDecoration(
-                        border: Border.all(color: theme.colorScheme.outline),
-                        borderRadius: BorderRadius.circular(12)
-                    ),
-                    child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                            value: selectedPaymentMethod,
-                            isExpanded: true,
-                            hint: const Text('Select payment method'),
-                            items: availablePaymentMethods.map((method) => DropdownMenuItem(
-                                value: method,
-                                child: Row(
-                                    children: [
-                                        Icon(
-                                            method == 'Cash' 
-                                                ? Icons.money_outlined 
-                                                : (method == 'TNG' ? Icons.account_balance_wallet_outlined : Icons.account_balance_outlined), 
-                                            color: theme.colorScheme.primary, 
-                                            size: 18
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Text(method, style: theme.textTheme.bodyMedium),
-                                    ],
-                                )
-                            )).toList(),
-                            onChanged: (val) {
-                                if (val != null) setModalState(() => selectedPaymentMethod = val);
-                            }
-                        ),
-                    ),
-                ),
-                
-                 const SizedBox(height: 16),
-
-                 if (isRent) ...[
-                   Text("Select Rental Period", style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold)),
-                   const SizedBox(height: 8),
-                   InkWell(
-                     onTap: () async {
-                       final DateTimeRange? picked = await showDateRangePicker(
-                         context: context,
-                         firstDate: DateTime.now(),
-                         lastDate: DateTime.now().add(const Duration(days: 365)),
-                         builder: (context, child) {
-                           return Theme(
-                             data: Theme.of(context).copyWith(
-                               colorScheme: Theme.of(context).colorScheme.copyWith(
-                                 primary: Theme.of(context).colorScheme.primary,
-                               ),
-                             ),
-                             child: child!,
-                           );
-                         },
-                       );
-                       if (picked != null) {
-                          int selectedDays = picked.end.difference(picked.start).inDays + 1;
-                          if (selectedDays > widget.product.maxRentalDuration) {
-                               if (context.mounted) {
-                                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                       content: Text('Maximum rental duration is ${widget.product.maxRentalDuration} days!'),
-                                       backgroundColor: theme.colorScheme.error,
-                                       behavior: SnackBarBehavior.floating,
-                                   ));
-                               }
-                               return;
-                          }
-                          setModalState(() {
-                            _rentStartDate = picked.start;
-                            _rentEndDate = picked.end;
-                          });
-                       }
-                     },
-                     child: Container(
-                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                       decoration: BoxDecoration(
-                         border: Border.all(color: theme.colorScheme.outline),
-                         borderRadius: BorderRadius.circular(12),
-                       ),
-                       child: Row(
-                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                         children: [
-                           Text(
-                             _rentStartDate != null && _rentEndDate != null
-                                 ? '${_rentStartDate!.toString().split(' ')[0]} to ${_rentEndDate!.toString().split(' ')[0]}'
-                                 : 'Tap to select dates',
-                             style: theme.textTheme.bodyMedium?.copyWith(
-                               color: _rentStartDate != null ? theme.colorScheme.onSurface : theme.colorScheme.onSurfaceVariant,
-                             ),
-                           ),
-                           Icon(Icons.calendar_today, size: 18, color: theme.colorScheme.primary),
-                         ],
-                       ),
-                     ),
-                   ),
-                   const SizedBox(height: 16),
-                 ],
-                
-                Text(isRent ? 'Rental Summary:' : 'Product Summary:', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-                 const SizedBox(height: 8),
-                Row(
-                  children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: widget.product.imageUrl.isNotEmpty 
-                        ? CachedNetworkImage(imageUrl: widget.product.imageUrl, width: 60, height: 60, fit: BoxFit.cover)
-                        : Container(width: 60, height: 60, color: theme.colorScheme.surfaceContainer),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(widget.product.title, style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
-                          if (isRent) ...[
-                            Text(
-                              'RM ${widget.product.rentalPricePerDay.toStringAsFixed(2)} / day',
-                              style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)
-                            ),
-                              if (_rentStartDate != null && _rentEndDate != null)
-                                Text(
-                                  'Total ($rentDays days): RM ${totalRentCost.toStringAsFixed(2)}',
-                                  style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.primary, fontWeight: FontWeight.bold)
-                                ),
-                          ] else ...[
-                            Text(
-                                'RM ${widget.product.price.toStringAsFixed(2)}', 
-                                style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.primary, fontWeight: FontWeight.bold)
-                            ),
-                          ],
-                          Row(
-                            children: [
-                              Icon(Icons.location_on, size: 12, color: theme.colorScheme.primary),
-                              const SizedBox(width: 4),
-                              Expanded(
-                                child: Text(
-                                  'Meetup: $_selectedLocation',
-                                  style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    )
-                  ],
-                ),
-                 const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: (_isBuying || (isRent && (_rentStartDate == null || _rentEndDate == null))) ? null : () {
-                      _buyNow(
-                        context, 
-                        isRent ? totalRentCost : widget.product.price,
-                        rentStartDate: _rentStartDate,
-                        rentEndDate: _rentEndDate,
-                        paymentMethod: selectedPaymentMethod,
-                        meetupLocation: _selectedLocation,
-                      ); 
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: theme.colorScheme.primary,
-                      foregroundColor: theme.colorScheme.onPrimary,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    child: _isBuying
-                        ? Center(child: CircularProgressIndicator(color: theme.colorScheme.onPrimary))
-                        : const Text('Confirm & Schedule'),
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
-      );
-    },
-  );
-}
 
   void _buyNow(BuildContext context, double finalPrice, {DateTime? rentStartDate, DateTime? rentEndDate, String? paymentMethod, String? meetupLocation}) async {
       final theme = Theme.of(context);

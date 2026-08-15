@@ -232,6 +232,10 @@ const Layout = ({ children }) => {
                                 <Users size={20} style={{ flexShrink: 0 }} />
                                 <span>User Management</span>
                             </NavLink>
+                            <NavLink to="/students" onClick={handleNavClick} className={({isActive}) => `nav-link ${isActive ? 'active' : ''}`}>
+                                <GraduationCap size={20} style={{ flexShrink: 0, color: '#10b981' }} />
+                                <span>Student Directory</span>
+                            </NavLink>
                             <NavLink to="/ml-models" onClick={handleNavClick} className={({isActive}) => `nav-link ${isActive ? 'active' : ''}`}>
                                 <BrainCircuit size={20} style={{ flexShrink: 0 }} />
                                 <span>ML Models</span>

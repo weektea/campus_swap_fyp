@@ -595,6 +595,14 @@ if (process.env.NODE_ENV !== 'test') {
                     // Ignore error if value already exists or enum is not created yet
                 }
 
+                // Dynamically add 'Partially_Refunded' value to the transactions deposit_status enum in Postgres catalog
+                try {
+                    await sequelize.query('ALTER TYPE "enum_Transactions_deposit_status" ADD VALUE \'Partially_Refunded\';');
+                    console.log('Transactions deposit_status enum updated successfully with Partially_Refunded');
+                } catch (enumErr) {
+                    // Ignore error if value already exists or enum is not created yet
+                }
+
                 // Dynamically add 'Rental Damage' value to the disputes reason enum in Postgres catalog
                 try {
                     await sequelize.query('ALTER TYPE "enum_Disputes_reason" ADD VALUE \'Rental Damage\';');
@@ -631,9 +639,47 @@ if (process.env.NODE_ENV !== 'test') {
                 // Dynamically add cancelled_by_id column to Transactions table if missing
                 try {
                     await sequelize.query('ALTER TABLE "Transactions" ADD COLUMN IF NOT EXISTS cancelled_by_id UUID;');
-                    console.log('Transactions table updated with cancelled_by_id column');
+                    await sequelize.query('ALTER TABLE "Transactions" ADD COLUMN IF NOT EXISTS meetup_pin VARCHAR(10);');
+                    await sequelize.query('ALTER TABLE "Transactions" ADD COLUMN IF NOT EXISTS stripe_session_id VARCHAR(255);');
+                    await sequelize.query('ALTER TABLE "Transactions" ADD COLUMN IF NOT EXISTS stripe_payment_intent_id VARCHAR(255);');
+                    await sequelize.query('ALTER TABLE "Transactions" ADD COLUMN IF NOT EXISTS stripe_payment_status VARCHAR(50);');
+                    console.log('Transactions table updated with Stripe and PIN columns');
                 } catch (colErr) {
                     // Ignore if column already exists
+                }
+
+                // Ensure enum_StudentWhitelists_status type exists safely
+                try {
+                    await sequelize.query(`
+                        DO $$
+                        BEGIN
+                            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'enum_StudentWhitelists_status') THEN
+                                CREATE TYPE "enum_StudentWhitelists_status" AS ENUM('Active', 'Expired');
+                            END IF;
+                        END $$;
+                    `);
+                    console.log('StudentWhitelists enum verified');
+                } catch (enumErr) {
+                    // Ignore if type already exists
+                }
+
+                // Ensure Reviews table NLP moderation columns and enum exist safely
+                try {
+                    await sequelize.query(`
+                        DO $$
+                        BEGIN
+                            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'enum_Reviews_status') THEN
+                                CREATE TYPE "enum_Reviews_status" AS ENUM('PENDING', 'PUBLISHED', 'FLAGGED_FOR_REVIEW');
+                            END IF;
+                        END $$;
+                        ALTER TABLE "Reviews" ADD COLUMN IF NOT EXISTS "is_toxic" BOOLEAN DEFAULT FALSE;
+                        ALTER TABLE "Reviews" ADD COLUMN IF NOT EXISTS "sentiment_score" FLOAT DEFAULT 0.0;
+                        ALTER TABLE "Reviews" ADD COLUMN IF NOT EXISTS "flag_reason" VARCHAR(255);
+                        ALTER TABLE "Reviews" ADD COLUMN IF NOT EXISTS "status" "enum_Reviews_status" DEFAULT 'PUBLISHED';
+                    `);
+                    console.log('Reviews table NLP columns verified');
+                } catch (reviewMigErr) {
+                    console.log('Reviews table migration note:', reviewMigErr.message);
                 }
 
                 console.log('SavedItems and Users table pre-sync migrations executed successfully');
@@ -688,12 +734,14 @@ import zoneRoutes from './routes/zoneRoutes.js';
 import analyticsRoutes from './routes/analyticsRoutes.js';
 import onboardingRoutes from './routes/onboardingRoutes.js';
 import facultyRoutes from './routes/facultyRoutes.js';
+import paymentRoutes from './routes/paymentRoutes.js';
 
 app.use('/api/auth', authRoutes);
 app.use('/api/onboarding', onboardingRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/items', itemRoutes);
 app.use('/api/transactions', transactionRoutes);
+app.use('/api/payments', paymentRoutes);
 app.use('/api/saved', savedRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/reviews', reviewRoutes);

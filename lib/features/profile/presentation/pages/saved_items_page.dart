@@ -268,7 +268,7 @@ class _SavedItemsPageState extends State<SavedItemsPage> with SingleTickerProvid
                                         CircleAvatar(
                                           radius: 28,
                                           backgroundImage: profileUrl.isNotEmpty ? NetworkImage(profileUrl) : null,
-                                          backgroundColor: theme.colorScheme.primary.withOpacity(0.1),
+                                          backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.1),
                                           child: profileUrl.isEmpty
                                               ? Text(
                                                   fullName[0].toUpperCase(),
@@ -318,7 +318,7 @@ class _SavedItemsPageState extends State<SavedItemsPage> with SingleTickerProvid
                                                   Container(
                                                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                                     decoration: BoxDecoration(
-                                                      color: theme.colorScheme.primary.withOpacity(0.08),
+                                                      color: theme.colorScheme.primary.withValues(alpha: 0.08),
                                                       borderRadius: BorderRadius.circular(8),
                                                     ),
                                                     child: Text(

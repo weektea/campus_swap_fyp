@@ -1,8 +1,10 @@
-import { User, Product, Transaction, Report, SupportTicket, Category, SubCategory, Dispute, BackupLog, Review, SafeMeetupZone, Notification, TicketMessage, UserInteraction, Follow, SavedItem, Message, ActivityLog, BroadcastRequest } from '../models/index.js';
+import { User, Product, Transaction, Report, SupportTicket, Category, SubCategory, Dispute, BackupLog, Review, SafeMeetupZone, Notification, TicketMessage, UserInteraction, Follow, SavedItem, Message, ActivityLog, BroadcastRequest, StudentWhitelist } from '../models/index.js';
 import sequelize from '../config/database.js';
 import { Op } from 'sequelize';
 import { exec } from 'child_process';
 import path from 'path';
+import { Readable } from 'stream';
+import csvParser from 'csv-parser';
 import { getCarbonValue } from './transactionController.js';
 import { createNotification } from './notificationController.js';
 import { executeBackup, executeRestore } from '../utils/backupHelper.js';
@@ -1220,12 +1222,66 @@ export const getAllReviews = async (req, res) => {
     }
 };
 
+export const getFlaggedReviews = async (req, res) => {
+    try {
+        const { Op } = await import('sequelize');
+        const reviews = await Review.findAll({
+            where: {
+                [Op.or]: [
+                    { is_toxic: true },
+                    { status: 'FLAGGED_FOR_REVIEW' }
+                ]
+            },
+            include: [
+                { model: User, as: 'reviewer', attributes: ['id', 'email', 'username', 'full_name'] },
+                { model: User, as: 'reviewee', attributes: ['id', 'email', 'username', 'full_name'] },
+                { 
+                    model: Transaction, 
+                    as: 'transaction', 
+                    include: [{ model: Product, as: 'product', attributes: ['id', 'title'] }] 
+                }
+            ],
+            order: [['createdAt', 'DESC']]
+        });
+        res.set('X-Total-Count', reviews.length);
+        res.json(reviews);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+};
+
+export const approveReview = async (req, res) => {
+    try {
+        const review = await Review.findByPk(req.params.id);
+        if (!review) return res.status(404).json({ error: 'Review not found' });
+
+        review.is_toxic = false;
+        review.status = 'PUBLISHED';
+        review.flag_reason = 'Approved by Moderator';
+        await review.save();
+
+        // Recalculate reviewee reputation score
+        const { updateReputation } = await import('./reviewController.js');
+        const newScore = await updateReputation(review.reviewee_id);
+
+        res.json({ message: 'Review approved and published successfully.', review, new_reputation: newScore });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+};
+
 export const deleteReview = async (req, res) => {
     try {
         const review = await Review.findByPk(req.params.id);
         if (!review) return res.status(404).json({ error: 'Review not found' });
         
+        const revieweeId = review.reviewee_id;
         await review.destroy();
+
+        // Recalculate reviewee reputation score
+        const { updateReputation } = await import('./reviewController.js');
+        await updateReputation(revieweeId);
+
         res.json({ message: 'Review permanently deleted.' });
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -1901,21 +1957,29 @@ export const getOnboardingAnalytics = async (req, res) => {
 export const getPopularListings = async (req, res) => {
     try {
         const popularListings = await sequelize.query(`
-            SELECT p.id, p.title, p.price, p.type, p.category, p.image_urls,
-                   COUNT(CASE WHEN ui.interaction_type = 'view' THEN 1 END) as view_count,
-                   COUNT(CASE WHEN ui.interaction_type = 'save' THEN 1 END) as save_count,
-                   COUNT(CASE WHEN ui.interaction_type = 'message' THEN 1 END) as message_count,
-                   COUNT(CASE WHEN ui.interaction_type = 'buy' THEN 1 END) as buy_count,
-                   COALESCE(SUM(CASE 
-                       WHEN ui.interaction_type = 'view' THEN 1
-                       WHEN ui.interaction_type = 'message' THEN 3
-                       WHEN ui.interaction_type = 'save' THEN 5
-                       WHEN ui.interaction_type = 'buy' THEN 10
-                       ELSE 0 END), 0) as popularity_score
+            SELECT p.id, p.title, p.price, p.type, p.category, p.image_urls, p."createdAt",
+                   COALESCE(ui_stats.view_count, 0)::int as view_count,
+                   COALESCE(saved_stats.save_count, 0)::int as save_count,
+                   COALESCE(ui_stats.buy_count, 0)::int as buy_count,
+                   (
+                       COALESCE(ui_stats.view_count, 0) * 1 +
+                       COALESCE(saved_stats.save_count, 0) * 5 +
+                       COALESCE(ui_stats.buy_count, 0) * 10
+                   )::int as popularity_score
             FROM "Products" p
-            LEFT JOIN "UserInteractions" ui ON ui.product_id = p.id
+            LEFT JOIN (
+                SELECT product_id,
+                       COUNT(DISTINCT CASE WHEN interaction_type = 'view' THEN id END) as view_count,
+                       COUNT(DISTINCT CASE WHEN interaction_type = 'buy' THEN id END) as buy_count
+                FROM "UserInteractions"
+                GROUP BY product_id
+            ) ui_stats ON ui_stats.product_id = p.id
+            LEFT JOIN (
+                SELECT product_id, COUNT(DISTINCT saved_item_id) as save_count
+                FROM "SavedItems"
+                GROUP BY product_id
+            ) saved_stats ON saved_stats.product_id = p.id
             WHERE p.status = 'Available'
-            GROUP BY p.id, p.title, p.price, p.type, p.category, p.image_urls
             ORDER BY popularity_score DESC, view_count DESC, p."createdAt" DESC
             LIMIT 50
         `, {
@@ -1928,4 +1992,340 @@ export const getPopularListings = async (req, res) => {
         res.status(500).json({ error: 'Failed to fetch popular listings' });
     }
 };
+
+// ======================= STUDENT WHITELIST MANAGEMENT =======================
+
+/**
+ * Upload and bulk import CSV file containing university student whitelist
+ */
+export const uploadStudentWhitelist = async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'No CSV file uploaded. Please provide a valid CSV file.' });
+        }
+
+        const results = [];
+        const bufferStream = new Readable();
+        bufferStream.push(req.file.buffer);
+        bufferStream.push(null);
+
+        // Normalize header keys: strip BOM, trim, lowercase, remove spaces/underscores
+        const normalizeHeader = (header) => header.replace(/^\uFEFF/, '').trim().toLowerCase().replace(/[\s_-]+/g, '');
+
+        const parser = bufferStream.pipe(csvParser({
+            mapHeaders: ({ header }) => normalizeHeader(header)
+        }));
+
+        for await (const row of parser) {
+            results.push(row);
+        }
+
+        if (results.length === 0) {
+            return res.status(400).json({ error: 'The uploaded CSV file is empty or has invalid formatting.' });
+        }
+
+        const currentYear = new Date().getFullYear();
+        let inserted = 0;
+        let updated = 0;
+        let skipped = 0;
+        const errors = [];
+
+        for (let i = 0; i < results.length; i++) {
+            const raw = results[i];
+            const rowNumber = i + 2; // account for header line
+
+            // Flexible header matching
+            const studentId = raw.studentid || raw.universityid || raw.id || raw.studentno || raw.student_id;
+            const email = raw.email || raw.studentemail || raw.mail || raw.student_email;
+            const faculty = raw.faculty || raw.facultyname || raw.department || raw.dept || 'General';
+            const yearRaw = raw.enrollmentyear || raw.intakeyear || raw.year || raw.enrollment || raw.enrollment_year;
+            const explicitStatus = raw.status ? String(raw.status).trim() : null;
+
+            if (!studentId || !email || !yearRaw) {
+                skipped++;
+                errors.push(`Row ${rowNumber}: Missing student_id, email, or enrollment_year.`);
+                continue;
+            }
+
+            const cleanStudentId = String(studentId).trim().toUpperCase();
+            const cleanEmail = String(email).trim().toLowerCase();
+            const enrollmentYear = parseInt(String(yearRaw).trim(), 10);
+
+            if (isNaN(enrollmentYear) || enrollmentYear < 1990 || enrollmentYear > 2100) {
+                skipped++;
+                errors.push(`Row ${rowNumber} (${cleanStudentId}): Invalid enrollment year '${yearRaw}'.`);
+                continue;
+            }
+
+            // Auto-calculation logic: If (Current Year - enrollment_year > 4), automatically set status to 'Expired'
+            let status = 'Active';
+            if (explicitStatus && (explicitStatus.toLowerCase() === 'expired' || explicitStatus.toLowerCase() === 'active')) {
+                status = explicitStatus.charAt(0).toUpperCase() + explicitStatus.slice(1).toLowerCase();
+            }
+            if (currentYear - enrollmentYear > 4) {
+                status = 'Expired';
+            }
+
+            try {
+                // Find existing by student_id or email
+                const existing = await StudentWhitelist.findOne({
+                    where: {
+                        [Op.or]: [
+                            { student_id: cleanStudentId },
+                            { email: cleanEmail }
+                        ]
+                    }
+                });
+
+                if (existing) {
+                    existing.student_id = cleanStudentId;
+                    existing.email = cleanEmail;
+                    existing.faculty = String(faculty).trim();
+                    existing.enrollment_year = enrollmentYear;
+                    existing.status = status;
+                    await existing.save();
+                    updated++;
+                } else {
+                    await StudentWhitelist.create({
+                        student_id: cleanStudentId,
+                        email: cleanEmail,
+                        faculty: String(faculty).trim(),
+                        enrollment_year: enrollmentYear,
+                        status
+                    });
+                    inserted++;
+                }
+            } catch (rowErr) {
+                skipped++;
+                errors.push(`Row ${rowNumber} (${cleanStudentId}): ${rowErr.message}`);
+            }
+        }
+
+        // Audit Log
+        if (req.user?.id) {
+            await ActivityLog.create({
+                user_id: req.user.id,
+                action: 'UPLOAD_WHITELIST_CSV',
+                entity_type: 'StudentWhitelist',
+                details: `Admin uploaded whitelist CSV: ${inserted} inserted, ${updated} updated, ${skipped} skipped.`
+            }).catch(() => {});
+        }
+
+        res.json({
+            message: `CSV processed successfully. ${inserted} inserted, ${updated} updated, ${skipped} skipped.`,
+            summary: {
+                totalRows: results.length,
+                inserted,
+                updated,
+                skipped,
+                errors: errors.slice(0, 20)
+            }
+        });
+    } catch (error) {
+        console.error('Upload Whitelist CSV Error:', error);
+        res.status(500).json({ error: error.message || 'Failed to process whitelist CSV' });
+    }
+};
+
+/**
+ * Get paginated list of whitelisted students with search & filter
+ */
+export const getStudentWhitelist = async (req, res) => {
+    try {
+        const { search, status, faculty, sortBy, page = 1, limit = 10 } = req.query;
+        const pageSize = parseInt(limit, 10) || 10;
+        const offset = (Math.max(1, parseInt(page, 10)) - 1) * pageSize;
+
+        const where = {};
+
+        if (status && status !== 'All') {
+            where.status = status;
+        }
+
+        if (faculty && faculty !== 'All') {
+            where.faculty = faculty;
+        }
+
+        if (search && search.trim()) {
+            const cleanSearch = `%${search.trim()}%`;
+            where[Op.or] = [
+                { student_id: { [Op.iLike]: cleanSearch } },
+                { email: { [Op.iLike]: cleanSearch } },
+                { faculty: { [Op.iLike]: cleanSearch } }
+            ];
+        }
+
+        let order = [['createdAt', 'DESC']];
+        if (sortBy === 'newest') order = [['createdAt', 'DESC']];
+        else if (sortBy === 'oldest') order = [['createdAt', 'ASC']];
+        else if (sortBy === 'student_id_asc') order = [['student_id', 'ASC']];
+        else if (sortBy === 'student_id_desc') order = [['student_id', 'DESC']];
+        else if (sortBy === 'year_desc') order = [['enrollment_year', 'DESC']];
+        else if (sortBy === 'year_asc') order = [['enrollment_year', 'ASC']];
+
+        const { count, rows: students } = await StudentWhitelist.findAndCountAll({
+            where,
+            order,
+            limit: pageSize,
+            offset
+        });
+
+        // Overall stats
+        const totalActive = await StudentWhitelist.count({ where: { status: 'Active' } });
+        const totalExpired = await StudentWhitelist.count({ where: { status: 'Expired' } });
+        const totalAll = await StudentWhitelist.count();
+
+        // Distinct faculties
+        const faculties = await StudentWhitelist.findAll({
+            attributes: [[sequelize.fn('DISTINCT', sequelize.col('faculty')), 'faculty']],
+            raw: true
+        });
+        const facultyList = faculties.map(f => f.faculty).filter(Boolean);
+
+        res.set('X-Total-Count', count);
+        res.json({
+            students,
+            total: count,
+            page: parseInt(page, 10) || 1,
+            pageSize,
+            totalPages: Math.ceil(count / pageSize) || 1,
+            stats: {
+                totalAll,
+                totalActive,
+                totalExpired,
+                faculties: facultyList
+            }
+        });
+    } catch (error) {
+        console.error('Get Student Whitelist Error:', error);
+        res.status(500).json({ error: 'Failed to fetch student whitelist directory' });
+    }
+};
+
+/**
+ * Manually toggle or update a student's whitelist status (e.g. Extend or Expire)
+ */
+export const updateStudentWhitelistStatus = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { status } = req.body;
+
+        if (!status || !['Active', 'Expired'].includes(status)) {
+            return res.status(400).json({ error: "Status must be either 'Active' or 'Expired'" });
+        }
+
+        const student = await StudentWhitelist.findByPk(id);
+        if (!student) {
+            return res.status(404).json({ error: 'Student whitelist record not found' });
+        }
+
+        const oldStatus = student.status;
+        student.status = status;
+        await student.save();
+
+        if (req.user?.id) {
+            await ActivityLog.create({
+                user_id: req.user.id,
+                action: 'UPDATE_WHITELIST_STATUS',
+                entity_type: 'StudentWhitelist',
+                details: `Admin changed status of student ${student.student_id} from ${oldStatus} to ${status}.`
+            }).catch(() => {});
+        }
+
+        res.json({ message: `Student access status updated to ${status}`, student });
+    } catch (error) {
+        console.error('Update Whitelist Status Error:', error);
+        res.status(500).json({ error: 'Failed to update student whitelist status' });
+    }
+};
+
+/**
+ * Add a single student manually to the whitelist
+ */
+export const createStudentWhitelistEntry = async (req, res) => {
+    try {
+        const { student_id, email, faculty, enrollment_year, status } = req.body;
+
+        if (!student_id || !email || !enrollment_year) {
+            return res.status(400).json({ error: 'Student ID, email, and enrollment year are required' });
+        }
+
+        const cleanStudentId = String(student_id).trim().toUpperCase();
+        const cleanEmail = String(email).trim().toLowerCase();
+        const year = parseInt(enrollment_year, 10);
+
+        if (isNaN(year) || year < 1990 || year > 2100) {
+            return res.status(400).json({ error: 'Invalid enrollment year' });
+        }
+
+        const currentYear = new Date().getFullYear();
+        let computedStatus = status || (currentYear - year > 4 ? 'Expired' : 'Active');
+
+        // Check duplicate
+        const existing = await StudentWhitelist.findOne({
+            where: {
+                [Op.or]: [{ student_id: cleanStudentId }, { email: cleanEmail }]
+            }
+        });
+        if (existing) {
+            return res.status(400).json({ error: 'A student with this ID or email already exists in the whitelist.' });
+        }
+
+        const newStudent = await StudentWhitelist.create({
+            student_id: cleanStudentId,
+            email: cleanEmail,
+            faculty: faculty ? String(faculty).trim() : 'General',
+            enrollment_year: year,
+            status: computedStatus
+        });
+
+        res.status(201).json({ message: 'Student successfully added to whitelist', student: newStudent });
+    } catch (error) {
+        console.error('Create Student Whitelist Error:', error);
+        res.status(500).json({ error: error.message || 'Failed to add student to whitelist' });
+    }
+};
+
+/**
+ * Delete a student from the whitelist
+ */
+export const deleteStudentWhitelistEntry = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const student = await StudentWhitelist.findByPk(id);
+        if (!student) {
+            return res.status(404).json({ error: 'Student whitelist record not found' });
+        }
+
+        await student.destroy();
+        res.json({ message: `Student ${student.student_id} removed from whitelist.` });
+    } catch (error) {
+        console.error('Delete Student Whitelist Error:', error);
+        res.status(500).json({ error: 'Failed to delete student from whitelist' });
+    }
+};
+
+/**
+ * Export whitelist as CSV
+ */
+export const exportStudentWhitelistCSV = async (req, res) => {
+    try {
+        const students = await StudentWhitelist.findAll({
+            order: [['enrollment_year', 'DESC'], ['student_id', 'ASC']]
+        });
+
+        const csvHeaders = 'student_id,email,faculty,enrollment_year,status,created_at\n';
+        const csvRows = students.map(s => 
+            `"${s.student_id}","${s.email}","${s.faculty || ''}",${s.enrollment_year},"${s.status}","${s.createdAt ? s.createdAt.toISOString() : ''}"`
+        ).join('\n');
+
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', `attachment; filename="student_whitelist_${new Date().toISOString().slice(0, 10)}.csv"`);
+        res.send(csvHeaders + csvRows);
+    } catch (error) {
+        console.error('Export Whitelist CSV Error:', error);
+        res.status(500).json({ error: 'Failed to export whitelist CSV' });
+    }
+};
+
 

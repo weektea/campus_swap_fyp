@@ -107,7 +107,7 @@ const Transaction = sequelize.define('Transaction', {
         defaultValue: 0.00,
     },
     deposit_status: {
-        type: DataTypes.ENUM('Waived', 'Held', 'Refunded', 'Claimed_Forfeited'),
+        type: DataTypes.ENUM('Waived', 'Held', 'Refunded', 'Partially_Refunded', 'Claimed_Forfeited'),
         defaultValue: 'Held',
     },
     cancelled_by_id: {
@@ -116,6 +116,22 @@ const Transaction = sequelize.define('Transaction', {
     },
     cancellation_reason: {
         type: DataTypes.TEXT,
+        allowNull: true,
+    },
+    meetup_pin: {
+        type: DataTypes.STRING(10),
+        allowNull: true,
+    },
+    stripe_session_id: {
+        type: DataTypes.STRING,
+        allowNull: true,
+    },
+    stripe_payment_intent_id: {
+        type: DataTypes.STRING,
+        allowNull: true,
+    },
+    stripe_payment_status: {
+        type: DataTypes.STRING(50),
         allowNull: true,
     },
 }, {

@@ -9,3 +9,4 @@ torchvision==0.18.0
 Pillow==10.3.0
 requests
 psycopg2-binary
+vaderSentiment==3.3.2

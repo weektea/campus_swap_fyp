@@ -1,28 +1,78 @@
 import { Review, Transaction, User, Product } from '../models/index.js';
+import axios from 'axios';
+
+const ML_SERVICE_URL = process.env.ML_SERVICE_URL || 'http://localhost:5000';
+
+// Fallback toxicity checker if ML service is unreachable
+const LOCAL_TOXIC_KEYWORDS = [
+    'fuck', 'shit', 'bitch', 'bastard', 'asshole', 'idiot', 'moron',
+    'stupid', 'dumb', 'scum', 'loser', 'trash', 'crap', 'bullshit', 'dick',
+    'cunt', 'piss', 'slut', 'whore', 'scammer', 'scam', 'fraud', 'thief',
+    'cheat', 'cheater', 'liar', 'robbed', 'fake', 'stole', 'kill', 'die'
+];
+
+export const analyzeTextWithNLP = async (text) => {
+    if (!text || !text.trim()) {
+        return { is_toxic: false, sentiment_score: 0.0, flag_reason: null };
+    }
+    try {
+        const response = await axios.post(`${ML_SERVICE_URL}/nlp/analyze-review`, { text }, { timeout: 3000 });
+        if (response.data) {
+            return {
+                is_toxic: Boolean(response.data.is_toxic),
+                sentiment_score: parseFloat(response.data.sentiment_score || 0.0),
+                flag_reason: response.data.flag_reason || null
+            };
+        }
+    } catch (err) {
+        console.warn('[NLP Microservice Warning] Could not reach ML service, using lexical fallback:', err.message);
+    }
+
+    // Local fallback
+    const lower = text.toLowerCase();
+    const matched = LOCAL_TOXIC_KEYWORDS.filter(k => new RegExp(`\\b${k}\\b`, 'i').test(lower));
+    if (matched.length > 0) {
+        return {
+            is_toxic: true,
+            sentiment_score: -0.65,
+            flag_reason: `Abusive / profane keywords detected: [${matched.slice(0, 3).join(', ')}]`
+        };
+    }
+    return { is_toxic: false, sentiment_score: 0.1, flag_reason: null };
+};
 
 export const updateReputation = async (userId) => {
+    // Only calculate reputation from PUBLISHED, non-toxic reviews
     const reviews = await Review.findAll({
         include: [{
             model: Transaction,
             as: 'transaction',
             where: { review_status: 'PUBLISHED' }
         }],
-        where: { reviewee_id: userId }
+        where: { 
+            reviewee_id: userId,
+            status: 'PUBLISHED',
+            is_toxic: false
+        }
     });
+
+    const user = await User.findByPk(userId);
+    if (!user) return null;
 
     if (reviews.length > 0) {
         const totalRating = reviews.reduce((sum, r) => sum + r.rating, 0);
         const calculatedScore = totalRating / reviews.length;
-        
-        const user = await User.findByPk(userId);
-        if (user) {
-            user.reputation_score = parseFloat(calculatedScore.toFixed(1));
-            user.total_reviews = reviews.length;
-            await user.save();
-        }
-        return calculatedScore;
+        user.reputation_score = parseFloat(calculatedScore.toFixed(1));
+        user.total_reviews = reviews.length;
+        await user.save();
+        return user.reputation_score;
+    } else {
+        // Default reputation if no valid published reviews
+        user.reputation_score = 5.0;
+        user.total_reviews = 0;
+        await user.save();
+        return 5.0;
     }
-    return null;
 };
 
 export const autoPublishExpiredReviews = async () => {
@@ -80,22 +130,31 @@ export const createReview = async (req, res) => {
             return res.status(400).json({ error: 'Cannot review yourself' });
         }
 
-        // Check for double review (Optional: one review per transaction per user)
+        // Check for double review
         const existingReview = await Review.findOne({ where: { transaction_id, reviewer_id } });
         if (existingReview) {
             return res.status(400).json({ error: 'You have already reviewed this transaction' });
         }
 
-        // Create Review
+        // 1. Run Automated NLP Toxicity & Sentiment Moderation
+        const nlpResult = await analyzeTextWithNLP(comment);
+        const isToxic = nlpResult.is_toxic;
+        const reviewStatus = isToxic ? 'FLAGGED_FOR_REVIEW' : 'PUBLISHED';
+
+        // 2. Create Review Record
         const review = await Review.create({
             transaction_id,
             reviewer_id,
             reviewee_id,
             rating,
-            comment
+            comment,
+            is_toxic: isToxic,
+            sentiment_score: nlpResult.sentiment_score,
+            flag_reason: nlpResult.flag_reason,
+            status: reviewStatus
         });
 
-        // Sync to Transaction (Denormalization) and Advance State Machine
+        // 3. Preserve Mutual Blind Review State Machine on Transaction
         if (transaction.buyer_id === reviewer_id) {
             transaction.rating_from_buyer = rating;
             transaction.buyer_comment = comment;
@@ -119,13 +178,22 @@ export const createReview = async (req, res) => {
 
         let newScore = null;
 
-        // ONLY Update Reputation Score if the review state is PUBLISHED
+        // ONLY Update Reputation Score if the review state is PUBLISHED on transaction
+        // (updateReputation will automatically filter out flagged toxic reviews)
         if (transaction.review_status === 'PUBLISHED') {
             await updateReputation(transaction.buyer_id);
             newScore = await updateReputation(transaction.seller_id);
         }
 
-        res.status(201).json({ review, new_reputation: newScore, review_status: transaction.review_status });
+        res.status(201).json({
+            review,
+            new_reputation: newScore,
+            review_status: transaction.review_status,
+            is_flagged: isToxic,
+            moderation_note: isToxic
+                ? 'Your review contains sensitive language and has been submitted for moderator review before public display.'
+                : null
+        });
     } catch (error) {
         console.error('Create Review Error:', error);
         res.status(500).json({ error: 'Failed to create review' });
@@ -138,7 +206,11 @@ export const getUserReviews = async (req, res) => {
 
         const { user_id } = req.params;
         const reviews = await Review.findAll({
-            where: { reviewee_id: user_id },
+            where: { 
+                reviewee_id: user_id,
+                status: 'PUBLISHED',
+                is_toxic: false
+            },
             include: [
                 { model: User, as: 'reviewer', attributes: ['username', 'full_name'] },
                 { 
@@ -160,3 +232,4 @@ export const getUserReviews = async (req, res) => {
         res.status(500).json({ error: 'Failed to fetch reviews' });
     }
 };
+

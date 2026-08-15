@@ -3,6 +3,7 @@ import { Op } from 'sequelize';
 import { createNotification } from './notificationController.js';
 import { emitToUser, emitToAdmins } from '../config/socket.js';
 import { sendError, isStaff } from '../middleware/authMiddleware.js';
+import { processStripeRefund } from './paymentController.js';
 
 export const createTransaction = async (req, res) => {
     try {
@@ -275,6 +276,12 @@ export const getUserTransactions = async (req, res) => {
                     txObj.buyer_comment = "Awaiting the other party to submit their review to unlock.";
                 }
             }
+
+            // Security: Mask Meetup PIN from seller (PIN is only shown to buyer)
+            if (type === 'selling') {
+                txObj.meetup_pin = null;
+            }
+
             return txObj;
         });
 
@@ -339,6 +346,23 @@ export const getTransactionById = async (req, res) => {
                     txObj.reviews = txObj.reviews.filter(r => String(r.reviewer_id) === reqUserId);
                 }
             }
+        } else {
+            // If published, check if any review is toxic / flagged by NLP
+            if (txObj.reviews) {
+                const buyerReview = txObj.reviews.find(r => String(r.reviewer_id) === String(txObj.buyer_id));
+                const sellerReview = txObj.reviews.find(r => String(r.reviewer_id) === String(txObj.seller_id));
+                if (buyerReview && (buyerReview.is_toxic || buyerReview.status === 'FLAGGED_FOR_REVIEW')) {
+                    txObj.buyer_comment = "This review is hidden pending moderator approval.";
+                }
+                if (sellerReview && (sellerReview.is_toxic || sellerReview.status === 'FLAGGED_FOR_REVIEW')) {
+                    txObj.seller_comment = "This review is hidden pending moderator approval.";
+                }
+            }
+        }
+
+        // Security: Mask Meetup PIN from seller (PIN is strictly private to the buyer)
+        if (reqUserId !== String(txObj.buyer_id)) {
+            txObj.meetup_pin = null;
         }
 
         res.json(txObj);
@@ -499,8 +523,11 @@ export const updateTransactionStatus = async (req, res) => {
         const requesterId = req.user?.id;
         const otherPartyId = String(requesterId) === String(transaction.buyer_id) ? transaction.seller_id : transaction.buyer_id;
 
-        // Prevent buyer from cancelling after submitting payment proof (To Confirm status)
-        if (oldStatus === 'To Confirm' && targetStatus === 'Cancelled' && String(requesterId) === String(transaction.buyer_id)) {
+        // Cancellation handling for To Confirm status:
+        // If paid via Stripe Escrow, allow cancellation and auto-refund.
+        // If manual bank transfer/cash proof submitted, restrict buyer cancellation to protect seller.
+        const isStripePaid = !!(transaction.stripe_payment_intent_id || transaction.selected_payment_method === 'Stripe');
+        if (oldStatus === 'To Confirm' && targetStatus === 'Cancelled' && String(requesterId) === String(transaction.buyer_id) && !isStripePaid) {
             return res.status(400).json({ error: 'Payment receipt has been submitted. Order cannot be cancelled by buyer.' });
         }
 
@@ -556,29 +583,29 @@ export const updateTransactionStatus = async (req, res) => {
             }
             
             // Deposit Management Lifecycle: when status changes to Completed (meaning item is returned safely),
-            // the rental_deposit is marked for refund to the Buyer, while the rental fee goes to the Seller.
+            // the rental_deposit is refunded (full or minus late penalties) to the Buyer.
             let lateMessage = '';
-            if (product && product.type === 'Rent') {
-                const deposit = product.rental_deposit ? parseFloat(product.rental_deposit) : 0.0;
+            const isRentItem = (product && product.type === 'Rent') || transaction.rental_start_date != null;
+            let netRefund = 0.0;
+            let penalty = 0.0;
+            let deposit = 0.0;
+
+            if (isRentItem) {
+                deposit = transaction.deposit_amount ? parseFloat(transaction.deposit_amount) : (product?.rental_deposit ? parseFloat(product.rental_deposit) : 0.0);
                 
                 // Late Return Check
-                const endDate = new Date(transaction.rental_end_date);
+                const endDate = transaction.rental_end_date ? new Date(transaction.rental_end_date) : null;
                 const today = new Date();
                 today.setHours(0,0,0,0);
-                endDate.setHours(0,0,0,0);
+                if (endDate) endDate.setHours(0,0,0,0);
 
                 let daysLate = 0;
-                let penalty = 0.0;
 
-                if (today > endDate) {
+                if (endDate && today > endDate) {
                     const diffTime = today.getTime() - endDate.getTime();
                     daysLate = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                    penalty = daysLate * parseFloat(product.rental_price_per_day);
-                    
-                    // Cap the penalty at the deposit amount to avoid negative values
-                    if (penalty > deposit) {
-                        penalty = deposit;
-                    }
+                    const dailyPrice = parseFloat(product?.rental_price_per_day || product?.price || 0);
+                    penalty = Math.min(daysLate * dailyPrice, deposit);
                     
                     // Deduct from buyer's reputation score by 0.5 (clamped to 1.0)
                     const buyer = await User.findByPk(transaction.buyer_id);
@@ -590,10 +617,25 @@ export const updateTransactionStatus = async (req, res) => {
                     lateMessage = ` Late return detected by ${daysLate} days. Penalty of RM ${penalty.toFixed(2)} applied. Buyer reputation score deducted by 0.5.`;
                 }
 
-                const netRefund = deposit - penalty;
-                const netRentalFee = parseFloat(transaction.amount) - deposit + penalty;
+                netRefund = Math.max(0, deposit - penalty);
+                const netRentalFee = parseFloat(transaction.amount || 0) - deposit + penalty;
 
                 console.log(`[Deposit Management & Late Penalties]${lateMessage} Refundable Deposit: RM ${netRefund.toFixed(2)} returned to Buyer. Rental Fee + Penalty: RM ${netRentalFee.toFixed(2)} sent to Seller.`);
+
+                // Dynamic Stripe Deposit Refund (Clean vs Late Return)
+                if (transaction.stripe_payment_intent_id && netRefund > 0) {
+                    await processStripeRefund(transaction, 'requested_by_customer', Math.round(netRefund * 100));
+                }
+
+                if (transaction.deposit_status === 'Waived') {
+                    // Kept as Waived
+                } else if (penalty > 0 && netRefund > 0) {
+                    transaction.deposit_status = 'Partially_Refunded';
+                } else if (penalty > 0 && netRefund <= 0) {
+                    transaction.deposit_status = 'Claimed_Forfeited';
+                } else if (transaction.deposit_status !== 'Claimed_Forfeited') {
+                    transaction.deposit_status = 'Refunded';
+                }
             }
             
             // Calculate Carbon Savings
@@ -608,41 +650,51 @@ export const updateTransactionStatus = async (req, res) => {
             transaction.review_status = 'PENDING_REVIEWS';
             transaction.awarded_carbon_points = co2Saved;
             
-            // Calculate 2% Platform Fee based strictly on Rental Fee (amount - deposit_amount)
+            // Calculate 2% Platform Fee based strictly on Net Rental Fee (amount - deposit_amount)
             const totalAmt = parseFloat(transaction.amount || 0);
             const depAmt = transaction.deposit_amount ? parseFloat(transaction.deposit_amount) : 0.0;
-            const isRentItem = (product && product.type === 'Rent') || transaction.rental_start_date != null;
             const rentFee = isRentItem ? Math.max(0, totalAmt - depAmt) : totalAmt;
 
             const platformFee = parseFloat((rentFee * 0.02).toFixed(2));
             transaction.platform_fee = platformFee;
-
-            // Safeguard 4: Update deposit_status to 'Refunded' ONLY IF not already 'Claimed_Forfeited' (e.g. set by Moderator)
-            if (isRentItem && transaction.deposit_status !== 'Claimed_Forfeited') {
-                transaction.deposit_status = 'Refunded';
-            }
             await transaction.save();
             
+            // Smart Platform Fee Accumulation:
+            // - If Cash/Manual transfer: Seller received full cash offline, so add 2% to accumulated_balance_due.
+            // - If Stripe: Platform already holds funds and deducted 2% fee upfront (net 98% payout), DO NOT add to accumulated_balance_due!
+            const isOfflineOrDirectPayment = transaction.selected_payment_method !== 'Stripe' && !transaction.stripe_payment_intent_id;
+
             if (product) {
                  if (transaction.buyer_id === transaction.seller_id) {
-                      // Self-trade: only increment once to prevent double-counting
-                      await User.increment(
-                          { items_reused: 1, total_carbon_saved: co2Saved, carbon_saved_buyer: co2Saved, carbon_saved_seller: co2Saved, accumulated_balance_due: platformFee },
-                          { where: { id: transaction.buyer_id } }
-                      );
-                  } else {
+                      // Self-trade
+                      const selfPayload = { 
+                          items_reused: 1, 
+                          total_carbon_saved: co2Saved, 
+                          carbon_saved_buyer: co2Saved, 
+                          carbon_saved_seller: co2Saved 
+                      };
+                      if (isOfflineOrDirectPayment) {
+                          selfPayload.accumulated_balance_due = platformFee;
+                      }
+                      await User.increment(selfPayload, { where: { id: transaction.buyer_id } });
+                 } else {
                       // Update Buyer
                       await User.increment(
                           { items_reused: 1, total_carbon_saved: co2Saved, carbon_saved_buyer: co2Saved },
                           { where: { id: transaction.buyer_id } }
                       );
                       
-                      // Update Seller (increment accumulated_balance_due by platformFee)
-                      await User.increment(
-                          { items_reused: 1, total_carbon_saved: co2Saved, carbon_saved_seller: co2Saved, accumulated_balance_due: platformFee },
-                          { where: { id: transaction.seller_id } }
-                      );
-                  }
+                      // Update Seller
+                      const sellerPayload = { 
+                          items_reused: 1, 
+                          total_carbon_saved: co2Saved, 
+                          carbon_saved_seller: co2Saved 
+                      };
+                      if (isOfflineOrDirectPayment) {
+                          sellerPayload.accumulated_balance_due = platformFee;
+                      }
+                      await User.increment(sellerPayload, { where: { id: transaction.seller_id } });
+                 }
             }
 
             // Log interaction: 'buy' for Buyer (Idempotency assured)
@@ -688,11 +740,22 @@ export const updateTransactionStatus = async (req, res) => {
                     { where: { id: transaction.product_id } }
                 );
             }
+
+            // If order was paid via Stripe Escrow, automatically issue full Stripe refund
+            if (transaction.stripe_payment_intent_id && transaction.stripe_payment_status !== 'refunded') {
+                console.log(`[Cancel Auto-Refund] Processing Stripe Escrow Refund for Transaction #${transaction.id}...`);
+                await processStripeRefund(transaction, 'requested_by_customer');
+            }
+
             const isBuyerCancelling = String(requesterId) === String(transaction.buyer_id);
             const cancelTitle = isBuyerCancelling ? 'Order Cancelled by Buyer' : 'Request Declined by Seller';
             let cancelMsg = isBuyerCancelling 
                 ? `Buyer has cancelled their order for "${productTitle}".` 
                 : `Seller has declined your request for "${productTitle}".`;
+
+            if (transaction.stripe_payment_intent_id) {
+                cancelMsg += ' (Stripe Escrow payment has been automatically refunded to buyer\'s card).';
+            }
 
             if (cancellation_reason && cancellation_reason.trim().length > 0) {
                 cancelMsg += ` Reason: ${cancellation_reason.trim()}`;
@@ -1031,37 +1094,175 @@ export const getBookedDates = async (req, res) => {
 export const returnRentalAndRefundDeposit = async (req, res) => {
     try {
         const { id } = req.params;
-        const transaction = await Transaction.findByPk(id, { include: [{ model: Product, as: 'product' }] });
+        const transaction = await Transaction.findByPk(id, { 
+            include: [
+                { 
+                    model: Product, 
+                    as: 'product',
+                    include: [
+                        { model: Category, as: 'categoryModel' },
+                        { model: SubCategory, as: 'subcategoryModel' }
+                    ]
+                },
+                { model: User, as: 'seller', attributes: ['id', 'username', 'email', 'fcm_token'] },
+                { model: User, as: 'buyer', attributes: ['id', 'username', 'email', 'fcm_token'] }
+            ] 
+        });
         if (!transaction) {
             return res.status(404).json({ error: 'Transaction not found' });
         }
 
         const reqUserId = String(req.user.id);
-        if (reqUserId !== String(transaction.seller_id) && reqUserId !== String(transaction.buyer_id)) {
+        if (reqUserId !== String(transaction.seller_id) && reqUserId !== String(transaction.buyer_id) && !isStaff(req.user.role)) {
             return res.status(403).json({ error: 'Not authorized to process rental return' });
         }
 
-        transaction.deposit_status = 'Refunded';
+        const product = transaction.product;
+        const deposit = transaction.deposit_amount ? parseFloat(transaction.deposit_amount) : (product?.rental_deposit ? parseFloat(product.rental_deposit) : 0.0);
+        
+        // Late Return Check
+        const endDate = transaction.rental_end_date ? new Date(transaction.rental_end_date) : null;
+        const today = new Date();
+        today.setHours(0,0,0,0);
+        if (endDate) endDate.setHours(0,0,0,0);
+
+        let daysLate = 0;
+        let penalty = 0.0;
+        let lateMessage = '';
+
+        if (endDate && today > endDate) {
+            const diffTime = today.getTime() - endDate.getTime();
+            daysLate = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            const dailyPrice = parseFloat(product?.rental_price_per_day || product?.price || 0);
+            penalty = Math.min(daysLate * dailyPrice, deposit);
+            
+            // Deduct from buyer's reputation score by 0.5 (clamped to 1.0)
+            const buyer = await User.findByPk(transaction.buyer_id);
+            if (buyer) {
+                buyer.reputation_score = Math.max(1.0, parseFloat(buyer.reputation_score || 5.0) - 0.5);
+                await buyer.save();
+            }
+
+            lateMessage = ` Late return detected by ${daysLate} days. Penalty of RM ${penalty.toFixed(2)} applied. Buyer reputation score deducted by 0.5.`;
+        }
+
+        const netRefund = Math.max(0, deposit - penalty);
+        console.log(`[Rental Return & Deposit]${lateMessage} Deposit: RM ${deposit.toFixed(2)}, Penalty: RM ${penalty.toFixed(2)}, Net Refund to Buyer: RM ${netRefund.toFixed(2)}.`);
+
+        // Dynamic Stripe Deposit Refund
+        if (transaction.stripe_payment_intent_id && netRefund > 0) {
+            await processStripeRefund(transaction, 'requested_by_customer', Math.round(netRefund * 100));
+        }
+
+        if (transaction.deposit_status === 'Waived') {
+            // Waived deposit remains marked as Waived
+        } else if (penalty > 0 && netRefund > 0) {
+            transaction.deposit_status = 'Partially_Refunded';
+        } else if (penalty > 0 && netRefund <= 0) {
+            transaction.deposit_status = 'Claimed_Forfeited';
+        } else {
+            transaction.deposit_status = 'Refunded';
+        }
+
         transaction.status = 'Completed';
         transaction.completed_at = new Date();
+        transaction.review_status = 'PENDING_REVIEWS';
+
+        // Calculate Carbon Savings
+        let co2Saved = 0.0;
+        if (product) {
+            const catName = product.categoryModel ? product.categoryModel.name : product.category;
+            const subCatName = product.subcategoryModel ? product.subcategoryModel.name : null;
+            co2Saved = getCarbonValue(catName, subCatName, product);
+        }
+        transaction.awarded_carbon_points = co2Saved;
+
+        // Calculate 2% Platform Fee based strictly on Net Rental Fee (amount - deposit_amount)
+        const totalAmt = parseFloat(transaction.amount || 0);
+        const depAmt = transaction.deposit_amount ? parseFloat(transaction.deposit_amount) : 0.0;
+        const rentFee = Math.max(0, totalAmt - depAmt);
+        const platformFee = parseFloat((rentFee * 0.02).toFixed(2));
+        transaction.platform_fee = platformFee;
+
         await transaction.save();
 
         // Release Product status back to Available for future rentals
-        if (transaction.product) {
-            transaction.product.status = 'Available';
-            await transaction.product.save();
+        if (product) {
+            await Product.update(
+                { status: 'Available' },
+                { where: { id: transaction.product_id } }
+            );
         }
 
+        // Smart Platform Fee Accumulation:
+        // If Cash/Manual: seller received offline funds -> add 2% to accumulated_balance_due.
+        // If Stripe: platform holds funds and deducted fee upfront -> DO NOT add to accumulated_balance_due!
+        const isOfflineOrDirectPayment = transaction.selected_payment_method !== 'Stripe' && !transaction.stripe_payment_intent_id;
+
+        if (product) {
+            if (transaction.buyer_id === transaction.seller_id) {
+                const selfPayload = {
+                    items_reused: 1,
+                    total_carbon_saved: co2Saved,
+                    carbon_saved_buyer: co2Saved,
+                    carbon_saved_seller: co2Saved
+                };
+                if (isOfflineOrDirectPayment) {
+                    selfPayload.accumulated_balance_due = platformFee;
+                }
+                await User.increment(selfPayload, { where: { id: transaction.buyer_id } });
+            } else {
+                await User.increment(
+                    { items_reused: 1, total_carbon_saved: co2Saved, carbon_saved_buyer: co2Saved },
+                    { where: { id: transaction.buyer_id } }
+                );
+                const sellerPayload = {
+                    items_reused: 1,
+                    total_carbon_saved: co2Saved,
+                    carbon_saved_seller: co2Saved
+                };
+                if (isOfflineOrDirectPayment) {
+                    sellerPayload.accumulated_balance_due = platformFee;
+                }
+                await User.increment(sellerPayload, { where: { id: transaction.seller_id } });
+            }
+        }
+
+        // Realtime Socket updates
+        emitToUser(transaction.buyer_id, 'transaction_status_updated', {
+            transaction_id: transaction.id,
+            status: 'Completed',
+            deposit_status: transaction.deposit_status,
+            completed_at: transaction.completed_at
+        });
+        emitToUser(transaction.seller_id, 'transaction_status_updated', {
+            transaction_id: transaction.id,
+            status: 'Completed',
+            deposit_status: transaction.deposit_status,
+            completed_at: transaction.completed_at
+        });
+        emitToAdmins('admin_transaction_update', {
+            transaction_id: transaction.id,
+            status: 'Completed',
+            deposit_status: transaction.deposit_status
+        });
+
         // Notify Buyer
+        const refundNote = netRefund > 0 ? ` (RM ${netRefund.toFixed(2)} refunded)` : '';
         await createNotification(
             transaction.buyer_id,
-            'Rental Returned & Deposit Refunded',
-            `Your rental item "${transaction.product?.title || 'item'}" has been marked as returned cleanly. Deposit status: Refunded.`,
+            'Rental Returned & Deposit Settled',
+            `Your rental item "${product?.title || 'item'}" has been marked as returned.${refundNote} Deposit status: ${transaction.deposit_status}.${lateMessage}`,
             'Transaction',
             transaction.id
         );
 
-        res.json({ message: 'Rental returned successfully. Deposit marked as refunded.', transaction });
+        res.json({ 
+            message: `Rental returned successfully. Deposit status: ${transaction.deposit_status}.${lateMessage}`, 
+            transaction,
+            net_refund: netRefund,
+            penalty 
+        });
     } catch (error) {
         console.error('Error returning rental:', error);
         res.status(500).json({ error: 'Failed to process rental return' });
@@ -1092,22 +1293,212 @@ export const claimRentalDeposit = async (req, res) => {
             transaction_id: transaction.id,
             complainant_id: transaction.seller_id,
             reason: 'Rental Damage',
-            description: reason || 'Seller reported damage/late return on rental item and requested deposit claim.',
-            status: 'New'
+            description: reason || 'Item returned damaged by renter. Seller claiming security deposit.',
+            status: 'Open'
         });
 
         // Notify Buyer
         await createNotification(
             transaction.buyer_id,
-            'Deposit Claimed - Rental Dispute Opened',
-            `The seller requested a deposit claim on rental item "${transaction.product?.title || 'item'}". A dispute ticket has been created for staff review.`,
+            'Rental Deposit Claim Filed',
+            `Seller has reported damage for "${transaction.product?.title || 'item'}" and filed a deposit claim. A dispute has been opened for moderation review.`,
             'Dispute',
             dispute.id
         );
 
-        res.json({ message: 'Deposit claim recorded and dispute initiated for moderator review.', dispute, transaction });
+        res.json({ message: 'Damage claim filed. Deposit held pending dispute resolution.', dispute, transaction });
     } catch (error) {
         console.error('Error claiming rental deposit:', error);
-        res.status(500).json({ error: 'Failed to claim deposit' });
+        res.status(500).json({ error: 'Failed to claim rental deposit' });
     }
 };
+
+// POST /api/transactions/:id/verify-pin (Seller inputs buyer's 4-digit Meetup PIN to complete handover / release Escrow)
+export const verifyMeetupPin = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { pin } = req.body;
+        const sellerId = req.user.id;
+
+        if (!pin) {
+            return res.status(400).json({ error: 'Meetup PIN is required' });
+        }
+
+        const transaction = await Transaction.findByPk(id, {
+            include: [
+                { 
+                    model: Product, 
+                    as: 'product',
+                    include: [
+                        { model: Category, as: 'categoryModel' },
+                        { model: SubCategory, as: 'subcategoryModel' }
+                    ]
+                },
+                { model: User, as: 'seller', attributes: ['id', 'username', 'email', 'fcm_token'] },
+                { model: User, as: 'buyer', attributes: ['id', 'username', 'email', 'fcm_token'] }
+            ]
+        });
+
+        if (!transaction) {
+            return res.status(404).json({ error: 'Transaction not found' });
+        }
+
+        // Only the seller or staff can verify the PIN
+        if (String(transaction.seller_id) !== String(sellerId) && !isStaff(req.user.role)) {
+            return res.status(403).json({ error: 'Only the seller can verify the buyer\'s Meetup PIN.' });
+        }
+
+        if (transaction.status !== 'To Confirm') {
+            return res.status(400).json({ 
+                error: `Cannot verify PIN for order in '${transaction.status}' status. Order must be 'To Confirm'.` 
+            });
+        }
+
+        // Check PIN matching
+        if (!transaction.meetup_pin || String(transaction.meetup_pin).trim() !== String(pin).trim()) {
+            return res.status(400).json({ 
+                error: 'Invalid Meetup PIN. Please ask the buyer to show the correct 4-digit PIN on their order screen.' 
+            });
+        }
+
+        const product = transaction.product;
+        const isRent = product && product.type === 'Rent';
+        const targetStatus = isRent ? 'On Rent' : 'Completed';
+
+        transaction.status = targetStatus;
+        if (!isRent) {
+            transaction.completed_at = new Date();
+            transaction.review_status = 'PENDING_REVIEWS';
+        }
+        await transaction.save();
+
+        if (isRent) {
+            await createNotification(
+                transaction.buyer_id,
+                'Rental Handover Verified',
+                `Seller verified your PIN. Your rental for "${product.title}" is now active!`,
+                'Transaction',
+                transaction.id
+            );
+            await createNotification(
+                transaction.seller_id,
+                'Rental Handover Complete',
+                `PIN verified successfully. Rental item "${product.title}" is now marked On Rent.`,
+                'Transaction',
+                transaction.id
+            );
+        } else {
+            // Sale item completed
+            if (product) {
+                await Product.update(
+                    { status: 'Sold' },
+                    { where: { id: transaction.product_id } }
+                );
+            }
+
+            // Calculate Carbon Savings
+            let co2Saved = 0.0;
+            if (product) {
+                 const catName = product.categoryModel ? product.categoryModel.name : product.category;
+                 const subCatName = product.subcategoryModel ? product.subcategoryModel.name : null;
+                 co2Saved = getCarbonValue(catName, subCatName, product);
+            }
+
+            const totalAmt = parseFloat(transaction.amount || 0);
+            const platformFee = parseFloat((totalAmt * 0.02).toFixed(2));
+            transaction.platform_fee = platformFee;
+            transaction.awarded_carbon_points = co2Saved;
+            await transaction.save();
+
+            // Smart Platform Fee Accumulation:
+            // Since this order was paid via Stripe Escrow, the platform already deducted 2% fee upfront.
+            // DO NOT add platformFee to accumulated_balance_due.
+            const isOfflineOrDirectPayment = transaction.selected_payment_method !== 'Stripe' && !transaction.stripe_payment_intent_id;
+
+            if (product) {
+                if (transaction.buyer_id === transaction.seller_id) {
+                    const selfPayload = {
+                        items_reused: 1,
+                        total_carbon_saved: co2Saved,
+                        carbon_saved_buyer: co2Saved,
+                        carbon_saved_seller: co2Saved
+                    };
+                    if (isOfflineOrDirectPayment) {
+                        selfPayload.accumulated_balance_due = platformFee;
+                    }
+                    await User.increment(selfPayload, { where: { id: transaction.buyer_id } });
+                } else {
+                    await User.increment(
+                        { items_reused: 1, total_carbon_saved: co2Saved, carbon_saved_buyer: co2Saved },
+                        { where: { id: transaction.buyer_id } }
+                    );
+                    const sellerPayload = {
+                        items_reused: 1,
+                        total_carbon_saved: co2Saved,
+                        carbon_saved_seller: co2Saved
+                    };
+                    if (isOfflineOrDirectPayment) {
+                        sellerPayload.accumulated_balance_due = platformFee;
+                    }
+                    await User.increment(sellerPayload, { where: { id: transaction.seller_id } });
+                }
+            }
+
+            // Log activity and interactions
+            try {
+                await ActivityLog.create({
+                    user_id: transaction.seller_id,
+                    action: 'ITEM_SOLD'
+                });
+                await ActivityLog.create({
+                    user_id: transaction.buyer_id,
+                    action: 'ITEM_BOUGHT'
+                });
+                await UserInteraction.findOrCreate({
+                    where: {
+                        user_id: transaction.buyer_id,
+                        product_id: transaction.product_id,
+                        interaction_type: 'buy'
+                    },
+                    defaults: { weight: 10 }
+                });
+            } catch (e) {}
+
+            await createNotification(
+                transaction.buyer_id,
+                'Order Handover Complete & Funds Released',
+                `Seller verified your PIN for "${product?.title || 'item'}". The transaction is complete. You can now view your e-receipt and rate your experience!`,
+                'Transaction',
+                transaction.id
+            );
+            await createNotification(
+                transaction.seller_id,
+                'Handover Verified - Escrow Released',
+                `PIN verified successfully! Escrow funds for "${product?.title || 'item'}" are released to your account.`,
+                'Transaction',
+                transaction.id
+            );
+        }
+
+        // Real-time socket updates
+        emitToUser(transaction.buyer_id, 'transaction_status_updated', { 
+            transaction_id: transaction.id, 
+            status: targetStatus 
+        });
+        emitToUser(transaction.seller_id, 'transaction_status_updated', { 
+            transaction_id: transaction.id, 
+            status: targetStatus 
+        });
+        emitToAdmins('admin_metrics_update', { trigger: 'transaction_completed' });
+
+        res.json({
+            success: true,
+            message: `Meetup PIN verified successfully. Order status updated to '${targetStatus}'.`,
+            transaction
+        });
+    } catch (error) {
+        console.error('Verify Meetup PIN Error:', error);
+        res.status(500).json({ error: error.message || 'Failed to verify Meetup PIN' });
+    }
+};
+

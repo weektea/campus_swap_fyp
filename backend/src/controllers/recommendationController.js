@@ -70,16 +70,18 @@ export const getRecommendations = async (req, res) => {
         // Model B (Baseline): Selected ONLY IF user is completely new (0 interactions) AND skipped onboarding (no preference tags).
         let userPrefTags = [];
         let userPrimaryIntent = 'browse';
+        let userFaculty = null;
         let userInteractionCount = 0;
 
         if (user_id) {
             try {
                 const uObj = await User.findByPk(user_id, {
-                    attributes: ['preference_tags', 'primary_intent']
+                    attributes: ['preference_tags', 'primary_intent', 'faculty']
                 });
                 if (uObj) {
                     userPrefTags = Array.isArray(uObj.preference_tags) ? uObj.preference_tags : [];
                     userPrimaryIntent = uObj.primary_intent || 'browse';
+                    userFaculty = uObj.faculty || null;
                 }
                 userInteractionCount = await UserInteraction.count({ where: { user_id } });
             } catch (uErr) {
@@ -246,11 +248,12 @@ export const getRecommendations = async (req, res) => {
         if (user_id && userPrefTags.length === 0) {
             try {
                 const uObj = await User.findByPk(user_id, {
-                    attributes: ['preference_tags', 'primary_intent']
+                    attributes: ['preference_tags', 'primary_intent', 'faculty']
                 });
                 if (uObj) {
                     userPrefTags = Array.isArray(uObj.preference_tags) ? uObj.preference_tags : [];
                     userPrimaryIntent = uObj.primary_intent || 'browse';
+                    userFaculty = uObj.faculty || null;
                 }
             } catch (uErr) {
                 console.error("Failed to query user preferences for ML:", uErr);
@@ -273,7 +276,7 @@ export const getRecommendations = async (req, res) => {
             include: [{
                 model: User,
                 as: 'seller',
-                attributes: ['username', 'full_name', 'reputation_score', 'profile_image_url']
+                attributes: ['username', 'full_name', 'reputation_score', 'profile_image_url', 'faculty']
             }, {
                 model: Category,
                 as: 'categoryModel'
@@ -350,19 +353,27 @@ export const getRecommendations = async (req, res) => {
             }
         }
 
-        const productsPayload = availableProducts.map(p => ({
-            id: p.id,
-            title: p.title,
-            description: p.description || '',
-            category: p.categoryModel ? p.categoryModel.name : (p.category || ''),
-            subcategory: p.subcategoryModel ? p.subcategoryModel.name : '',
-            seller_id: p.seller_id
-        }));
+        const now = Date.now();
+        const productsPayload = availableProducts.map(p => {
+            const createdTime = p.createdAt ? new Date(p.createdAt).getTime() : now;
+            const daysSinceListed = Math.max(0, (now - createdTime) / (1000 * 60 * 60 * 24));
+            return {
+                id: p.id,
+                title: p.title,
+                description: p.description || '',
+                category: p.categoryModel ? p.categoryModel.name : (p.category || ''),
+                subcategory: p.subcategoryModel ? p.subcategoryModel.name : '',
+                seller_id: p.seller_id,
+                seller_faculty: p.seller?.faculty || null,
+                days_since_listed: parseFloat(daysSinceListed.toFixed(2))
+            };
+        });
 
         let recommendedIds = [];
         try {
             const pythonRes = await axios.post(`${ML_SERVICE_URL}/api/recommend/hybrid`, {
                 user_id: user_id || 'guest',
+                user_faculty: userFaculty,
                 interactions: userInteractions, // send user profile interactions
                 products: productsPayload,
                 followed_seller_ids: followedSellerIds,

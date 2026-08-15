@@ -3,7 +3,6 @@ import {
     Flame, 
     Eye, 
     Heart, 
-    MessageSquare, 
     ShoppingBag, 
     RefreshCw, 
     Search, 
@@ -80,7 +79,7 @@ const PopularListings = () => {
                         Weighted Popularity Formula Breakdown
                     </h3>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginTop: '0.75rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem', marginTop: '0.75rem' }}>
                     <div style={{ background: 'white', padding: '0.85rem 1rem', borderRadius: '10px', border: '1px solid #ffedd5', display: 'flex', alignItems: 'center', gap: '10px' }}>
                         <div style={{ padding: '8px', borderRadius: '8px', background: '#eff6ff', color: '#2563eb' }}>
                             <Eye size={18} />
@@ -88,16 +87,6 @@ const PopularListings = () => {
                         <div>
                             <div style={{ fontSize: '0.75rem', fontWeight: '600', color: '#6b7280' }}>Views</div>
                             <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#1e3a8a' }}>+1 pt / view</div>
-                        </div>
-                    </div>
-
-                    <div style={{ background: 'white', padding: '0.85rem 1rem', borderRadius: '10px', border: '1px solid #ffedd5', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <div style={{ padding: '8px', borderRadius: '8px', background: '#f0fdf4', color: '#16a34a' }}>
-                            <MessageSquare size={18} />
-                        </div>
-                        <div>
-                            <div style={{ fontSize: '0.75rem', fontWeight: '600', color: '#6b7280' }}>Chat Messages</div>
-                            <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#14532d' }}>+3 pts / chat</div>
                         </div>
                     </div>
 
@@ -174,8 +163,8 @@ const PopularListings = () => {
                                 <th style={{ textAlign: 'left', padding: '1rem' }}>PRICE</th>
                                 <th style={{ textAlign: 'center', padding: '1rem' }}>TYPE</th>
                                 <th style={{ textAlign: 'center', padding: '1rem' }}>VIEWS (+1)</th>
-                                <th style={{ textAlign: 'center', padding: '1rem' }}>CHATS (+3)</th>
                                 <th style={{ textAlign: 'center', padding: '1rem' }}>SAVES (+5)</th>
+                                <th style={{ textAlign: 'center', padding: '1rem' }}>PURCHASES (+10)</th>
                                 <th style={{ textAlign: 'center', padding: '1rem' }}>POPULARITY SCORE</th>
                             </tr>
                         </thead>
@@ -247,11 +236,11 @@ const PopularListings = () => {
                                             <td style={{ textAlign: 'center', fontWeight: '600', color: '#2563eb' }}>
                                                 {item.view_count || 0}
                                             </td>
-                                            <td style={{ textAlign: 'center', fontWeight: '600', color: '#16a34a' }}>
-                                                {item.message_count || 0}
-                                            </td>
                                             <td style={{ textAlign: 'center', fontWeight: '600', color: '#dc2626' }}>
                                                 {item.save_count || 0}
+                                            </td>
+                                            <td style={{ textAlign: 'center', fontWeight: '600', color: '#a855f7' }}>
+                                                {item.buy_count || 0}
                                             </td>
                                             <td style={{ textAlign: 'center', padding: '1rem' }}>
                                                 <span style={{ 

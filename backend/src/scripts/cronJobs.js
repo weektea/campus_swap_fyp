@@ -1,7 +1,32 @@
 import cron from 'node-cron';
 import { Op } from 'sequelize';
-import { Transaction, User, Review } from '../models/index.js';
+import { Transaction, User, Review, StudentWhitelist } from '../models/index.js';
 import { executeBackup, pruneOldBackups } from '../utils/backupHelper.js';
+
+export const checkAndExpireOldStudents = async () => {
+    try {
+        const currentYear = new Date().getFullYear();
+        // If (Current Year - enrollment_year > 4), status is Expired
+        // That means enrollment_year < (currentYear - 4)
+        const cutoffYear = currentYear - 4;
+        const [updatedCount] = await StudentWhitelist.update(
+            { status: 'Expired' },
+            {
+                where: {
+                    status: 'Active',
+                    enrollment_year: {
+                        [Op.lt]: cutoffYear
+                    }
+                }
+            }
+        );
+        if (updatedCount > 0) {
+            console.log(`[Cron Whitelist] Automatically marked ${updatedCount} students as Expired (enrollment year < ${cutoffYear}).`);
+        }
+    } catch (e) {
+        console.error('Error in student whitelist auto-expiry check:', e);
+    }
+};
 
 const updateReputation = async (userId) => {
     try {
@@ -31,6 +56,15 @@ const updateReputation = async (userId) => {
 };
 
 export const startCronJobs = () => {
+    // Run initial whitelist check on startup
+    checkAndExpireOldStudents();
+
+    // Auto-expire students daily at midnight
+    cron.schedule('0 0 * * *', async () => {
+        console.log('Running daily Student Whitelist status auto-expiration check...');
+        await checkAndExpireOldStudents();
+    });
+
     // Run every day at midnight
     cron.schedule('0 0 * * *', async () => {
         console.log('Running timeout cron job for Mutual Blind Reviews...');

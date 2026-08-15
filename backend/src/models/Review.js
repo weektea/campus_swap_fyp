@@ -34,6 +34,22 @@ const Review = sequelize.define('Review', {
     reviewee_id: {
         type: DataTypes.UUID,
         allowNull: false,
+    },
+    is_toxic: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false,
+    },
+    sentiment_score: {
+        type: DataTypes.FLOAT,
+        defaultValue: 0.0,
+    },
+    flag_reason: {
+        type: DataTypes.STRING,
+        allowNull: true,
+    },
+    status: {
+        type: DataTypes.ENUM('PENDING', 'PUBLISHED', 'FLAGGED_FOR_REVIEW'),
+        defaultValue: 'PUBLISHED',
     }
 });
 

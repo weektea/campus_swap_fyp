@@ -21,6 +21,7 @@ import MLModels from './pages/MLModels';
 
 import Broadcast from './pages/Broadcast';
 import System from './pages/System';
+import StudentDirectory from './pages/StudentDirectory';
 import PrivateRoute from './components/PrivateRoute';
 import { SocketProvider } from './context/SocketContext';
 
@@ -92,6 +93,22 @@ function App() {
           <PrivateRoute>
             <Layout>
               <UserDetail />
+            </Layout>
+          </PrivateRoute>
+        } />
+
+        <Route path="/students" element={
+          <PrivateRoute>
+            <Layout>
+              <StudentDirectory />
+            </Layout>
+          </PrivateRoute>
+        } />
+
+        <Route path="/whitelist" element={
+          <PrivateRoute>
+            <Layout>
+              <StudentDirectory />
             </Layout>
           </PrivateRoute>
         } />

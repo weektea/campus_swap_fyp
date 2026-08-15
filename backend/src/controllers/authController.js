@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { User, Transaction, Dispute, Report, Product, ActivityLog, SupportTicket, Follow, Message } from '../models/index.js';
+import { User, Transaction, Dispute, Report, Product, ActivityLog, SupportTicket, Follow, Message, StudentWhitelist } from '../models/index.js';
+import sequelize from '../config/database.js';
 import { Op } from 'sequelize';
 import { emitToAdmins, emitToStrictlyAdmins } from '../config/socket.js';
 import { sendMail } from '../utils/mailer.js';
@@ -34,6 +35,7 @@ export const register = async (req, res) => {
         }
 
         const normalizedEmail = email.toLowerCase().trim();
+        const normalizedUniId = university_id.toUpperCase().trim();
 
         // Full Name Validation
         const cleanedFullName = full_name.trim();
@@ -83,6 +85,28 @@ export const register = async (req, res) => {
             });
         }
 
+        // 1.5. University Whitelist Verification
+        const whitelistRecord = await StudentWhitelist.findOne({
+            where: {
+                [Op.and]: [
+                    sequelize.where(sequelize.fn('LOWER', sequelize.col('email')), normalizedEmail),
+                    sequelize.where(sequelize.fn('UPPER', sequelize.col('student_id')), normalizedUniId)
+                ]
+            }
+        });
+
+        if (!whitelistRecord) {
+            return res.status(403).json({
+                error: 'Student record not found in the university database.'
+            });
+        }
+
+        if (whitelistRecord.status === 'Expired') {
+            return res.status(403).json({
+                error: 'Student account expired. Graduated students cannot access the active trading platform.'
+            });
+        }
+
         // 2. Check existing
         const existingEmail = await User.findOne({ where: { email: normalizedEmail } });
         if (existingEmail) {
@@ -94,7 +118,7 @@ export const register = async (req, res) => {
             return res.status(400).json({ error: 'Username already registered' });
         }
 
-        const existingUniId = await User.findOne({ where: { university_id: university_id.toUpperCase().trim() } });
+        const existingUniId = await User.findOne({ where: { university_id: normalizedUniId } });
         if (existingUniId) {
             return res.status(400).json({ error: 'University ID already registered' });
         }
@@ -121,7 +145,8 @@ export const register = async (req, res) => {
             username: normalizedUsername,
             full_name: cleanedFullName,
             password_hash: hashedPassword,
-            university_id: university_id.toUpperCase().trim(), // Store uniform uppercase
+            university_id: normalizedUniId,
+            faculty: whitelistRecord.faculty || 'FCI',
             phone_number,
             role: 'student',
             is_verified: bypassEmailVerification ? true : false,

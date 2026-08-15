@@ -10,6 +10,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:campus_swap/core/services/socket_service.dart';
 import 'package:campus_swap/features/product/presentation/pages/product_details_page.dart';
 import 'package:campus_swap/features/home/domain/entities/product.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter/services.dart';
 
 class TransactionDetailPage extends StatefulWidget {
   final String transactionId;
@@ -27,9 +29,13 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
   String? _uploadedProofUrl;
   bool _isUploadingProof = false;
   bool _isUpdatingStatus = false;
+  bool _isPayingWithStripe = false;
+  bool _isVerifyingPin = false;
+  final TextEditingController _pinInputController = TextEditingController();
 
   @override
   void dispose() {
+    _pinInputController.dispose();
     SocketService().socket?.off('transaction_status_updated');
     super.dispose();
   }
@@ -265,6 +271,247 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
       } finally {
           setState(() => _isUploadingProof = false);
       }
+  }
+
+  Future<void> _payWithStripe() async {
+    setState(() => _isPayingWithStripe = true);
+    try {
+      final apiClient = ApiClient();
+      final res = await apiClient.post('/payments/create-checkout-session', {
+        'transaction_id': widget.transactionId,
+      });
+
+      if (res != null && res['url'] != null) {
+        final sessionUrl = res['url'].toString();
+        final sessionId = res['session_id']?.toString();
+
+        final uri = Uri.parse(sessionUrl);
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+        }
+
+        if (mounted) {
+          _showStripePaymentCompletionDialog(sessionId);
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to initialize Stripe checkout: ${_getFriendlyErrorMessage(e)}'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isPayingWithStripe = false);
+      }
+    }
+  }
+
+  void _showStripePaymentCompletionDialog(String? sessionId) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF635BFF).withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.credit_card, color: Color(0xFF635BFF), size: 28),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Stripe Escrow Checkout',
+                        style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      Text(
+                        'Test Mode Demonstration',
+                        style: GoogleFonts.outfit(fontSize: 13, color: Colors.grey[600]),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: const Color(0xFF635BFF).withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFF635BFF).withValues(alpha: 0.2)),
+              ),
+              child: Text(
+                'Complete your payment in the opened Stripe Checkout tab. Once completed, tap below to confirm payment and receive your secure 4-digit Meetup Handover PIN.',
+                style: GoogleFonts.outfit(fontSize: 13, height: 1.4),
+              ),
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: ElevatedButton.icon(
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  await _confirmStripePayment(sessionId);
+                },
+                icon: const Icon(Icons.check_circle, color: Colors.white),
+                label: Text(
+                  'I Have Completed Payment',
+                  style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF635BFF),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _confirmStripePayment(String? sessionId) async {
+    setState(() => _isLoading = true);
+    try {
+      final apiClient = ApiClient();
+      final res = await apiClient.post('/payments/confirm', {
+        'transaction_id': widget.transactionId,
+        if (sessionId != null) 'session_id': sessionId,
+      });
+
+      if (mounted) {
+        final pin = res['meetup_pin'] ?? '';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Payment verified! Your Handover PIN is: $pin'),
+            backgroundColor: const Color(0xFF0D503C),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        _fetchTransactionDetails();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to confirm payment: ${_getFriendlyErrorMessage(e)}'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        _fetchTransactionDetails();
+      }
+    }
+  }
+
+  Future<void> _verifyMeetupPin() async {
+    final enteredPin = _pinInputController.text.trim();
+    if (enteredPin.length != 4) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Please enter all 4 digits of the Meetup PIN.'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isVerifyingPin = true);
+    try {
+      final apiClient = ApiClient();
+      final res = await apiClient.post('/transactions/${widget.transactionId}/verify-pin', {
+        'pin': enteredPin,
+      });
+
+      if (mounted) {
+        _pinInputController.clear();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(res['message']?.toString() ?? 'Handover verified and completed!'),
+            backgroundColor: const Color(0xFF0D503C),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        _fetchTransactionDetails();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('PIN Verification Failed: ${_getFriendlyErrorMessage(e)}'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isVerifyingPin = false);
+      }
+    }
+  }
+
+  Future<void> _cancelAndRefundStripeOrder() async {
+    final totalAmount = _transaction['amount'] != null ? 'RM ${_transaction['amount']}' : 'your payment';
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.warning_amber_rounded, color: Colors.red),
+            const SizedBox(width: 8),
+            Text('Cancel & Request Refund?', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 17)),
+          ],
+        ),
+        content: Text(
+          'Are you sure? This will cancel the meetup and automatically refund $totalAmount back to your card via Stripe.',
+          style: GoogleFonts.outfit(fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Keep Order'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Text('Cancel & Auto-Refund', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      _updateStatus('Cancelled', {
+        'cancellation_reason': 'Buyer cancelled order and requested Stripe Escrow auto-refund'
+      }, true);
+    }
   }
 
   Widget _buildStatusStepper(String status) {
@@ -1191,6 +1438,93 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // --- Option 1: Stripe Escrow Payment (Instant Escrow + PIN) ---
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          const Color(0xFF635BFF).withValues(alpha: 0.12),
+                          const Color(0xFF00D4FF).withValues(alpha: 0.08),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFF635BFF).withValues(alpha: 0.35)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF635BFF),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(Icons.shield_rounded, color: Colors.white, size: 20),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Campus Swap Escrow Protection',
+                                    style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 15),
+                                  ),
+                                  Text(
+                                    'Secure online card payment with 4-digit Meetup PIN handover',
+                                    style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey[600]),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 48,
+                          child: ElevatedButton.icon(
+                            onPressed: _isPayingWithStripe ? null : _payWithStripe,
+                            icon: _isPayingWithStripe
+                                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                : const Icon(Icons.credit_card_rounded, color: Colors.white),
+                            label: Text(
+                              _isPayingWithStripe ? 'Opening Stripe Checkout...' : 'Pay with Stripe (Secure Escrow)',
+                              style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF635BFF),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              elevation: 2,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      const Expanded(child: Divider()),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Text(
+                          'OR CASH / MANUAL RECEIPT',
+                          style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey[500], letterSpacing: 1),
+                        ),
+                      ),
+                      const Expanded(child: Divider()),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
@@ -1206,16 +1540,16 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
                       style: GoogleFonts.outfit(color: Colors.blue[800]),
                     ),
                   ),
-                  const SizedBox(height: 24),
-                  Text(proofTitle, style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 16),
+                  Text(proofTitle, style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 4),
-                  Text(proofHelper, style: GoogleFonts.outfit(fontSize: 13, color: Colors.grey[600])),
-                  const SizedBox(height: 12),
+                  Text(proofHelper, style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey[600])),
+                  const SizedBox(height: 10),
                   GestureDetector(
                     onTap: _isUploadingProof ? null : () => _showPhotoSourcePicker(context),
                     child: Container(
                       width: double.infinity,
-                      height: 150,
+                      height: 140,
                       decoration: BoxDecoration(
                         color: Colors.grey.withValues(alpha: 0.05),
                         borderRadius: BorderRadius.circular(12),
@@ -1234,14 +1568,14 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
                               : Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    Icon(proofIcon, color: Colors.grey[600], size: 32),
-                                    const SizedBox(height: 8),
-                                    Text(proofHint, style: GoogleFonts.outfit(color: Colors.grey[600])),
+                                    Icon(proofIcon, color: Colors.grey[600], size: 30),
+                                    const SizedBox(height: 6),
+                                    Text(proofHint, style: GoogleFonts.outfit(color: Colors.grey[600], fontSize: 13)),
                                   ],
                                 ),
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 16),
                   SizedBox(
                     width: double.infinity,
                     height: 48,
@@ -1266,7 +1600,7 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
                       ),
                       child: Text(
                         isCash ? 'Confirm Handover & Proceed' : 'Submit Payment Receipt', 
-                        style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)
+                        style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)
                       ),
                     ),
                   ),
@@ -1281,7 +1615,7 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
                         side: BorderSide(color: Colors.red.withValues(alpha: 0.5)),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
                       ),
-                      child: Text('Cancel Order', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 16)),
+                      child: Text('Cancel Order', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 15)),
                     ),
                   ),
                 ],
@@ -1300,7 +1634,7 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
                           child: Text(
                               isCash 
                                   ? 'Cash Payment Selected: Meet up at the scheduled zone. Once cash is received, click "Confirm Cash Received & Complete".'
-                                  : 'Waiting for buyer to upload payment receipt...', 
+                                  : 'Waiting for buyer to complete payment (Stripe Escrow or receipt upload)...', 
                               style: GoogleFonts.outfit(color: Colors.blue[800])
                           ),
                       ),
@@ -1342,8 +1676,133 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
       if (status == 'To Confirm') {
           final String paymentMethod = _transaction['selected_payment_method']?.toString() ?? 'Cash';
           final bool isCash = paymentMethod == 'Cash';
+          final String? meetupPin = _transaction['meetup_pin']?.toString();
+          final bool hasStripe = paymentMethod == 'Stripe' || _transaction['stripe_payment_status'] == 'paid' || meetupPin != null;
 
           if (isBuying) {
+              if (meetupPin != null && meetupPin.isNotEmpty) {
+                  // --- Buyer View: Bold Meetup Handover PIN Card ---
+                  final pinDigits = meetupPin.split('');
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              const Color(0xFF0D503C).withValues(alpha: 0.12),
+                              const Color(0xFF635BFF).withValues(alpha: 0.08),
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(color: const Color(0xFF0D503C).withValues(alpha: 0.35), width: 1.5),
+                        ),
+                        child: Column(
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(Icons.shield_rounded, color: Color(0xFF0D503C), size: 22),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'STRIPE ESCROW PROTECTED',
+                                  style: GoogleFonts.outfit(
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 13,
+                                    color: const Color(0xFF0D503C),
+                                    letterSpacing: 1.2,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 14),
+                            Text(
+                              'Your 4-Digit Handover PIN',
+                              style: GoogleFonts.outfit(fontSize: 14, color: Colors.grey[700], fontWeight: FontWeight.w600),
+                            ),
+                            const SizedBox(height: 12),
+                            // Large, High-Contrast 4-Digit PIN Boxes
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: pinDigits.map((digit) {
+                                return Container(
+                                  margin: const EdgeInsets.symmetric(horizontal: 6),
+                                  width: 54,
+                                  height: 62,
+                                  decoration: BoxDecoration(
+                                    color: Theme.of(context).cardColor,
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(color: const Color(0xFF0D503C), width: 2),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: const Color(0xFF0D503C).withValues(alpha: 0.15),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 4),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      digit,
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 30,
+                                        fontWeight: FontWeight.w900,
+                                        color: const Color(0xFF0D503C),
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                            const SizedBox(height: 16),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).cardColor.withValues(alpha: 0.8),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.info_outline, size: 18, color: Color(0xFF0D503C)),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      'Show this 4-digit PIN to the seller in person when receiving your item to complete handover.',
+                                      style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey[800], height: 1.3),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      // Cancel & Auto-Refund Button
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: OutlinedButton.icon(
+                          onPressed: _cancelAndRefundStripeOrder,
+                          icon: const Icon(Icons.cancel_outlined, color: Colors.red),
+                          label: Text(
+                            'Cancel Order & Auto-Refund',
+                            style: GoogleFonts.outfit(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 15),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            side: BorderSide(color: Colors.red.withValues(alpha: 0.5)),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+              }
+
               return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -1408,9 +1867,109 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
                       ),
                   ],
               );
-          }
+          } else {
+              // --- Seller View: Enter Buyer's 4-digit Meetup PIN ---
+              if (hasStripe) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(18),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF635BFF).withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFF635BFF).withValues(alpha: 0.25)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.lock_clock, color: Color(0xFF635BFF), size: 24),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    'Buyer Paid via Stripe. Waiting for Meetup',
+                                    style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 15, color: const Color(0xFF635BFF)),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Payment is securely held in Escrow. Meet with the buyer in person, inspect items, and enter their 4-digit Meetup PIN below to complete handover and release payment.',
+                              style: GoogleFonts.outfit(fontSize: 13, color: Colors.grey[700], height: 1.4),
+                            ),
+                            const SizedBox(height: 18),
+                            Text(
+                              'Enter Buyer\'s 4-Digit Handover PIN:',
+                              style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 8),
+                            TextField(
+                              controller: _pinInputController,
+                              keyboardType: TextInputType.number,
+                              maxLength: 4,
+                              textAlign: TextAlign.center,
+                              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                              style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.w900, letterSpacing: 10),
+                              decoration: InputDecoration(
+                                counterText: '',
+                                hintText: '• • • •',
+                                hintStyle: GoogleFonts.outfit(letterSpacing: 10, color: Colors.grey[400]),
+                                filled: true,
+                                fillColor: Theme.of(context).cardColor,
+                                contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF635BFF))),
+                                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF635BFF), width: 2)),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            SizedBox(
+                              width: double.infinity,
+                              height: 48,
+                              child: ElevatedButton.icon(
+                                onPressed: _isVerifyingPin ? null : _verifyMeetupPin,
+                                icon: _isVerifyingPin
+                                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                    : const Icon(Icons.check_circle_outline, color: Colors.white),
+                                label: Text(
+                                  _isVerifyingPin ? 'Verifying PIN...' : 'Confirm Handover',
+                                  style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                                ),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF0D503C),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: SizedBox(
+                              height: 44,
+                              child: OutlinedButton(
+                                onPressed: () => _updateStatus('Disputed'),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: Colors.red,
+                                  side: BorderSide(color: Colors.red.withValues(alpha: 0.5)),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                ),
+                                child: Text('Report Issue / Dispute', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 13)),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  );
+              }
 
- else {
               return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [

@@ -944,8 +944,9 @@ const Analytics = () => {
                 <div className="flex gap-6 print-flex-row" style={{ flexWrap: 'wrap' }}>
                     <div className="card flex-col print-flex-child" style={{ flex: 1, display: 'flex', alignItems: 'center', minWidth: '300px' }}>
                         <h3 style={{ margin: '0 0 1rem 0', fontSize: '0.9rem', width: '100%', textAlign: 'left' }}>Carbon Reduction Distribution</h3>
-                        <ResponsiveContainer width="100%" height={180}>
-                            <PieChart>
+                        <div style={{ width: '100%', height: '180px', minWidth: 0 }}>
+                            <ResponsiveContainer width="100%" height={180} minWidth={0} minHeight={0}>
+                                <PieChart>
                                 <Pie
                                     data={metrics?.category_distribution || []}
                                     cx="50%"
@@ -962,6 +963,7 @@ const Analytics = () => {
                                 <Tooltip formatter={(value) => [`${Number(value).toFixed(2)} kg CO2e`, 'Carbon Saved']} />
                             </PieChart>
                         </ResponsiveContainer>
+                        </div>
                     </div>
                     <div className="card flex-col print-flex-child" style={{ flex: 1.5, minWidth: '300px' }}>
                         <h3 style={{ margin: '0 0 1rem 0', fontSize: '0.9rem' }}>Sustainability Metric Breakdown</h3>
@@ -999,8 +1001,8 @@ const Analytics = () => {
                     <div className="card flex-col" style={{ height: '320px' }}>
                         <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '0.95rem', fontWeight: 'bold' }}>Student Platform Intent Distribution</h3>
                         <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>Primary goal selected during 1st-time user onboarding</p>
-                        <div style={{ flex: 1, width: '100%' }}>
-                            <ResponsiveContainer width="100%" height={210}>
+                        <div style={{ flex: 1, width: '100%', minWidth: 0 }}>
+                            <ResponsiveContainer width="100%" height={210} minWidth={0} minHeight={0}>
                                 <PieChart>
                                     <Pie
                                         data={metrics?.onboarding?.intent_distribution || [
@@ -1031,8 +1033,8 @@ const Analytics = () => {
                     <div className="card flex-col" style={{ height: '320px' }}>
                         <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '0.95rem', fontWeight: 'bold' }}>Top Onboarding Interest Categories</h3>
                         <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>Used by ML Cold-Start engine for Day 1 personalization</p>
-                        <div style={{ flex: 1, width: '100%' }}>
-                            <ResponsiveContainer width="100%" height={210}>
+                        <div style={{ flex: 1, width: '100%', minWidth: 0 }}>
+                            <ResponsiveContainer width="100%" height={210} minWidth={0} minHeight={0}>
                                 <BarChart data={(metrics?.onboarding?.top_categories || []).slice(0, 6)} layout="vertical">
                                     <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e5e7eb" />
                                     <XAxis type="number" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#6b7280' }} />
@@ -1078,8 +1080,8 @@ const Analytics = () => {
                 {/* Sales Chart */}
                 <div className="card flex-col" style={{ height: '280px' }}>
                     <h3 style={{ margin: '0 0 1rem 0', fontSize: '0.9rem' }}>GMV Sales Trend (RM)</h3>
-                    <div style={{ flex: 1, width: '100%' }}>
-                        <ResponsiveContainer width="100%" height={220}>
+                    <div style={{ flex: 1, width: '100%', minWidth: 0 }}>
+                        <ResponsiveContainer width="100%" height={220} minWidth={0} minHeight={0}>
                             <LineChart data={metrics?.daily_sales || []}>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
                                 <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#6b7280' }} dy={10} />
@@ -1110,7 +1112,7 @@ const Analytics = () => {
                             <h3 className="chart-title">📈 Monthly User Growth</h3>
                             <p className="chart-subtitle">Monthly sign-ups of new user accounts</p>
                             <div style={{ flex: 1, width: '100%', height: '220px', minWidth: 0, position: 'relative' }}>
-                                <ResponsiveContainer width="100%" height="100%">
+                                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                                     <LineChart data={growthData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
                                         <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#6b7280' }} tickLine={false} axisLine={false} />
@@ -1129,7 +1131,7 @@ const Analytics = () => {
                             <h3 className="chart-title">💸 Revenue & Predictive Projection</h3>
                             <p className="chart-subtitle">Actual monthly earnings and linear regression trend projection</p>
                             <div style={{ flex: 1, width: '100%', height: '220px', minWidth: 0, position: 'relative' }}>
-                                <ResponsiveContainer width="100%" height="100%">
+                                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                                     <ComposedChart data={combinedEarningsData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
                                         <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#6b7280' }} tickLine={false} axisLine={false} />
@@ -1155,7 +1157,7 @@ const Analytics = () => {
                             
                             <div style={{ display: 'flex', alignItems: 'center', height: '100%', gap: '16px' }}>
                                 <div style={{ flex: 1, height: '180px', minWidth: 0, position: 'relative' }}>
-                                    <ResponsiveContainer width="100%" height="100%">
+                                    <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                                         <PieChart>
                                             <Pie 
                                                 data={orderTypeData} 

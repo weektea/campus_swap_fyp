@@ -8,7 +8,8 @@ import {
     getTransactionReceipt,
     getBookedDates,
     returnRentalAndRefundDeposit,
-    claimRentalDeposit
+    claimRentalDeposit,
+    verifyMeetupPin
 } from '../controllers/transactionController.js';
 import { authenticateToken } from '../middleware/authMiddleware.js';
 
@@ -23,5 +24,6 @@ router.patch('/:id/status', authenticateToken, updateTransactionStatus);
 router.patch('/:id/rate', authenticateToken, addRating);
 router.post('/:id/return-rental', authenticateToken, returnRentalAndRefundDeposit);
 router.post('/:id/claim-deposit', authenticateToken, claimRentalDeposit);
+router.post('/:id/verify-pin', authenticateToken, verifyMeetupPin);
 
 export default router;

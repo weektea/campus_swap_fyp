@@ -28,7 +28,7 @@ export const SocketProvider = ({ children }) => {
 
         const wsUrl = import.meta.env.VITE_WS_URL || import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:3000';
         const socketInstance = io(wsUrl, {
-            transports: ['websocket'],
+            transports: ['websocket', 'polling'],
             auth: {
                 token: token
             },

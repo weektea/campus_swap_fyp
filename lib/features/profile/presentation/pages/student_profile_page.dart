@@ -231,9 +231,9 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
                             child: Container(
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
-                                color: isDark ? Colors.teal.shade900.withOpacity(0.2) : Colors.teal.shade50,
+                                color: isDark ? Colors.teal.shade900.withValues(alpha: 0.2) : Colors.teal.shade50,
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: isDark ? Colors.teal.shade800.withOpacity(0.4) : Colors.teal.shade100),
+                                border: Border.all(color: isDark ? Colors.teal.shade800.withValues(alpha: 0.4) : Colors.teal.shade100),
                               ),
                               child: Column(
                                 children: [
@@ -257,9 +257,9 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
                             child: Container(
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
-                                color: isDark ? Colors.teal.shade900.withOpacity(0.2) : Colors.teal.shade50,
+                                color: isDark ? Colors.teal.shade900.withValues(alpha: 0.2) : Colors.teal.shade50,
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: isDark ? Colors.teal.shade800.withOpacity(0.4) : Colors.teal.shade100),
+                                border: Border.all(color: isDark ? Colors.teal.shade800.withValues(alpha: 0.4) : Colors.teal.shade100),
                               ),
                               child: Column(
                                 children: [
@@ -359,9 +359,9 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
                                 return Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                                   decoration: BoxDecoration(
-                                    color: isDark ? Colors.orange.shade900.withOpacity(0.2) : Colors.orange.shade50,
+                                    color: isDark ? Colors.orange.shade900.withValues(alpha: 0.2) : Colors.orange.shade50,
                                     borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(color: isDark ? Colors.orange.shade800.withOpacity(0.4) : Colors.orange.shade200),
+                                    border: Border.all(color: isDark ? Colors.orange.shade800.withValues(alpha: 0.4) : Colors.orange.shade200),
                                   ),
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
