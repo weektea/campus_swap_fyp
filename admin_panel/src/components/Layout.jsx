@@ -10,6 +10,7 @@ import {
     DatabaseBackup,
     Headset,
     ShieldAlert,
+    ShieldCheck,
     History as HistoryIcon,
     ShoppingCart,
     Tags,
@@ -219,6 +220,10 @@ const Layout = ({ children }) => {
                         <NavLink to="/reviews" onClick={handleNavClick} className={({isActive}) => `nav-link ${isActive ? 'active' : ''}`}>
                             <MessageSquareWarning size={20} style={{ flexShrink: 0 }} />
                             <span>User Reviews</span>
+                        </NavLink>
+                        <NavLink to="/moderation" onClick={handleNavClick} className={({isActive}) => `nav-link ${isActive ? 'active' : ''}`}>
+                            <ShieldCheck size={20} style={{ flexShrink: 0, color: '#10b981' }} />
+                            <span>Moderation Rules</span>
                         </NavLink>
                     </nav>
                 </div>

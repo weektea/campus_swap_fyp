@@ -2,6 +2,7 @@ import { Message, User, ActivityLog } from '../models/index.js';
 import { Op } from 'sequelize';
 import { emitToUser } from '../config/socket.js';
 import { createNotification } from './notificationController.js';
+import moderationService from '../services/moderationService.js';
 
 // Send Message
 export const sendMessage = async (req, res) => {
@@ -13,41 +14,24 @@ export const sendMessage = async (req, res) => {
             return res.status(400).json({ error: 'Missing details' });
         }
 
-        // Sensitive / Profane Word Filtering
-        const sensitiveWords = [
-            'whatsapp me off platform',
-            'bank transfer outside app',
-            'outside app',
-            'pay directly to my bank',
-            'direct bank transfer',
-            'fuck', 'shit', 'bitch', 'asshole'
-        ];
-
-        let filteredContent = content;
-        let hasScamPattern = false;
-
-        sensitiveWords.forEach(word => {
-            const regex = new RegExp(word.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'), 'gi');
-            if (regex.test(filteredContent)) {
-                filteredContent = filteredContent.replace(regex, '***');
-                if (word.includes('outside') || word.includes('platform') || word.includes('bank') || word.includes('transfer') || word.includes('whatsapp')) {
-                    hasScamPattern = true;
-                }
-            }
+        // 1. Dynamic Database-Backed Content Moderation & Privacy Evaluation
+        const modResult = await moderationService.evaluateContent(content, {
+            userId: sender_id,
+            sourceType: 'message'
         });
 
-        // Trigger an auto-log warning if a scam/high-risk word is detected
-        if (hasScamPattern) {
-            try {
-                await ActivityLog.create({
-                    user_id: sender_id,
-                    action: `ANOMALY: Chat Safety Warning - User [${sender_id}]: Sensitive scam pattern detected in chat.`
-                });
-            } catch (err) {
-                console.error('Failed to log chat anomaly:', err);
-            }
+        // 2. Enforce Block Policy with Friendly User Feedback
+        if (modResult.isBlocked) {
+            return res.status(400).json({
+                error: modResult.feedbackMessage || 'Message blocked: Content violates safety guidelines.',
+                code: 'MODERATION_BLOCKED',
+                categories: modResult.matchedCategories
+            });
         }
 
+        const filteredContent = modResult.sanitizedText || content;
+
+        // 3. Persist Clean / Sanitized Message
         const msg = await Message.create({ 
             sender_id, 
             receiver_id, 
@@ -74,7 +58,10 @@ export const sendMessage = async (req, res) => {
             msg.id
         );
 
-        res.status(201).json(msg);
+        res.status(201).json({
+            ...msg.toJSON(),
+            moderation_notice: modResult.feedbackMessage || null
+        });
     } catch (error) {
         console.error('Send Msg Error:', error);
         res.status(500).json({ error: 'Failed to send' });

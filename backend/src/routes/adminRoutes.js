@@ -123,6 +123,15 @@ router.put('/whitelist/:id/status', authenticateToken, isAdminOrModerator, admin
 router.delete('/whitelist/:id', authenticateToken, isAdmin, adminController.deleteStudentWhitelistEntry);
 router.get('/whitelist/export', authenticateToken, isAdminOrModerator, adminController.exportStudentWhitelistCSV);
 
+// Moderation Rules & Flagged Contents Management
+router.get('/moderation/rules', authenticateToken, isAdminOrModerator, adminController.getModerationRules);
+router.post('/moderation/rules', authenticateToken, isAdmin, adminController.createModerationRule);
+router.put('/moderation/rules/:id', authenticateToken, isAdmin, adminController.updateModerationRule);
+router.delete('/moderation/rules/:id', authenticateToken, isAdmin, adminController.deleteModerationRule);
+router.post('/moderation/test', authenticateToken, isAdminOrModerator, adminController.testModerationEngine);
+router.get('/moderation/flagged', authenticateToken, isAdminOrModerator, adminController.getFlaggedContents);
+router.put('/moderation/flagged/:id/resolve', authenticateToken, isAdminOrModerator, adminController.resolveFlaggedContent);
+
 // System Management (Admin Only)
 router.get('/system/health', authenticateToken, isAdmin, systemController.getSystemHealth);
 router.get('/system/settings', authenticateToken, isAdmin, systemController.getSystemSettings);
@@ -130,3 +139,4 @@ router.put('/system/settings', authenticateToken, isAdmin, systemController.upda
 router.put('/system/policies/:type', authenticateToken, isAdmin, systemController.updatePolicy);
 
 export default router;
+

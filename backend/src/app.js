@@ -22,6 +22,7 @@ app.use(express.json());
 // Database Connection
 import sequelize from './config/database.js';
 import { User, Product, Transaction } from './models/index.js';
+import moderationService from './services/moderationService.js';
 
 async function runProductCategoryMigration() {
     try {
@@ -698,6 +699,7 @@ if (process.env.NODE_ENV !== 'test') {
         .then(async () => {
             console.log('Database synced');
             await runProductCategoryMigration();
+            await moderationService.seedDefaultRulesIfEmpty();
             httpServer.listen(port, '0.0.0.0', () => {
                 console.log(`Server running on port ${port}`);
             });

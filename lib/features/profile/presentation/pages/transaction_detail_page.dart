@@ -22,7 +22,7 @@ class TransactionDetailPage extends StatefulWidget {
   State<TransactionDetailPage> createState() => _TransactionDetailPageState();
 }
 
-class _TransactionDetailPageState extends State<TransactionDetailPage> {
+class _TransactionDetailPageState extends State<TransactionDetailPage> with WidgetsBindingObserver {
   bool _isLoading = true;
   dynamic _transaction;
   final session = UserSession();
@@ -34,26 +34,35 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
   final TextEditingController _pinInputController = TextEditingController();
 
   @override
-  void dispose() {
-    _pinInputController.dispose();
-    SocketService().socket?.off('transaction_status_updated');
-    super.dispose();
-  }
-
-  @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _fetchTransactionDetails();
 
     // Listen for WebSocket status updates dynamically
     SocketService().socket?.on('transaction_status_updated', (data) {
       if (mounted && data != null) {
-        final txId = data['transaction_id']?.toString() ?? data['id']?.toString();
+        final txId = data['transaction_id']?.toString() ?? data['transactionId']?.toString() ?? data['id']?.toString();
         if (txId == widget.transactionId.toString()) {
           _fetchTransactionDetailsSilently();
         }
       }
     });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted) {
+      _fetchTransactionDetailsSilently();
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _pinInputController.dispose();
+    SocketService().socket?.off('transaction_status_updated');
+    super.dispose();
   }
 
   Future<void> _fetchTransactionDetailsSilently() async {
@@ -281,16 +290,31 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
         'transaction_id': widget.transactionId,
       });
 
+      if (res != null && res['already_paid'] == true) {
+        if (mounted) {
+          _fetchTransactionDetails();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Payment already verified! Handover PIN: ${res['meetup_pin']}'),
+              backgroundColor: const Color(0xFF0D503C),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+        return;
+      }
+
       if (res != null && res['url'] != null) {
         final sessionUrl = res['url'].toString();
         final sessionId = res['session_id']?.toString();
 
         final uri = Uri.parse(sessionUrl);
         if (await canLaunchUrl(uri)) {
-          await launchUrl(uri, mode: LaunchMode.externalApplication);
+          await launchUrl(uri, mode: LaunchMode.inAppBrowserView);
         }
 
         if (mounted) {
+          _fetchTransactionDetails(); // Auto-refresh order status and PIN
           _showStripePaymentCompletionDialog(sessionId);
         }
       }
@@ -607,7 +631,14 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
     final otherParty = isBuying ? _transaction['seller'] : _transaction['buyer'];
     final status = _transaction['status'];
     final productImg = product['image_urls'] != null && (product['image_urls'] as List).isNotEmpty ? product['image_urls'][0] : '';
-    final String otherPartyName = otherParty['full_name'] ?? (otherParty['username'] != null ? '@${otherParty['username']}' : 'Unknown User');
+    final String otherPartyName = otherParty != null ? (otherParty['full_name'] ?? (otherParty['username'] != null ? '@${otherParty['username']}' : 'Unknown User')) : 'Unknown User';
+    final String? proofUrl = _transaction['payment_proof_url']?.toString();
+    final bool isProofImage = proofUrl != null && 
+        (proofUrl.startsWith('/uploads/') || proofUrl.startsWith('http://') || proofUrl.startsWith('https://')) &&
+        !proofUrl.toLowerCase().contains('stripe') &&
+        !proofUrl.toLowerCase().contains('escrow');
+    final String selectedMethod = _transaction['selected_payment_method']?.toString() ?? 'Cash';
+    final bool isStripeOrder = selectedMethod.toLowerCase().contains('stripe') || selectedMethod.toLowerCase().contains('card') || _transaction['stripe_payment_status'] == 'paid';
 
     return Scaffold(
       appBar: AppBar(
@@ -830,11 +861,11 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
                 )
              ),
             
-            // Permanent Handover / Payment Proof Record Card (Shown for Completed, Disputed, On Rent status)
-            if (_transaction['payment_proof_url'] != null && status != 'To Confirm') ...[
+            // Permanent Handover / Payment Proof Record Card (Shown only for real uploaded images in manual transfer/cash orders)
+            if (!isStripeOrder && isProofImage && status != 'To Confirm') ...[
               const SizedBox(height: 24),
               Text(
-                (_transaction['selected_payment_method']?.toString() ?? 'Cash') == 'Cash'
+                selectedMethod == 'Cash'
                     ? 'Handover Proof Record'
                     : 'Payment Receipt Record',
                 style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold)
@@ -856,7 +887,7 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
                         const Icon(Icons.verified_outlined, size: 16, color: Colors.teal),
                         const SizedBox(width: 6),
                         Text(
-                          (_transaction['selected_payment_method']?.toString() ?? 'Cash') == 'Cash'
+                          selectedMethod == 'Cash'
                               ? 'Permanent Handover Evidence'
                               : 'Permanent Payment Transfer Evidence',
                           style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.teal),
@@ -867,7 +898,7 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
                     ClipRRect(
                       borderRadius: BorderRadius.circular(10),
                       child: Image.network(
-                        '${ApiClient.baseUrl.replaceAll('/api', '')}${_transaction['payment_proof_url']}',
+                        '${ApiClient.baseUrl.replaceAll('/api', '')}$proofUrl',
                         width: double.infinity,
                         height: 220,
                         fit: BoxFit.cover,
@@ -1426,185 +1457,201 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
 
       if (status == 'Scheduled') {
           final String paymentMethod = _transaction['selected_payment_method']?.toString() ?? 'Cash';
+          final bool isStripe = paymentMethod.toLowerCase().contains('stripe') || paymentMethod.toLowerCase().contains('card') || paymentMethod.toLowerCase().contains('escrow');
           final bool isCash = paymentMethod == 'Cash';
           final String proofTitle = isCash ? "Upload Handover Proof (Item Photo)" : "Upload Payment Receipt";
           final String proofHelper = isCash 
               ? "Please take a photo of the received item at the meetup zone to confirm successful handover." 
-              : "Please upload a screenshot of your successful transfer.";
-          final String proofHint = isCash ? "Click to upload handover photo" : "Click to upload payment receipt";
+              : "Please upload a screenshot of your successful $paymentMethod transfer.";
+          final String proofHint = isCash ? "Click to upload handover photo" : "Click to upload $paymentMethod payment receipt";
           final IconData proofIcon = isCash ? Icons.camera_alt_outlined : Icons.upload_file_outlined;
 
           if (isBuying) {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // --- Option 1: Stripe Escrow Payment (Instant Escrow + PIN) ---
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(18),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          const Color(0xFF635BFF).withValues(alpha: 0.12),
-                          const Color(0xFF00D4FF).withValues(alpha: 0.08),
-                        ],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFF635BFF).withValues(alpha: 0.35)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF635BFF),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: const Icon(Icons.shield_rounded, color: Colors.white, size: 20),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Campus Swap Escrow Protection',
-                                    style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 15),
-                                  ),
-                                  Text(
-                                    'Secure online card payment with 4-digit Meetup PIN handover',
-                                    style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey[600]),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 14),
-                        SizedBox(
-                          width: double.infinity,
-                          height: 48,
-                          child: ElevatedButton.icon(
-                            onPressed: _isPayingWithStripe ? null : _payWithStripe,
-                            icon: _isPayingWithStripe
-                                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                                : const Icon(Icons.credit_card_rounded, color: Colors.white),
-                            label: Text(
-                              _isPayingWithStripe ? 'Opening Stripe Checkout...' : 'Pay with Stripe (Secure Escrow)',
-                              style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
-                            ),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF635BFF),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                              elevation: 2,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 20),
-                  Row(
-                    children: [
-                      const Expanded(child: Divider()),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        child: Text(
-                          'OR CASH / MANUAL RECEIPT',
-                          style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey[500], letterSpacing: 1),
-                        ),
-                      ),
-                      const Expanded(child: Divider()),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.blue.withValues(alpha: 0.2)),
-                    ),
-                    child: Text(
-                      isCash 
-                          ? 'Please take a photo of the received item at the meetup zone to confirm handover (Optional).'
-                          : 'Please upload payment receipt to proceed to the next step.',
-                      style: GoogleFonts.outfit(color: Colors.blue[800]),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(proofTitle, style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 4),
-                  Text(proofHelper, style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey[600])),
-                  const SizedBox(height: 10),
-                  GestureDetector(
-                    onTap: _isUploadingProof ? null : () => _showPhotoSourcePicker(context),
-                    child: Container(
+                  if (isStripe) ...[
+                    // --- Dedicated Online Stripe Escrow Payment Block ---
+                    Container(
                       width: double.infinity,
-                      height: 140,
+                      padding: const EdgeInsets.all(18),
                       decoration: BoxDecoration(
-                        color: Colors.grey.withValues(alpha: 0.05),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.grey.withValues(alpha: 0.3)),
+                        gradient: LinearGradient(
+                          colors: [
+                            const Color(0xFF635BFF).withValues(alpha: 0.12),
+                            const Color(0xFF00D4FF).withValues(alpha: 0.08),
+                          ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFF635BFF).withValues(alpha: 0.35)),
                       ),
-                      child: _isUploadingProof
-                          ? const Center(child: CircularProgressIndicator())
-                          : _uploadedProofUrl != null
-                              ? ClipRRect(
-                                  borderRadius: BorderRadius.circular(12),
-                                  child: Image.network(
-                                    '${ApiClient.baseUrl.replaceAll('/api', '')}$_uploadedProofUrl',
-                                    fit: BoxFit.cover,
-                                  ),
-                                )
-                              : Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF635BFF),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Icon(Icons.shield_rounded, color: Colors.white, size: 20),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Icon(proofIcon, color: Colors.grey[600], size: 30),
-                                    const SizedBox(height: 6),
-                                    Text(proofHint, style: GoogleFonts.outfit(color: Colors.grey[600], fontSize: 13)),
+                                    Text(
+                                      'Campus Swap Escrow Protection',
+                                      style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 15),
+                                    ),
+                                    Text(
+                                      'Secure online card payment with 4-digit Meetup PIN handover',
+                                      style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey[600]),
+                                    ),
                                   ],
                                 ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 14),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 48,
+                            child: ElevatedButton.icon(
+                              onPressed: _isPayingWithStripe ? null : _payWithStripe,
+                              icon: _isPayingWithStripe
+                                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                  : const Icon(Icons.credit_card_rounded, color: Colors.white),
+                              label: Text(
+                                _isPayingWithStripe ? 'Opening Stripe Checkout...' : 'Pay with Stripe (Secure Escrow)',
+                                style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF635BFF),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                elevation: 2,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 48,
-                    child: ElevatedButton(
-                      onPressed: () {
-                          if (!isCash && _uploadedProofUrl == null) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: const Text('Please upload a screenshot of your successful transfer first!'),
-                                  backgroundColor: Theme.of(context).colorScheme.error,
-                                  behavior: SnackBarBehavior.floating,
+                    const SizedBox(height: 12),
+                  ] else ...[
+                    // --- Dedicated Manual Transfer (TNG / Bank Transfer) or Cash Block ---
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: isCash ? Colors.amber.withValues(alpha: 0.1) : Colors.blue.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: isCash ? Colors.amber.withValues(alpha: 0.3) : Colors.blue.withValues(alpha: 0.2)),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            isCash ? Icons.money_outlined : (paymentMethod == 'TNG' ? Icons.account_balance_wallet_outlined : Icons.account_balance_outlined),
+                            color: isCash ? Colors.amber[900] : Colors.blue[800],
+                            size: 24,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Payment Method: $paymentMethod',
+                                  style: GoogleFonts.outfit(
+                                    fontWeight: FontWeight.bold, 
+                                    fontSize: 14, 
+                                    color: isCash ? Colors.amber[900] : Colors.blue[900]
+                                  ),
                                 ),
-                              );
-                              return;
-                          }
-                          final extra = _uploadedProofUrl != null ? {'payment_proof_url': _uploadedProofUrl} : null;
-                          _updateStatus('To Confirm', extra);
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Theme.of(context).colorScheme.primary,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
-                      ),
-                      child: Text(
-                        isCash ? 'Confirm Handover & Proceed' : 'Submit Payment Receipt', 
-                        style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)
+                                const SizedBox(height: 4),
+                                Text(
+                                  isCash
+                                      ? 'Please prepare exact cash of RM ${_transaction['amount'] ?? '0.00'} and hand it to the seller during meetup.'
+                                      : 'Please transfer RM ${_transaction['amount'] ?? '0.00'} to the seller via $paymentMethod, then upload your transfer receipt below.',
+                                  style: GoogleFonts.outfit(color: isCash ? Colors.amber[900] : Colors.blue[800], fontSize: 13),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
+                    const SizedBox(height: 16),
+                    Text(proofTitle, style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 4),
+                    Text(proofHelper, style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey[600])),
+                    const SizedBox(height: 10),
+                    GestureDetector(
+                      onTap: _isUploadingProof ? null : () => _showPhotoSourcePicker(context),
+                      child: Container(
+                        width: double.infinity,
+                        height: 140,
+                        decoration: BoxDecoration(
+                          color: Colors.grey.withValues(alpha: 0.05),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.grey.withValues(alpha: 0.3)),
+                        ),
+                        child: _isUploadingProof
+                            ? const Center(child: CircularProgressIndicator())
+                            : _uploadedProofUrl != null
+                                ? ClipRRect(
+                                    borderRadius: BorderRadius.circular(12),
+                                    child: Image.network(
+                                      '${ApiClient.baseUrl.replaceAll('/api', '')}$_uploadedProofUrl',
+                                      fit: BoxFit.cover,
+                                    ),
+                                  )
+                                : Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(proofIcon, color: Colors.grey[600], size: 30),
+                                      const SizedBox(height: 6),
+                                      Text(proofHint, style: GoogleFonts.outfit(color: Colors.grey[600], fontSize: 13)),
+                                    ],
+                                  ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: ElevatedButton(
+                        onPressed: () {
+                            if (!isCash && _uploadedProofUrl == null) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: const Text('Please upload a screenshot of your successful transfer first!'),
+                                    backgroundColor: Theme.of(context).colorScheme.error,
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
+                                return;
+                            }
+                            final extra = _uploadedProofUrl != null ? {'payment_proof_url': _uploadedProofUrl} : null;
+                            _updateStatus('To Confirm', extra);
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Theme.of(context).colorScheme.primary,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
+                        ),
+                        child: Text(
+                          isCash ? 'Confirm Handover & Proceed' : 'Submit Payment Receipt', 
+                          style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
                   SizedBox(
                     width: double.infinity,
                     height: 48,
@@ -1678,6 +1725,11 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
           final bool isCash = paymentMethod == 'Cash';
           final String? meetupPin = _transaction['meetup_pin']?.toString();
           final bool hasStripe = paymentMethod == 'Stripe' || _transaction['stripe_payment_status'] == 'paid' || meetupPin != null;
+          final String? proofUrl = _transaction['payment_proof_url']?.toString();
+          final bool isProofImg = proofUrl != null && 
+              (proofUrl.startsWith('/uploads/') || proofUrl.startsWith('http://') || proofUrl.startsWith('https://')) &&
+              !proofUrl.toLowerCase().contains('stripe') &&
+              !proofUrl.toLowerCase().contains('escrow');
 
           if (isBuying) {
               if (meetupPin != null && meetupPin.isNotEmpty) {
@@ -1822,7 +1874,7 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
                           ),
                       ),
                       const SizedBox(height: 16),
-                      if (_transaction['payment_proof_url'] != null) ...[
+                      if (isProofImg) ...[
                           Text(
                               isCash ? 'Your Submitted Handover Photo:' : 'Your Submitted Payment Receipt:', 
                               style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.bold)
@@ -1831,7 +1883,7 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
                           ClipRRect(
                               borderRadius: BorderRadius.circular(12),
                               child: Image.network(
-                                  '${ApiClient.baseUrl.replaceAll('/api', '')}${_transaction['payment_proof_url']}',
+                                  '${ApiClient.baseUrl.replaceAll('/api', '')}$proofUrl',
                                   width: double.infinity,
                                   height: 220,
                                   fit: BoxFit.cover,
@@ -1989,13 +2041,13 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
                           ),
                       ),
                       const SizedBox(height: 16),
-                      if (_transaction['payment_proof_url'] != null) ...[
+                      if (isProofImg) ...[
                           Text(isCash ? 'Uploaded Handover Photo (Item Photo):' : 'Uploaded Payment Receipt:', style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.bold)),
                           const SizedBox(height: 8),
                           ClipRRect(
                               borderRadius: BorderRadius.circular(12),
                               child: Image.network(
-                                  '${ApiClient.baseUrl.replaceAll('/api', '')}${_transaction['payment_proof_url']}',
+                                  '${ApiClient.baseUrl.replaceAll('/api', '')}$proofUrl',
                                   width: double.infinity,
                                   height: 220,
                                   fit: BoxFit.cover,
@@ -2057,9 +2109,9 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
     String text = 'Held';
 
     if (status == 'Waived') {
-      bg = Colors.blue.withValues(alpha: 0.1);
-      fg = Colors.blue[800]!;
-      text = 'Waived (High Trust)';
+      bg = Colors.grey.withValues(alpha: 0.1);
+      fg = Colors.grey[800]!;
+      text = 'Waived (RM 0.00)';
     } else if (status == 'Refunded') {
       bg = Colors.green.withValues(alpha: 0.1);
       fg = Colors.green[800]!;

@@ -1,6 +1,10 @@
 import { DataTypes } from 'sequelize';
 import sequelize from '../config/database.js';
 
+/**
+ * Follow Model
+ * Manages user following relationships (follower and following user IDs).
+ */
 const Follow = sequelize.define('Follow', {
     follow_id: {
         type: DataTypes.UUID,

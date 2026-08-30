@@ -151,15 +151,45 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
     try {
       final apiClient = ApiClient();
-      await apiClient.post('/messages', {
+      final res = await apiClient.post('/messages', {
         'receiver_id': widget.otherUserId,
         'content': content
       });
-      // Optionally refresh to confirm sync
-    } catch (e) {
-      // print('Send error: $e');
+      
+      if (res != null && res['moderation_notice'] != null && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(res['moderation_notice'].toString()),
+            backgroundColor: Colors.orange[800],
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    } on ApiException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to send')));
+        setState(() {
+          if (_messages.isNotEmpty) {
+            _messages.removeLast();
+          }
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.message),
+            backgroundColor: Theme.of(context).colorScheme.error,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          if (_messages.isNotEmpty) {
+            _messages.removeLast();
+          }
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to send message')),
+        );
       }
     }
   }

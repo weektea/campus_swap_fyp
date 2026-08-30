@@ -6,13 +6,15 @@ description: Start the Full Stack Application
 
 This workflow helps you start all components of the system.
 
-## 1. Start Support Services (Backend & ML)
+## Start Support Services (Backend & ML)
 
 ### Backend (Node.js)
 Open a terminal and run:
 ```powershell
 cd backend
 npm install
+
+docker-compose up -d
 npm run dev
 ```
 
@@ -24,9 +26,13 @@ cd ml_service
 uvicorn main:app --host 0.0.0.0 --port 5000 --reload
 ```
 
-## 2. Start the Frontend (Flutter)
 
-Open a terminal in the root directory and run:
-```powershell
-flutter run
-```
+# Admin & Moderator - Panel
+1. cd admin_panel
+2. npm install (if not yet install)
+3. npm run dev
+
+# Email:
+admin@campus.edu.my
+# Password:
+Admin@123

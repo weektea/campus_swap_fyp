@@ -5,10 +5,7 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:image_picker/image_picker.dart';
 import 'package:campus_swap/core/session/user_session.dart';
-import 'package:campus_swap/core/services/socket_service.dart';
-import 'package:campus_swap/core/services/notification_service.dart';
 import 'package:campus_swap/main.dart' show navigatorKey;
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart';
 import 'package:campus_swap/features/auth/presentation/pages/login_page.dart';
 
@@ -178,15 +175,8 @@ class ApiClient {
     // Prevent multiple concurrent redirects
     if (!UserSession().isLoggedIn) return;
 
-    // Disconnect socket & stop polling
-    SocketService().disconnect();
-    NotificationService().stopPolling();
-    UserSession().clear();
-    
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('auto_login', false);
-    } catch (_) {}
+    // Disconnect socket, stop polling, and clear persistent storage
+    await UserSession().clearStorage();
 
     // Show a dialog on the current UI navigator context and redirect to login screen
     final context = navigatorKey.currentContext;

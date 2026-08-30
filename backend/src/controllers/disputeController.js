@@ -25,7 +25,6 @@ const rollbackCarbonPoints = async (transaction) => {
                 co2Saved = 2.5; // fallback
             }
         }
-
         if (transaction.buyer_id === transaction.seller_id) {
             await User.decrement(
                 { items_reused: 1, total_carbon_saved: co2Saved, carbon_saved_buyer: co2Saved, carbon_saved_seller: co2Saved },
@@ -220,7 +219,8 @@ export const arbitrateDispute = async (req, res) => {
             await transaction.save();
 
             // Auto-trigger Stripe refund if paid via Stripe Escrow
-            if (transaction.stripe_payment_intent_id && transaction.stripe_payment_status !== 'refunded') {
+            const isStripePaid = !!(transaction.stripe_payment_intent_id || transaction.stripe_session_id || transaction.selected_payment_method === 'Stripe');
+            if (isStripePaid && transaction.stripe_payment_status !== 'refunded') {
                 console.log(`[Dispute Arbitration] Refunding Buyer via Stripe Escrow for Transaction #${transaction.id}...`);
                 await processStripeRefund(transaction, 'fraudulent');
             }

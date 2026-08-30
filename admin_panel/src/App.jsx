@@ -16,6 +16,7 @@ import Transactions from './pages/Transactions';
 import Categories from './pages/Categories';
 import Faculties from './pages/Faculties';
 import Reviews from './pages/Reviews';
+import Moderation from './pages/Moderation';
 import PopularListings from './pages/PopularListings';
 import MLModels from './pages/MLModels';
 
@@ -174,6 +175,14 @@ function App() {
           <PrivateRoute>
             <Layout>
               <Reviews />
+            </Layout>
+          </PrivateRoute>
+        } />
+
+        <Route path="/moderation" element={
+          <PrivateRoute>
+            <Layout>
+              <Moderation />
             </Layout>
           </PrivateRoute>
         } />

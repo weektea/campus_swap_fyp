@@ -38,7 +38,7 @@ class _EditListingPageState extends State<EditListingPage> {
   final List<String> _conditions = ['New', 'Like New', 'Good', 'Fair', 'Poor'];
   final List<String> _statuses = ['Available', 'Reserved', 'Suspended']; // Removed Sold to prevent manual sold marking without transaction
   
-  final List<String> _paymentMethods = ['Cash', 'TNG', 'Bank Transfer'];
+  final List<String> _paymentMethods = ['Cash', 'TNG', 'Bank Transfer', 'Online Card (Stripe)'];
   late List<String> _selectedPaymentMethods;
   
   bool _isSubmitting = false;

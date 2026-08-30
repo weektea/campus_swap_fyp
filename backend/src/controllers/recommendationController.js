@@ -221,25 +221,42 @@ export const getRecommendations = async (req, res) => {
         
         // Fetch base interactions
         let userInteractions = [];
+        let recentViewedProductIds = [];
         if (user_id) {
             const userInteractionsDb = await UserInteraction.findAll({
-                where: { user_id }
+                where: { user_id },
+                order: [['createdAt', 'DESC']],
+                limit: 100
             });
             userInteractions = userInteractionsDb.map(i => ({
                 user_id: i.user_id,
                 product_id: i.product_id,
-                weight: parseFloat(i.weight) || 1.0
+                weight: parseFloat(i.weight) || 1.0,
+                interaction_type: i.interaction_type || 'view',
+                created_at: i.createdAt ? i.createdAt.toISOString() : null
             }));
+
+            // Extract recent view product IDs in chronological recency order
+            userInteractionsDb.forEach(i => {
+                if (i.interaction_type === 'view' && !recentViewedProductIds.includes(i.product_id)) {
+                    recentViewedProductIds.push(i.product_id);
+                }
+            });
         }
 
-        // Dynamically merge session interactions (weight 1.0)
+        // Dynamically merge session interactions (weight 1.0) as most recent views
         sessionProductIds.forEach(pid => {
+            if (!recentViewedProductIds.includes(pid)) {
+                recentViewedProductIds.unshift(pid);
+            }
             const exists = userInteractions.some(i => i.product_id === pid);
             if (!exists) {
                 userInteractions.push({
                     user_id: user_id || 'guest',
                     product_id: pid,
-                    weight: 1.0
+                    weight: 1.0,
+                    interaction_type: 'view',
+                    created_at: new Date().toISOString()
                 });
             }
         });
@@ -379,7 +396,8 @@ export const getRecommendations = async (req, res) => {
                 followed_seller_ids: followedSellerIds,
                 followed_interacted_product_ids: followedInteractedProductIds,
                 preference_tags: userPrefTags,
-                primary_intent: userPrimaryIntent
+                primary_intent: userPrimaryIntent,
+                recent_viewed_product_ids: recentViewedProductIds
             }, { timeout: 4000 });
 
             recommendedIds = pythonRes.data.recommended_product_ids || [];

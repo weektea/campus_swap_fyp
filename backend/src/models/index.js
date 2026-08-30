@@ -112,6 +112,8 @@ import ActivityLog from './ActivityLog.js';
 import BroadcastRequest from './BroadcastRequest.js';
 import Faculty from './Faculty.js';
 import StudentWhitelist from './StudentWhitelist.js';
+import ModerationRule from './ModerationRule.js';
+import FlaggedContent from './FlaggedContent.js';
 
 User.hasMany(ActivityLog, { foreignKey: 'user_id', as: 'activity_logs' });
 ActivityLog.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
@@ -120,9 +122,19 @@ User.hasMany(BroadcastRequest, { foreignKey: 'requested_by', as: 'broadcast_requ
 BroadcastRequest.belongsTo(User, { foreignKey: 'requested_by', as: 'requestedBy' });
 BroadcastRequest.belongsTo(User, { foreignKey: 'reviewed_by', as: 'reviewedBy' });
 
+// Moderation Rules & Flagged Contents
+User.hasMany(FlaggedContent, { foreignKey: 'user_id', as: 'flagged_contents' });
+FlaggedContent.belongsTo(User, { foreignKey: 'user_id', as: 'offender' });
+User.hasMany(FlaggedContent, { foreignKey: 'reviewed_by', as: 'reviewed_flagged_contents' });
+FlaggedContent.belongsTo(User, { foreignKey: 'reviewed_by', as: 'reviewer' });
+ModerationRule.hasMany(FlaggedContent, { foreignKey: 'matched_rule_id', as: 'triggered_flagged_contents' });
+FlaggedContent.belongsTo(ModerationRule, { foreignKey: 'matched_rule_id', as: 'rule' });
+
 export { 
     User, Product, Transaction, SavedItem, Message, Review, 
     Notification, UserInteraction, Category, SubCategory, 
     Report, SupportTicket, Dispute, SafeMeetupZone, BackupLog, TicketMessage, ActivityLog,
-    Follow, SystemSetting, PlatformPolicy, BroadcastRequest, Faculty, StudentWhitelist
+    Follow, SystemSetting, PlatformPolicy, BroadcastRequest, Faculty, StudentWhitelist,
+    ModerationRule, FlaggedContent
 };
+

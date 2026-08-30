@@ -37,17 +37,52 @@ class UserSession {
   Future<void> saveToStorage() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      if (token != null) await prefs.setString('jwt_token', token!);
-      if (userId != null) await prefs.setString('user_id', userId!);
-      if (email != null) await prefs.setString('user_email', email!);
-      if (username != null) await prefs.setString('user_name', username!);
-      if (fullName != null) await prefs.setString('user_fullname', fullName!);
-      if (avatarUrl != null) await prefs.setString('user_avatar', avatarUrl!);
-      if (role != null) await prefs.setString('user_role', role!);
+      if (token != null && token!.isNotEmpty) {
+        await prefs.setString('jwt_token', token!);
+      } else {
+        await prefs.remove('jwt_token');
+      }
+
+      if (userId != null && userId!.isNotEmpty) {
+        await prefs.setString('user_id', userId!);
+      } else {
+        await prefs.remove('user_id');
+      }
+
+      if (email != null && email!.isNotEmpty) {
+        await prefs.setString('user_email', email!);
+      } else {
+        await prefs.remove('user_email');
+      }
+
+      if (username != null && username!.isNotEmpty) {
+        await prefs.setString('user_name', username!);
+      } else {
+        await prefs.remove('user_name');
+      }
+
+      if (fullName != null && fullName!.isNotEmpty) {
+        await prefs.setString('user_fullname', fullName!);
+      } else {
+        await prefs.remove('user_fullname');
+      }
+
+      if (avatarUrl != null && avatarUrl!.isNotEmpty) {
+        await prefs.setString('user_avatar', avatarUrl!);
+      } else {
+        await prefs.remove('user_avatar');
+      }
+
+      if (role != null && role!.isNotEmpty) {
+        await prefs.setString('user_role', role!);
+      } else {
+        await prefs.remove('user_role');
+      }
+
       await prefs.setBool('user_is_onboarded', isOnboarded);
       await prefs.setString('user_primary_intent', primaryIntent);
       await prefs.setStringList('user_preference_tags', preferenceTags);
-      await prefs.setBool('auto_login', true);
+      await prefs.setBool('auto_login', isLoggedIn);
     } catch (e) {
       debugPrint('Error saving session to storage: $e');
     }

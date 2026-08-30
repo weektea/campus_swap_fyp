@@ -10,7 +10,8 @@ const ML_SERVICE_URL = process.env.ML_SERVICE_URL || 'http://localhost:5000';
 
 export const createProduct = async (req, res) => {
     try {
-        const { title, description, price, category, sub_category_id, condition, seller_id, image_urls, video_url, type, rental_price_per_day, max_rental_duration, rental_deposit, accepted_payment_methods } = req.body;
+        const { title, description, price, category, sub_category_id, condition, seller_id,
+        image_urls, video_url, type, rental_price_per_day, max_rental_duration, rental_deposit, accepted_payment_methods } = req.body;
 
         // Basic validation
         if (!title || !seller_id || (price === undefined && !rental_price_per_day)) {
@@ -62,7 +63,8 @@ export const createProduct = async (req, res) => {
             rental_price_per_day,
             max_rental_duration,
             rental_deposit,
-            accepted_payment_methods: (accepted_payment_methods && Array.isArray(accepted_payment_methods) && accepted_payment_methods.length > 0) ? accepted_payment_methods : ['Cash']
+            accepted_payment_methods: (accepted_payment_methods && Array.isArray
+            (accepted_payment_methods) && accepted_payment_methods.length > 0) ? accepted_payment_methods : ['Cash']
         });
 
         // Background task for ML Continuous Learning

@@ -57,10 +57,8 @@ export const createTransaction = async (req, res) => {
         }
 
         // UC17 Rental Constraints
-        let { rental_start_date, rental_end_date, co_renter_username } = req.body;
+        let { rental_start_date, rental_end_date } = req.body;
         let rentType = 'Short-term';
-        let grpSize = 1;
-        let coRenterId = null;
         let depositAmount = 0.0;
         let depositStatus = 'Waived';
 
@@ -113,42 +111,11 @@ export const createTransaction = async (req, res) => {
                 subtotal = subtotal * 0.7; // flat 30% Academic Discount
             }
 
-            // 2. Shared Rental check
-            if (co_renter_username && co_renter_username.trim()) {
-                const cleanUsername = co_renter_username.trim();
-                const coRenter = await User.findOne({ where: { username: cleanUsername } });
-                if (!coRenter) {
-                    return res.status(400).json({ error: `Co-renter username '${cleanUsername}' not found.` });
-                }
-
-                // Verify co-renter is not the buyer themselves
-                if (coRenter.id === buyer_id) {
-                    return res.status(400).json({ error: 'You cannot share a rental with yourself.' });
-                }
-
-                rentType = 'Shared';
-                grpSize = 2;
-                coRenterId = coRenter.id;
-            }
-
-            const buyer = await User.findByPk(buyer_id);
             let deposit = product.rental_deposit ? parseFloat(product.rental_deposit) : 0.0;
-            if (buyer && parseFloat(buyer.reputation_score || 5.0) >= 4.8) {
-                deposit = 0.0;
-                depositStatus = 'Waived';
-            } else {
-                depositStatus = deposit > 0 ? 'Held' : 'Waived';
-            }
+            depositStatus = deposit > 0 ? 'Held' : 'Waived';
             depositAmount = deposit;
 
-            // Shared logic: Only split rental fee (subtotal), hold full deposit
-            let finalAmount = 0.0;
-            if (rentType === 'Shared') {
-                finalAmount = (subtotal / 2.0) + deposit;
-            } else {
-                finalAmount = subtotal + deposit;
-            }
-
+            const finalAmount = subtotal + deposit;
             amount = finalAmount.toFixed(2);
         }
 
@@ -180,8 +147,6 @@ export const createTransaction = async (req, res) => {
             status: 'Pending',
             selected_payment_method,
             rental_type: rentType,
-            group_size: grpSize,
-            co_renter_id: coRenterId,
             deposit_amount: depositAmount.toFixed(2),
             deposit_status: depositStatus
         });
@@ -623,7 +588,8 @@ export const updateTransactionStatus = async (req, res) => {
                 console.log(`[Deposit Management & Late Penalties]${lateMessage} Refundable Deposit: RM ${netRefund.toFixed(2)} returned to Buyer. Rental Fee + Penalty: RM ${netRentalFee.toFixed(2)} sent to Seller.`);
 
                 // Dynamic Stripe Deposit Refund (Clean vs Late Return)
-                if (transaction.stripe_payment_intent_id && netRefund > 0) {
+                const isStripePaid = !!(transaction.stripe_payment_intent_id || transaction.stripe_session_id || transaction.selected_payment_method === 'Stripe');
+                if (isStripePaid && netRefund > 0) {
                     await processStripeRefund(transaction, 'requested_by_customer', Math.round(netRefund * 100));
                 }
 
@@ -742,7 +708,8 @@ export const updateTransactionStatus = async (req, res) => {
             }
 
             // If order was paid via Stripe Escrow, automatically issue full Stripe refund
-            if (transaction.stripe_payment_intent_id && transaction.stripe_payment_status !== 'refunded') {
+            const isStripePaid = !!(transaction.stripe_payment_intent_id || transaction.stripe_session_id || transaction.selected_payment_method === 'Stripe');
+            if (isStripePaid && transaction.stripe_payment_status !== 'refunded') {
                 console.log(`[Cancel Auto-Refund] Processing Stripe Escrow Refund for Transaction #${transaction.id}...`);
                 await processStripeRefund(transaction, 'requested_by_customer');
             }
@@ -753,7 +720,7 @@ export const updateTransactionStatus = async (req, res) => {
                 ? `Buyer has cancelled their order for "${productTitle}".` 
                 : `Seller has declined your request for "${productTitle}".`;
 
-            if (transaction.stripe_payment_intent_id) {
+            if (isStripePaid) {
                 cancelMsg += ' (Stripe Escrow payment has been automatically refunded to buyer\'s card).';
             }
 
@@ -1150,7 +1117,8 @@ export const returnRentalAndRefundDeposit = async (req, res) => {
         console.log(`[Rental Return & Deposit]${lateMessage} Deposit: RM ${deposit.toFixed(2)}, Penalty: RM ${penalty.toFixed(2)}, Net Refund to Buyer: RM ${netRefund.toFixed(2)}.`);
 
         // Dynamic Stripe Deposit Refund
-        if (transaction.stripe_payment_intent_id && netRefund > 0) {
+        const isStripePaid = !!(transaction.stripe_payment_intent_id || transaction.stripe_session_id || transaction.selected_payment_method === 'Stripe');
+        if (isStripePaid && netRefund > 0) {
             await processStripeRefund(transaction, 'requested_by_customer', Math.round(netRefund * 100));
         }
 

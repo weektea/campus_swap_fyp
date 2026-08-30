@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:campus_swap/core/api/api_client.dart';
 import 'package:campus_swap/core/session/user_session.dart';
 import 'package:campus_swap/features/auth/presentation/pages/login_page.dart';
-import 'package:campus_swap/core/services/socket_service.dart';
 import 'package:campus_swap/core/services/notification_service.dart';
 import 'package:campus_swap/features/profile/presentation/pages/my_listings_page.dart';
 import 'package:campus_swap/features/profile/presentation/pages/my_purchases_page.dart';
@@ -54,9 +52,7 @@ class _ProfilePageState extends State<ProfilePage> {
           if (resData != null && resData['user'] != null) {
               final userData = resData['user'];
               setState(() {
-                  if (userData['profile_image_url'] != null) {
-                      session.avatarUrl = userData['profile_image_url'];
-                  }
+                  session.avatarUrl = userData['profile_image_url'];
                   if (userData['username'] != null) {
                       session.username = userData['username'];
                   }
@@ -86,6 +82,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       _outstandingFees = double.tryParse(userData['total_outstanding_fees'].toString()) ?? 0.0;
                   }
               });
+              await session.saveToStorage();
           }
       } catch (e) {
           debugPrint('Error fetching profile: $e');
@@ -139,6 +136,7 @@ class _ProfilePageState extends State<ProfilePage> {
               session.avatarUrl = imageUrl;
               _isUploading = false;
           });
+          await session.saveToStorage();
           
           if (mounted) {
              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Avatar Updated!')));
@@ -253,12 +251,12 @@ class _ProfilePageState extends State<ProfilePage> {
               child: CircleAvatar(
                 radius: 45,
                 backgroundColor: theme.colorScheme.primary,
-                backgroundImage: session.avatarUrl != null 
+                backgroundImage: (session.avatarUrl != null && session.avatarUrl!.isNotEmpty)
                     ? NetworkImage('${ApiClient.baseUrl.replaceAll('/api', '')}${session.avatarUrl}') 
                     : null,
                 child: _isUploading 
                   ? CircularProgressIndicator(color: theme.colorScheme.onPrimary)
-                  : (session.avatarUrl == null ? Icon(Icons.person, size: 45, color: theme.colorScheme.onPrimary) : null),
+                  : ((session.avatarUrl == null || session.avatarUrl!.isEmpty) ? Icon(Icons.person, size: 45, color: theme.colorScheme.onPrimary) : null),
               ),
             ),
             const SizedBox(height: 8),
@@ -499,11 +497,7 @@ class _ProfilePageState extends State<ProfilePage> {
               if (confirm == true) {
                 // Clear session & FCM device token on backend
                 await NotificationService().clearFcmToken();
-                SocketService().disconnect();
-                NotificationService().stopPolling();
-                UserSession().clear();
-                final prefs = await SharedPreferences.getInstance();
-                await prefs.setBool('auto_login', false);
+                await UserSession().clearStorage();
 
                 if (context.mounted) {
                   Navigator.pushAndRemoveUntil(

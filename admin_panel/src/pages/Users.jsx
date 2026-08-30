@@ -254,7 +254,7 @@ const Users = () => {
                         borderBottom: viewTab === 'active' ? '2px solid var(--primary)' : 'none',
                         padding: '4px 12px', cursor: 'pointer'
                     }}
-                    onClick={() => setViewTab('active')}
+                    onClick={() => { setViewTab('active'); setCurrentPage(1); }}
                 >
                     Active Directory
                 </button>
@@ -266,7 +266,7 @@ const Users = () => {
                         borderBottom: viewTab === 'archived' ? '2px solid var(--primary)' : 'none',
                         padding: '4px 12px', cursor: 'pointer'
                     }}
-                    onClick={() => setViewTab('archived')}
+                    onClick={() => { setViewTab('archived'); setCurrentPage(1); }}
                 >
                     Archived Users (Auditing)
                 </button>

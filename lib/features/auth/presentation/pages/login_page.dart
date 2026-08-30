@@ -6,6 +6,7 @@ import 'package:campus_swap/features/auth/presentation/pages/onboarding_page.dar
 import 'package:campus_swap/core/session/user_session.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:campus_swap/core/services/socket_service.dart';
+import 'package:campus_swap/core/services/notification_service.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'package:campus_swap/features/auth/presentation/pages/forgot_password_page.dart';
@@ -160,6 +161,9 @@ class _LoginPageState extends State<LoginPage> {
 
         // Persist token and user data for auto-login
         await session.saveToStorage();
+
+        // Clear local notification cache for new account
+        await NotificationService().clearLocalCache();
 
         // Initialize real-time WebSocket connection
         SocketService().init();
@@ -608,6 +612,7 @@ class _LoginPageState extends State<LoginPage> {
                             UserSession().fullName = reactivateResponse['user']['full_name'];
                             UserSession().avatarUrl = reactivateResponse['user']['profile_picture'];
                             UserSession().role = reactivateResponse['user']['role'];
+                            await UserSession().saveToStorage();
                             
                             // Initialize dynamic real-time WebSocket connection
                             SocketService().init();

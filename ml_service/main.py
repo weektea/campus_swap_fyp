@@ -727,6 +727,8 @@ class InteractionItem(BaseModel):
     user_id: str
     product_id: str
     weight: float
+    interaction_type: Optional[str] = 'view'
+    created_at: Optional[str] = None
 
 class ProductItem(BaseModel):
     id: str
@@ -747,6 +749,7 @@ class HybridRecommendRequest(BaseModel):
     followed_interacted_product_ids: Optional[List[str]] = None
     preference_tags: Optional[List[str]] = None
     primary_intent: Optional[str] = None
+    recent_viewed_product_ids: Optional[List[str]] = None
 
 class UserPreferenceSyncRequest(BaseModel):
     user_id: str
@@ -777,10 +780,12 @@ class HybridRecommendResponse(BaseModel):
 @app.post("/api/recommend/hybrid", response_model=HybridRecommendResponse)
 async def get_hybrid_recommendations(req: HybridRecommendRequest):
     """
-    Generate recommendations for a user using a hybrid approach (Content-Based + Collaborative Filtering).
-    
-    Deep Learning models (Wide & Deep, NCF) are bypassed in this MVP version to mitigate the Cold Start problem 
-    and data sparsity inherent in new campus platforms, favoring this Hybrid TF-IDF + KNN approach for better initial accuracy.
+    Generate recommendations for a user using an Interaction-Aware Hybrid ML approach:
+    1. Content-Based Filtering (TF-IDF + Cosine Similarity) for Preference Learning
+    2. Collaborative Filtering (KNN with Cosine Metric) for Community Patterns
+    3. Contextual Multipliers (Followed Seller, Network Graph, Faculty Homophily, Freshness)
+    4. Interaction-Aware Layer (Recent Exposure Decay, Related Subcategory Expansion, Exploration)
+    5. Candidate Availability Fallback & Intra-List Diversity Re-Ranking
     """
     user_id = req.user_id
     interactions_data = [i.dict() for i in req.interactions]
@@ -818,7 +823,7 @@ async def get_hybrid_recommendations(req: HybridRecommendRequest):
     content_scores = np.zeros(len(products_data))
     user_profile_vec = np.zeros(tfidf_matrix.shape[1])
 
-    # 1a. Incorporate User Interactions into TF-IDF vector
+    # 1a. Incorporate User Interactions into TF-IDF vector (Authoritative Preference Signal)
     if user_interactions:
         for interaction in user_interactions:
             pid = interaction['product_id']
@@ -827,12 +832,13 @@ async def get_hybrid_recommendations(req: HybridRecommendRequest):
                 weight = interaction.get('weight', 1.0)
                 user_profile_vec += tfidf_matrix[idx].toarray()[0] * weight
 
-    # 1b. Cold Start & Preference Boost: Transform explicit preference tags using TF-IDF and boost vector (weight 5.0)
+    # 1b. Cold Start & Preference Boost: Transform explicit preference tags using TF-IDF and boost vector (weight 5.0 for cold-start, 2.0 when interactions present)
     if user_pref_tags:
         pref_text = " ".join(user_pref_tags).lower()
         try:
             pref_vec = vectorizer.transform([pref_text]).toarray()[0]
-            user_profile_vec += pref_vec * 5.0
+            tag_weight = 5.0 if not user_interactions else 2.0
+            user_profile_vec += pref_vec * tag_weight
         except Exception as pref_err:
             print(f"Preference vectorization warning: {pref_err}")
             
@@ -896,11 +902,7 @@ async def get_hybrid_recommendations(req: HybridRecommendRequest):
         else:
             cf_scores = product_cf_raw
 
-    # 3. Adaptive Hybrid Score Combination
-    # Solve Data Sparsity & Cold Start for new platform with small initial user base:
-    # If KNN cluster confidence is low (sum_similarities < 0.2) or user interactions are sparse,
-    # rely 100% on privatized Content-Based Filtering (CB = 1.0, CF = 0.0).
-    # Only shift to CF (CB = 0.75, CF = 0.25) when a confident cluster of similar users is detected.
+    # 3. Adaptive Hybrid Base Score Combination
     if 'sum_similarities' in locals() and sum_similarities >= 0.2 and len(all_users) >= 5:
         cb_weight = 0.75
         cf_weight = 0.25
@@ -908,42 +910,111 @@ async def get_hybrid_recommendations(req: HybridRecommendRequest):
         cb_weight = 1.00
         cf_weight = 0.00
 
-    final_scores = cb_weight * content_scores + cf_weight * cf_scores
+    base_hybrid_scores = cb_weight * content_scores + cf_weight * cf_scores
+    base_relevance_scores = np.copy(base_hybrid_scores)
     
-    # 1. Followed Seller Boost: increase final relevance by +50% (1.5x multiplier) if seller is followed
+    # 3a. Followed Seller Boost: +50% (1.5x multiplier)
     followed_sellers = set(req.followed_seller_ids or [])
     if followed_sellers:
         for idx, p in enumerate(products_data):
             seller_id = p.get('seller_id')
             if seller_id and seller_id in followed_sellers:
-                final_scores[idx] *= 1.50
+                base_relevance_scores[idx] *= 1.50
 
-    # 2. Social Collaborative Network Boost: increase relevance by +30% (1.3x multiplier) for items saved/messaged/bought by followed network (last 30 days)
+    # 3b. Social Collaborative Network Boost: +30% (1.3x multiplier)
     followed_network_pids = set(req.followed_interacted_product_ids or [])
     if followed_network_pids:
         for idx, p in enumerate(products_data):
             pid = p.get('id')
             if pid and pid in followed_network_pids:
-                final_scores[idx] *= 1.30
+                base_relevance_scores[idx] *= 1.30
 
-    # 3. Campus Context Homophily Boost: If item's seller belongs to the SAME faculty as current user -> +15% (1.15x multiplier)
+    # 3c. Campus Context Homophily Boost: +15% (1.15x multiplier)
     user_faculty = (req.user_faculty or '').strip().lower()
     if user_faculty:
         for idx, p in enumerate(products_data):
             seller_faculty = (p.get('seller_faculty') or '').strip().lower()
             if seller_faculty and seller_faculty == user_faculty:
-                final_scores[idx] *= 1.15
+                base_relevance_scores[idx] *= 1.15
 
-    # 4. Time-Decay Freshness Penalty: Exponential decay with max 60-day cap
+    # 3d. Time-Decay Freshness Factor: Exponential decay with max 60-day cap
+    freshness_factors = np.ones(len(products_data))
     for idx, p in enumerate(products_data):
         days_listed = min(60.0, max(0.0, float(p.get('days_since_listed') or 0.0)))
-        decay_factor = math.exp(-0.02 * days_listed)
-        final_scores[idx] *= decay_factor
+        freshness_factors[idx] = math.exp(-0.02 * days_listed)
+        base_relevance_scores[idx] *= freshness_factors[idx]
 
-    # Sort candidates by final score descending
+    # ==============================================================================
+    # 4. Interaction-Aware Personalization Layer
+    # ==============================================================================
+    # Configurable Hyperparameters
+    RECENT_VIEW_WINDOW = 15
+    EXPOSURE_INITIAL_PENALTY = 0.92   # r=0 -> 92% suppression (E=0.08)
+    EXPOSURE_DECAY_RATE = 0.15        # r=1 -> ~79% suppression (E=0.21), r=5 -> ~43% suppression (E=0.57), r=10 -> ~20% suppression (E=0.80)
+    REPETITION_PENALTY_WEIGHT = 0.20  # +20% suppression per repeat view
+    MIN_EXPOSURE_FLOOR = 0.02
+    RELATED_SIMILARITY_THRESHOLD = 0.08
+    MAX_RELATED_BONUS = 0.15
+    EXPLORATION_WEIGHT = 0.05
+
+    # 4a. Identify Interacted & Exposed Items
+    user_interacted_pids = [i['product_id'] for i in user_interactions]
+    user_interacted_set = set(user_interacted_pids)
+    
+    # Extract recent views (prefer explicitly passed optimized list, fallback to interaction order)
+    if req.recent_viewed_product_ids is not None:
+        recent_views = [pid for pid in req.recent_viewed_product_ids if pid]
+    else:
+        recent_views = [i['product_id'] for i in reversed(user_interactions) if i.get('interaction_type') == 'view']
+    
+    recent_view_window_list = recent_views[:RECENT_VIEW_WINDOW]
+    recent_view_counts: Dict[str, int] = {}
+    for pid in recent_views:
+        recent_view_counts[pid] = recent_view_counts.get(pid, 0) + 1
+
+    # 4b. Continuous Recency-Based Exposure Factor E(i)
+    exposure_factors = np.ones(len(products_data))
+    for idx, pid in enumerate(product_ids):
+        if pid in recent_view_window_list:
+            r = recent_view_window_list.index(pid)
+            c = recent_view_counts.get(pid, 1)
+            # Recency decay: r=0 -> 90% suppression; r=5 -> ~26% suppression; r=10 -> ~7% suppression
+            suppression = EXPOSURE_INITIAL_PENALTY * math.exp(-EXPOSURE_DECAY_RATE * r) * (1.0 + REPETITION_PENALTY_WEIGHT * (c - 1))
+            exposure_factors[idx] = max(MIN_EXPOSURE_FLOOR, 1.0 - suppression)
+
+    # 4c. Related Subcategory Semantic Discovery (TF-IDF Cosine Similarity)
+    related_bonus = np.zeros(len(products_data))
+    interacted_indices = [product_id_to_idx[pid] for pid in user_interacted_pids if pid in product_id_to_idx]
+    
+    if interacted_indices:
+        for idx, p in enumerate(products_data):
+            pid = p['id']
+            # Only boost items that are NOT the exact recently viewed items
+            if pid not in recent_view_window_list[:3]:
+                cand_vec = tfidf_matrix[idx]
+                max_sim_to_interacted = 0.0
+                for int_idx in interacted_indices:
+                    sim_val = float(cosine_similarity(tfidf_matrix[int_idx], cand_vec)[0][0])
+                    if sim_val > max_sim_to_interacted:
+                        max_sim_to_interacted = sim_val
+                
+                if max_sim_to_interacted >= RELATED_SIMILARITY_THRESHOLD:
+                    related_bonus[idx] = min(MAX_RELATED_BONUS, max_sim_to_interacted * 0.40)
+
+    # 4d. Relevance-Gated Controlled Exploration
+    exploration_bonus = np.zeros(len(products_data))
+    for idx, p in enumerate(products_data):
+        pid = p['id']
+        if base_hybrid_scores[idx] >= 0.08 and pid not in user_interacted_set:
+            exploration_bonus[idx] = EXPLORATION_WEIGHT * base_hybrid_scores[idx] * freshness_factors[idx]
+
+    # 4e. Combine Final Scores: (BaseRelevance * ExposureFactor) + RelatedBonus + ExplorationBonus
+    final_scores = (base_relevance_scores * exposure_factors) + related_bonus + exploration_bonus
+
+    # 4f. Candidate Availability Fallback Safeguard
     scored_products = list(zip(product_ids, final_scores))
     scored_products.sort(key=lambda x: x[1], reverse=True)
-    
+
     # 5. Re-ranking Phase: Intra-List Diversity Filter (Max 4 items per subcategory in Top 10)
     MAX_PER_SUBCATEGORY = 4
     TOP_N_TARGET = 10
@@ -955,7 +1026,7 @@ async def get_hybrid_recommendations(req: HybridRecommendRequest):
 
     selected_ids = []
     deferred_ids = []
-    subcat_counts = {}
+    subcat_counts: Dict[str, int] = {}
 
     for pid, score in scored_products:
         subcat = prod_cat_map.get(pid, 'general')
@@ -972,6 +1043,11 @@ async def get_hybrid_recommendations(req: HybridRecommendRequest):
             deferred_ids.append(pid)
 
     final_recommended_ids = (selected_ids + deferred_ids)[:TOP_N_TARGET]
+
+    # Debug logging for development and verification
+    suppressed_count = int(np.sum(exposure_factors < 0.99))
+    related_boost_count = int(np.sum(related_bonus > 0.0))
+    print(f"[ML Rec] User: {user_id} | Candidates: {len(products_data)} | Recent Views: {len(recent_view_window_list)} | Suppressed: {suppressed_count} | Related Boosted: {related_boost_count}")
 
     return {"recommended_product_ids": final_recommended_ids}
 

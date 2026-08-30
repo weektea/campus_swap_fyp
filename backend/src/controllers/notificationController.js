@@ -59,6 +59,10 @@ export const saveFcmToken = async (req, res) => {
         if (!fcm_token) {
             return res.status(400).json({ error: 'fcm_token is required' });
         }
+        // 1. Unbind this physical device's FCM token from any other accounts previously logged in on this phone
+        await User.update({ fcm_token: null }, { where: { fcm_token } });
+
+        // 2. Bind the device token exclusively to the currently active user
         await User.update({ fcm_token }, { where: { id: user_id } });
         res.json({ success: true, message: 'FCM Token updated successfully' });
     } catch (error) {
@@ -87,6 +91,18 @@ export const removeFcmToken = async (req, res) => {
  */
 export const createNotification = async (userId, title, message, type, relatedId) => {
     try {
+        const validTypes = ['Transaction', 'System', 'Promotion', 'PRICE_DROP', 'NEW_SELLER_ITEM', 'CHAT'];
+        let sanitizedType = type;
+        if (!validTypes.includes(sanitizedType)) {
+            if (sanitizedType === 'order_update' || sanitizedType === 'transaction') {
+                sanitizedType = 'Transaction';
+            } else if (sanitizedType === 'chat' || sanitizedType === 'message') {
+                sanitizedType = 'CHAT';
+            } else {
+                sanitizedType = 'System';
+            }
+        }
+
         let createdNote;
         if (relatedId) {
             const existing = await Notification.findOne({
@@ -99,6 +115,7 @@ export const createNotification = async (userId, title, message, type, relatedId
             });
             if (existing) {
                 existing.message = message;
+                existing.type = sanitizedType;
                 existing.createdAt = new Date(); // Bubble to top
                 await existing.save();
                 createdNote = existing;
@@ -109,7 +126,7 @@ export const createNotification = async (userId, title, message, type, relatedId
                 user_id: userId,
                 title,
                 message,
-                type,
+                type: sanitizedType,
                 related_id: relatedId
             });
         }

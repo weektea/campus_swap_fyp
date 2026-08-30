@@ -1,4 +1,4 @@
-import { User, Product, Transaction, Report, SupportTicket, Category, SubCategory, Dispute, BackupLog, Review, SafeMeetupZone, Notification, TicketMessage, UserInteraction, Follow, SavedItem, Message, ActivityLog, BroadcastRequest, StudentWhitelist } from '../models/index.js';
+import { User, Product, Transaction, Report, SupportTicket, Category, SubCategory, Dispute, BackupLog, Review, SafeMeetupZone, Notification, TicketMessage, UserInteraction, Follow, SavedItem, Message, ActivityLog, BroadcastRequest, StudentWhitelist, ModerationRule, FlaggedContent } from '../models/index.js';
 import sequelize from '../config/database.js';
 import { Op } from 'sequelize';
 import { exec } from 'child_process';
@@ -9,6 +9,7 @@ import { getCarbonValue } from './transactionController.js';
 import { createNotification } from './notificationController.js';
 import { executeBackup, executeRestore } from '../utils/backupHelper.js';
 import { emitToUser } from '../config/socket.js';
+import moderationService from '../services/moderationService.js';
 
 // ======================= MODERATOR & ADMIN SHARED =======================
 
@@ -837,8 +838,11 @@ export const deleteListing = async (req, res) => {
 // Full User Administration (Promoting, Banning)
 export const getAllUsers = async (req, res) => {
     try {
+        const { view } = req.query;
+        const isAnonymized = view === 'archived';
+
         const users = await User.findAll({
-            where: { is_anonymized: false },
+            where: { is_anonymized: isAnonymized },
             attributes: {
                 include: [
                     [
@@ -2328,4 +2332,249 @@ export const exportStudentWhitelistCSV = async (req, res) => {
     }
 };
 
+// ======================= MODERATION RULES & FLAGGED CONTENT =======================
 
+/**
+ * Get all moderation rules
+ */
+export const getModerationRules = async (req, res) => {
+    try {
+        await moderationService.seedDefaultRulesIfEmpty();
+        const rules = await ModerationRule.findAll({
+            order: [['category', 'ASC'], ['severity', 'DESC'], ['createdAt', 'ASC']]
+        });
+        res.json(rules);
+    } catch (error) {
+        console.error('Get Moderation Rules Error:', error);
+        res.status(500).json({ error: 'Failed to fetch moderation rules' });
+    }
+};
+
+/**
+ * Create a new moderation rule
+ */
+export const createModerationRule = async (req, res) => {
+    try {
+        const { name, category, match_type, pattern, severity, action, is_enabled, description } = req.body;
+
+        if (!name || !pattern) {
+            return res.status(400).json({ error: 'Rule name and pattern are required' });
+        }
+
+        const rule = await ModerationRule.create({
+            name: name.trim(),
+            category: category || 'custom',
+            match_type: match_type || 'keyword',
+            pattern: pattern.trim(),
+            severity: severity || 'medium',
+            action: action || 'flag',
+            is_enabled: is_enabled !== undefined ? is_enabled : true,
+            description: description ? description.trim() : null,
+            created_by: req.user ? req.user.id : null
+        });
+
+        moderationService.invalidateCache();
+        res.status(201).json(rule);
+    } catch (error) {
+        console.error('Create Moderation Rule Error:', error);
+        res.status(500).json({ error: 'Failed to create moderation rule' });
+    }
+};
+
+/**
+ * Update an existing moderation rule
+ */
+export const updateModerationRule = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const rule = await ModerationRule.findByPk(id);
+        if (!rule) {
+            return res.status(404).json({ error: 'Moderation rule not found' });
+        }
+
+        const { name, category, match_type, pattern, severity, action, is_enabled, description } = req.body;
+
+        if (name !== undefined) rule.name = name.trim();
+        if (category !== undefined) rule.category = category;
+        if (match_type !== undefined) rule.match_type = match_type;
+        if (pattern !== undefined) rule.pattern = pattern.trim();
+        if (severity !== undefined) rule.severity = severity;
+        if (action !== undefined) rule.action = action;
+        if (is_enabled !== undefined) rule.is_enabled = is_enabled;
+        if (description !== undefined) rule.description = description;
+
+        await rule.save();
+        moderationService.invalidateCache();
+
+        res.json(rule);
+    } catch (error) {
+        console.error('Update Moderation Rule Error:', error);
+        res.status(500).json({ error: 'Failed to update moderation rule' });
+    }
+};
+
+/**
+ * Delete a moderation rule
+ */
+export const deleteModerationRule = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const rule = await ModerationRule.findByPk(id);
+        if (!rule) {
+            return res.status(404).json({ error: 'Moderation rule not found' });
+        }
+
+        await rule.destroy();
+        moderationService.invalidateCache();
+
+        res.json({ message: `Moderation rule "${rule.name}" deleted successfully.` });
+    } catch (error) {
+        console.error('Delete Moderation Rule Error:', error);
+        res.status(500).json({ error: 'Failed to delete moderation rule' });
+    }
+};
+
+/**
+ * Test sample text against moderation engine in real time
+ */
+export const testModerationEngine = async (req, res) => {
+    try {
+        const { text } = req.body;
+        if (!text || typeof text !== 'string') {
+            return res.status(400).json({ error: 'Text string is required for testing' });
+        }
+
+        const result = await moderationService.evaluateContent(text);
+        res.json(result);
+    } catch (error) {
+        console.error('Test Moderation Engine Error:', error);
+        res.status(500).json({ error: 'Failed to test moderation engine' });
+    }
+};
+
+/**
+ * Get flagged contents review queue
+ */
+export const getFlaggedContents = async (req, res) => {
+    try {
+        const { status, category, limit = 50, page = 1 } = req.query;
+        const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
+
+        const where = {};
+        if (status && status !== 'All') {
+            where.review_status = status.toLowerCase();
+        }
+        if (category && category !== 'All') {
+            where.category = { [Op.like]: `%${category}%` };
+        }
+
+        const { count, rows } = await FlaggedContent.findAndCountAll({
+            where,
+            include: [
+                {
+                    model: User,
+                    as: 'offender',
+                    attributes: ['id', 'username', 'full_name', 'email', 'warning_count', 'reputation_score', 'is_active', 'profile_image_url']
+                },
+                {
+                    model: User,
+                    as: 'reviewer',
+                    attributes: ['id', 'username', 'full_name', 'role']
+                }
+            ],
+            order: [['createdAt', 'DESC']],
+            limit: parseInt(limit, 10),
+            offset
+        });
+
+        res.json({
+            total: count,
+            page: parseInt(page, 10),
+            totalPages: Math.ceil(count / parseInt(limit, 10)),
+            data: rows
+        });
+    } catch (error) {
+        console.error('Get Flagged Contents Error:', error);
+        res.status(500).json({ error: 'Failed to fetch flagged contents' });
+    }
+};
+
+/**
+ * Resolve/Review a Flagged Content Item (Dismiss, Approve, or Penalize)
+ */
+export const resolveFlaggedContent = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { resolution_action, review_notes } = req.body; // 'approved' | 'dismissed' | 'penalized'
+
+        if (!['approved', 'dismissed', 'penalized'].includes(resolution_action)) {
+            return res.status(400).json({ error: 'Invalid resolution_action. Must be approved, dismissed, or penalized.' });
+        }
+
+        const item = await FlaggedContent.findByPk(id, {
+            include: [{ model: User, as: 'offender' }]
+        });
+
+        if (!item) {
+            return res.status(404).json({ error: 'Flagged content item not found' });
+        }
+
+        item.review_status = resolution_action;
+        item.reviewed_by = req.user ? req.user.id : null;
+        item.review_notes = review_notes ? review_notes.trim() : null;
+        await item.save();
+
+        let penaltyDetails = null;
+
+        // Apply Sanctions if Penalized
+        if (resolution_action === 'penalized' && item.offender) {
+            const user = item.offender;
+            const currentWarnings = parseInt(user.warning_count || 0, 10) + 1;
+            user.warning_count = currentWarnings;
+
+            // Deduct 1.0 reputation score (minimum 1.0 floor)
+            const currentRep = parseFloat(user.reputation_score || 5.0);
+            user.reputation_score = Math.max(1.0, parseFloat((currentRep - 1.0).toFixed(1)));
+
+            let accountSuspended = false;
+            if (currentWarnings >= 3) {
+                user.is_active = false;
+                accountSuspended = true;
+            }
+
+            await user.save();
+
+            // Create ActivityLog entry for audit
+            await ActivityLog.create({
+                user_id: user.id,
+                action: `SANCTION: Moderation penalty applied for Flagged Content [#${item.id}]. Warning count: ${currentWarnings}/3. Reputation adjusted to ${user.reputation_score}.${accountSuspended ? ' ACCOUNT AUTO-SUSPENDED (3 Warnings).' : ''}`
+            });
+
+            // Create notification for user
+            await createNotification(
+                user.id,
+                accountSuspended ? 'Account Suspended: Content Policy Violations' : 'Warning Issued: Safety Policy Violation',
+                accountSuspended 
+                    ? 'Your account has been restricted after reaching 3 safety warnings. Please contact support.' 
+                    : `You have received a safety warning (Warning ${currentWarnings}/3) regarding sensitive content in ${item.source_type}. Please adhere to campus guidelines.`,
+                'MODERATION',
+                item.id
+            );
+
+            penaltyDetails = {
+                warning_count: currentWarnings,
+                reputation_score: user.reputation_score,
+                is_suspended: accountSuspended
+            };
+        }
+
+        res.json({
+            message: `Flagged content #${id} marked as ${resolution_action}.`,
+            item,
+            penaltyDetails
+        });
+    } catch (error) {
+        console.error('Resolve Flagged Content Error:', error);
+        res.status(500).json({ error: 'Failed to resolve flagged content' });
+    }
+};

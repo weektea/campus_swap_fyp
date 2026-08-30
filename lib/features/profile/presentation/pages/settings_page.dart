@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'package:campus_swap/core/session/user_session.dart';
 import 'package:campus_swap/features/auth/presentation/pages/login_page.dart';
 import 'package:campus_swap/core/theme/theme_provider.dart';
-import 'package:campus_swap/core/services/socket_service.dart';
 import 'package:campus_swap/core/services/notification_service.dart';
 import 'package:campus_swap/core/api/api_client.dart';
 import 'package:campus_swap/features/profile/presentation/pages/change_password_page.dart';
@@ -64,11 +62,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   void _logout() async {
     await NotificationService().clearFcmToken();
-    SocketService().disconnect();
-    NotificationService().stopPolling();
-    UserSession().clear();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('auto_login', false);
+    await UserSession().clearStorage();
 
     if (mounted) {
       Navigator.pushAndRemoveUntil(

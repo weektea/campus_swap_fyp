@@ -1120,7 +1120,11 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                                             Icon(
                                                 method == 'Cash' 
                                                     ? Icons.money_outlined 
-                                                    : (method == 'TNG' ? Icons.account_balance_wallet_outlined : Icons.account_balance_outlined), 
+                                                    : (method == 'TNG' 
+                                                        ? Icons.account_balance_wallet_outlined 
+                                                        : (method.contains('Stripe') || method.contains('Card') 
+                                                            ? Icons.credit_card_rounded 
+                                                            : Icons.account_balance_outlined)), 
                                                 color: theme.colorScheme.primary, 
                                                 size: 18
                                             ),

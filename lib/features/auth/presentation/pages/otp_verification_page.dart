@@ -78,8 +78,11 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
             session.isOnboarded = isOnboarded;
             session.primaryIntent = response['user']['primary_intent'] ?? 'browse';
             session.preferenceTags = List<String>.from(response['user']['preference_tags'] ?? []);
+            await session.saveToStorage();
 
             SocketService().init();
+
+            if (!mounted) return;
 
             if (!isOnboarded) {
               Navigator.of(context).pushAndRemoveUntil(

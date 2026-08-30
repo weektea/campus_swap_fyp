@@ -56,8 +56,8 @@ class _SellPageState extends State<SellPage> {
 
   Map<String, List<String>> _categoriesMap = {};
   
-  final List<String> _paymentMethods = ['Cash', 'TNG', 'Bank Transfer'];
-  List<String> _selectedPaymentMethods = ['Cash', 'TNG', 'Bank Transfer'];
+  final List<String> _paymentMethods = ['Cash', 'TNG', 'Bank Transfer', 'Online Card (Stripe)'];
+  List<String> _selectedPaymentMethods = ['Cash', 'TNG', 'Bank Transfer', 'Online Card (Stripe)'];
 
   @override
   void initState() {

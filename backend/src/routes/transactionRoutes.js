@@ -15,13 +15,18 @@ import { authenticateToken } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
+// Transaction creation and retrieval
 router.post('/', authenticateToken, createTransaction);
 router.get('/user/:user_id', authenticateToken, getUserTransactions);
 router.get('/product/:product_id/booked-dates', authenticateToken, getBookedDates);
 router.get('/:id', authenticateToken, getTransactionById);
 router.get('/:id/receipt', authenticateToken, getTransactionReceipt);
+
+// Transaction state management & ratings
 router.patch('/:id/status', authenticateToken, updateTransactionStatus);
 router.patch('/:id/rate', authenticateToken, addRating);
+
+// Rental return, deposit claim, and security PIN verification
 router.post('/:id/return-rental', authenticateToken, returnRentalAndRefundDeposit);
 router.post('/:id/claim-deposit', authenticateToken, claimRentalDeposit);
 router.post('/:id/verify-pin', authenticateToken, verifyMeetupPin);

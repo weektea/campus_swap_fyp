@@ -103,6 +103,10 @@ class _EditProfilePageState extends State<EditProfilePage> {
             _privacySetting = 'Public';
           }
         }
+
+        // Sync avatar with current session
+        UserSession().avatarUrl = userData['profile_image_url'];
+        await UserSession().saveToStorage();
       }
     } catch (e) {
       // Ignore
@@ -131,6 +135,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
               session.avatarUrl = imageUrl;
               _isUploading = false;
           });
+          await session.saveToStorage();
           if (mounted) {
              _showSuccessSnackBar(context, 'Avatar Updated!');
           }
@@ -219,12 +224,12 @@ class _EditProfilePageState extends State<EditProfilePage> {
                             CircleAvatar(
                               radius: 50,
                               backgroundColor: Colors.teal,
-                              backgroundImage: UserSession().avatarUrl != null 
+                              backgroundImage: (UserSession().avatarUrl != null && UserSession().avatarUrl!.isNotEmpty) 
                                   ? NetworkImage('${ApiClient.baseUrl.replaceAll('/api', '')}${UserSession().avatarUrl}') 
                                   : null,
                               child: _isUploading 
                                 ? const CircularProgressIndicator(color: Colors.white)
-                                : (UserSession().avatarUrl == null ? const Icon(Icons.person, size: 50, color: Colors.white) : null),
+                                : ((UserSession().avatarUrl == null || UserSession().avatarUrl!.isEmpty) ? const Icon(Icons.person, size: 50, color: Colors.white) : null),
                             ),
                             Positioned(
                                 bottom: 0,
